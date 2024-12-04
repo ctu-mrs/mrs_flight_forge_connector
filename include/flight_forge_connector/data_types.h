@@ -24,21 +24,11 @@ struct UavFrameType
             {"t650", 1},
             {"a300", 2},
             {"robofly", 3},
-            {"empty", 4}
+            {"wing", 4},
+            {"empty", 5}
         };
         return map;
     }
-};
-
-enum WorldLevelEnum : unsigned short
-{
-  VALLEY,
-  FOREST,
-  INFINITE_FOREST,
-  WAREHOUSE,
-  CAVE,
-  ERDING_AIRBASE,
-  TEMESVAR
 };
 
 struct GraphicsSettings
@@ -66,7 +56,10 @@ struct WorldName
             {"warehouse", 3},
             {"cave", 4},
             {"erding_airbase", 5},
-            {"temesvar", 6}
+            {"temesvar", 6},
+            {"eletric_towers", 7},
+            {"race_1", 8},
+            {"race_2", 9}
         };
         return map;
     }

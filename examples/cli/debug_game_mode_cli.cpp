@@ -74,16 +74,35 @@ int main() {
 #endif
 
   gameModeController = std::make_unique<ueds_connector::GameModeController>(LOCALHOST, 8000);
-  auto connect_result = gameModeController->Connect();
+  bool connect_result = gameModeController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
     return 1;
   }
 
-  std::string w = "cave";
-  // gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
-  w = "high";
-  gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(w));
+  std::string w = "race_2";
+  gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
+  connect_result = gameModeController->Disconnect();
+  if (!connect_result) {
+     std::cout << "[UnrealSimulator] Disconect was not Disconnected succesfully." << connect_result << std::endl;
+  }
+
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  while (true) {
+    connect_result = gameModeController->Connect();
+    if (connect_result != 1) {
+      std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
+    } else {
+      break;
+    }
+    // ros::Duration(1.0).sleep();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+
+
+  std::string s = "high";
+  gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
 
   while (true) {
     std::cout << "Exit: x" << std::endl;

@@ -59,7 +59,11 @@ struct WorldName
             {"temesvar", 6},
             {"eletric_towers", 7},
             {"race_1", 8},
-            {"race_2", 9}
+            {"race_2", 9},
+            {"industrial_warehouse", 10},
+            {"service_tunnel", 11},
+            {"dead_spruce_forest", 12},
+
         };
         return map;
     }

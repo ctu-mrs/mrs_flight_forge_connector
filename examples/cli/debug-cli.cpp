@@ -305,9 +305,9 @@ int main(int argc, char* argv[]) {
 
       config.orientation_ = ueds_connector::Rotation(0, 0, 0);
       
-      config.width_ = 640;
+      config.width_ = 999;//640; <1000
 
-      config.height_ = 480;
+      config.height_ = 999;//480; limit <1000
 
       config.enable_motion_blur_ = false;
 

@@ -25,7 +25,8 @@ struct UavFrameType
             {"a300", 2},
             {"robofly", 3},
             {"wing", 4},
-            {"empty", 5}
+            {"wing_2", 5},
+            {"empty", 6}
         };
         return map;
     }

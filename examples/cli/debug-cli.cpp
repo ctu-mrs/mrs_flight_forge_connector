@@ -260,7 +260,8 @@ int main(int argc, char* argv[]) {
                   << ", Frequency: " << config.Frequency
                   << ", offset: " << config.offset.toString()
                   << ", rotation: " << config.orientation.toString()
-                  << ", FOVHor: " << config.FOVHor << ", FOVVert: " << config.FOVVert
+                  << ", FOVHorLeft: " << config.FOVHorLeft << ", FOVHorLeft: " << config.FOVHorLeft
+                  << ", FOVVerUp: " << config.FOVVertUp << ", FOVVerDown: " << config.FOVVertDown
                   << ")" << std::endl;
       } else {
         std::cout << "GetLidarConfig error" << std::endl;
@@ -275,8 +276,10 @@ int main(int argc, char* argv[]) {
       config.Frequency = 10;
       config.offset = ueds_connector::Coordinates(0, 0, 6);
       config.orientation = ueds_connector::Rotation(0, 90, 0);
-      config.FOVHor = 360;
-      config.FOVVert = 50;
+      config.FOVHorLeft = 180;
+      config.FOVHorRight = 180;
+      config.FOVVertUp = 52;
+      config.FOVVertDown = 7;
 
       const auto res = UedsConnector->SetLidarConfig(config);
 

@@ -26,7 +26,8 @@ struct UavFrameType
             {"robofly", 3},
             {"wing", 4},
             {"wing_2", 5},
-            {"empty", 6}
+            {"gimbal", 6},
+            {"empty", 7}
         };
         return map;
     }
@@ -169,7 +170,7 @@ struct LidarConfig
 {
   LidarConfig() = default;
   LidarConfig(bool Enable, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
-              const Rotation orientation, double FOVHor, double FOVVert)
+              const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown)
       : Enable(Enable),
         showBeams(showBeams),
         beamLength(beamLength),
@@ -178,8 +179,10 @@ struct LidarConfig
         Frequency(Frequency),
         offset(offset),
         orientation(orientation),
-        FOVHor(FOVHor),
-        FOVVert(FOVVert) {
+        FOVHorLeft(FOVHorLeft),
+        FOVHorRight(FOVHorRight),
+        FOVVertUp(FOVVertUp),
+        FOVVertDown(FOVVertDown) {
   }
 
   bool        Enable;
@@ -190,8 +193,10 @@ struct LidarConfig
   double      Frequency;
   Coordinates offset;
   Rotation    orientation;
-  double      FOVHor;
-  double      FOVVert;
+  double      FOVHorLeft; 
+  double      FOVHorRight;
+  double      FOVVertUp;
+  double      FOVVertDown;
 
   std::string toString() const {
     return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +

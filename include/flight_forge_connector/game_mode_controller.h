@@ -10,6 +10,9 @@
 #include <flight_forge_connector/socket_client.h>
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
+#define API_VERSION_MAJOR 0
+#define API_VERSION_MINOR 10
+
 namespace ueds_connector
 {
 
@@ -34,7 +37,7 @@ public:
 
   std::pair<bool, float> GetFps();
 
-  std::pair<bool, int> GetApiVersion();
+  std::pair<bool, std::pair<int,int>> GetApiVersion();
 
   std::pair<bool, double> GetTime();
   

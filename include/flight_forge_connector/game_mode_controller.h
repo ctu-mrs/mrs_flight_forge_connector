@@ -54,6 +54,8 @@ public:
   bool SetWeather(const int& type_id);
 
   bool SetDatetime(const int& hour, const int& minute);
+
+  bool SetMutualDroneVisibility(const bool& enabled);
 };
 
 }  // namespace ueds_connector

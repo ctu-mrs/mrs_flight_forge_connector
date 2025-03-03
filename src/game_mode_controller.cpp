@@ -152,6 +152,17 @@ bool GameModeController::SetDatetime(const int& hour, const int& minute){
   return success; 
 }
 
+bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &enabled)
+{
+  Serializable::GameMode::SetMutualVisibility::Request request{};
+  request.mutual_visibiliti_enabled = enabled;
+
+  Serializable::GameMode::SetMutualVisibility::Response response{};
+  const auto                                    status  = Request(request, response);
+  const auto                                    success = status && response.status;
+
+  return success; 
+}
 //}
 
 /* getCameraCaptureMode() //{ */

@@ -99,7 +99,7 @@ int main() {
   }
 
 
-  std::string s = "high";
+  std::string s = "medium";
   gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
 
   while (true) {
@@ -115,6 +115,7 @@ int main() {
     std::cout << "Set Time: 8 [HOURS] [MINUTES]" << std::endl;
     std::cout << "Switch Wordl: 9 [ID] (0-Valley 1-Forest 2-InfForest 3-Warehouse 4-Cave)" << std::endl;
     std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
+    std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -304,6 +305,19 @@ int main() {
         std::cout << "SetGraphicsSettings successful." << std::endl;
       } else {
         std::cout << "SetGraphicsSettings error !!!" << std::endl;
+      }
+    }
+
+    else if (choice_char == 'b') {
+  
+      int enabled;
+      bool parse_res = parseInt(choice, enabled);
+
+      res = gameModeController->SetMutualDroneVisibility(enabled);
+      if (res) {
+        std::cout << "SetMutualVisibility successful." << std::endl;
+      } else {
+        std::cout << "SetMutualVisibility error !!!" << std::endl;
       }
     }
 

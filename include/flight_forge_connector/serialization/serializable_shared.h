@@ -113,6 +113,7 @@ enum MessageType : unsigned short
 struct LidarConfig
 {
   bool   Enable;
+  bool Livox;
   bool   ShowBeams;
   double BeamLength;
 

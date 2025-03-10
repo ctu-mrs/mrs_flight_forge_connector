@@ -393,6 +393,7 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
   if (success) {
 
     config.Enable       = response.config.Enable;
+    config.Livox = response.config.Livox;
     config.showBeams    = response.config.ShowBeams;
     config.BeamHorRays  = response.config.BeamHorRays;
     config.BeamVertRays = response.config.BeamVertRays;
@@ -423,6 +424,7 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
 
   request.config              = Serializable::Drone::LidarConfig{};
   request.config.Enable       = config.Enable;
+  request.config.Livox = config.Livox;
   request.config.ShowBeams    = config.showBeams;
   request.config.BeamHorRays  = config.BeamHorRays;
   request.config.BeamVertRays = config.BeamVertRays;

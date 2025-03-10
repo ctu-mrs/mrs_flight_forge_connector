@@ -169,9 +169,10 @@ struct LidarIntData
 struct LidarConfig
 {
   LidarConfig() = default;
-  LidarConfig(bool Enable, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
+  LidarConfig(bool Enable, bool Livox, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
               const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown)
       : Enable(Enable),
+        Livox(Livox),
         showBeams(showBeams),
         beamLength(beamLength),
         BeamHorRays(BeamHorRays),
@@ -186,6 +187,7 @@ struct LidarConfig
   }
 
   bool        Enable;
+  bool       Livox;
   bool        showBeams;
   double      beamLength;
   double      BeamHorRays;

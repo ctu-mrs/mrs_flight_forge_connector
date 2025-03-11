@@ -169,10 +169,9 @@ struct LidarIntData
 struct LidarConfig
 {
   LidarConfig() = default;
-  LidarConfig(bool Enable, bool Livox, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
-              const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown)
+  LidarConfig(bool Enable, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
+              const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown, bool Livox)
       : Enable(Enable),
-        Livox(Livox),
         showBeams(showBeams),
         beamLength(beamLength),
         BeamHorRays(BeamHorRays),
@@ -183,11 +182,12 @@ struct LidarConfig
         FOVHorLeft(FOVHorLeft),
         FOVHorRight(FOVHorRight),
         FOVVertUp(FOVVertUp),
-        FOVVertDown(FOVVertDown) {
+        FOVVertDown(FOVVertDown),
+        Livox(Livox)
+  {
   }
 
   bool        Enable;
-  bool       Livox;
   bool        showBeams;
   double      beamLength;
   double      BeamHorRays;
@@ -199,6 +199,7 @@ struct LidarConfig
   double      FOVHorRight;
   double      FOVVertUp;
   double      FOVVertDown;
+  bool       Livox;
 
   std::string toString() const {
     return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +

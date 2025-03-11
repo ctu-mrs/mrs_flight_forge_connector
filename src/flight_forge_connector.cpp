@@ -393,7 +393,6 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
   if (success) {
 
     config.Enable       = response.config.Enable;
-    config.Livox = response.config.Livox;
     config.showBeams    = response.config.ShowBeams;
     config.BeamHorRays  = response.config.BeamHorRays;
     config.BeamVertRays = response.config.BeamVertRays;
@@ -403,12 +402,11 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
 
     config.orientation = Rotation{response.config.OrientationPitch, response.config.OrientationYaw, response.config.OrientationRoll};
 
-    /* config.FOVHor  = response.config.FOVHor; */
-    /* config.FOVVert = response.config.FOVVert; */
     config.FOVHorLeft = response.config.FOVHorLeft;
     config.FOVHorRight = response.config.FOVHorRight;
     config.FOVVertUp = response.config.FOVVertUp;
     config.FOVVertDown = response.config.FOVVertDown;
+    config.Livox        = response.config.Livox;
   }
 
   return std::make_pair(success, config);
@@ -424,7 +422,6 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
 
   request.config              = Serializable::Drone::LidarConfig{};
   request.config.Enable       = config.Enable;
-  request.config.Livox = config.Livox;
   request.config.ShowBeams    = config.showBeams;
   request.config.BeamHorRays  = config.BeamHorRays;
   request.config.BeamVertRays = config.BeamVertRays;
@@ -446,6 +443,7 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
   request.config.FOVHorRight = config.FOVHorRight;
   request.config.FOVVertUp   = config.FOVVertUp;
   request.config.FOVVertDown = config.FOVVertDown;
+  request.config.Livox        = config.Livox;
 
   Serializable::Drone::SetLidarConfig::Response response{};
 

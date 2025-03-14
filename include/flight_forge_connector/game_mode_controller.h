@@ -11,7 +11,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 10
+#define API_VERSION_MINOR 11
 
 namespace ueds_connector
 {

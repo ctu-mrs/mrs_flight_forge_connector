@@ -144,7 +144,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Get rangefinder range data: c" << std::endl;
     std::cout << "Get camera seg data: d" << std::endl;
     std::cout << "Get seg lidar data: e" << std::endl;
-    std::cout << "Set weather: f" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;

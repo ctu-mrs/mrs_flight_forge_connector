@@ -152,6 +152,17 @@ bool GameModeController::SetDatetime(const int& hour, const int& minute){
   return success; 
 }
 
+bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &enabled)
+{
+  Serializable::GameMode::SetMutualVisibility::Request request{};
+  request.mutual_visibiliti_enabled = enabled;
+
+  Serializable::GameMode::SetMutualVisibility::Response response{};
+  const auto                                    status  = Request(request, response);
+  const auto                                    success = status && response.status;
+
+  return success; 
+}
 //}
 
 /* getCameraCaptureMode() //{ */
@@ -235,7 +246,7 @@ std::pair<bool, float> GameModeController::GetFps() {
 
 /* getApiVersion() //{ */
 
-std::pair<bool, int> GameModeController::GetApiVersion() {
+std::pair<bool, std::pair<int,int>> GameModeController::GetApiVersion() {
 
   Serializable::GameMode::GetApiVersion::Request request{};
 
@@ -243,7 +254,7 @@ std::pair<bool, int> GameModeController::GetApiVersion() {
   const auto                                      status  = Request(request, response);
   const auto                                      success = status && response.status;
 
-  return std::make_pair(success, success ? response.api_version : 0);
+  return std::make_pair(success, success ? std::make_pair(response.api_version_major, response.api_version_minor) : std::make_pair(-1, -1));
 }
 
 //}

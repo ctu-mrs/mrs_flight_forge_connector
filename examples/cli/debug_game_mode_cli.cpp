@@ -80,28 +80,26 @@ int main() {
     return 1;
   }
 
-  // std::string w = "race_2";
-  // gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
-  // connect_result = gameModeController->Disconnect();
-  // if (!connect_result) {
-  //    std::cout << "[UnrealSimulator] Disconect was not Disconnected succesfully." << connect_result << std::endl;
-  // }
+  auto [res, version] = gameModeController->GetApiVersion();
+  auto [api_version_major, api_version_minor] = version;
 
-  // std::this_thread::sleep_for(std::chrono::seconds(1));
+  if (!res || api_version_major != API_VERSION_MAJOR || api_version_minor != API_VERSION_MINOR) {
 
-  // while (true) {
-  //   connect_result = gameModeController->Connect();
-  //   if (connect_result != 1) {
-  //     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
-  //   } else {
-  //     break;
-  //   }
-  //   // ros::Duration(1.0).sleep();
-  //   std::this_thread::sleep_for(std::chrono::seconds(1));
-  // }
+    std::cout << "[FlighForge]: the API versions don't match! (CONNECTOR side 'v" << API_VERSION_MAJOR << "." << API_VERSION_MINOR << "' != UNREAL side 'v" << api_version_major << "." << api_version_minor << "')" << std::endl;
+    std::cout << "[FlighForge]:" << std::endl;
+    std::cout << "[FlighForge]: Solution:"<< std::endl;
+    std::cout << "[FlighForge]:           1. make sure the mrs_flight_forge_connector package is up to date"<< std::endl;
+    std::cout << "[FlighForge]:              git pull"<< std::endl;
+    std::cout << "[FlighForge]:"<< std::endl;
+    std::cout << "[FlighForge]:           2. make sure you have the right version of the FlighForge Simulator 'game'"<< std::endl;
+    std::cout << "[FlighForge]:              download at: https://github.com/ctu-mrs/mrs_uav_unreal_simulation"<< std::endl;
+    std::cout << "[FlighForge]:"<< std::endl;
+
+    exit(2);
+  }
 
 
-  std::string s = "high";
+  std::string s = "medium";
   gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
 
   while (true) {
@@ -114,6 +112,10 @@ int main() {
     std::cout << "Set camera capture mode: 5 [MODE] (0 - all frames, 1 - on movement, 2 - on demand)" << std::endl;
     std::cout << "Get FPS: 6" << std::endl;
     std::cout << "Set Weather: 7 [WEATHER ID]" << std::endl;
+    std::cout << "Set Time: 8 [HOURS] [MINUTES]" << std::endl;
+    std::cout << "Switch Wordl: 9 [ID] (0-Valley 1-Forest 2-InfForest 3-Warehouse 4-Cave)" << std::endl;
+    std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
+    std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -260,6 +262,65 @@ int main() {
 
       }
     }
+    else if( choice_char == '9'){
+      
+      //std::string w = "race_2";
+      //gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
+
+      int id_world;
+      bool parse_res = parseInt(choice, id_world);
+      
+      gameModeController->SwitchWorldLevel(id_world);
+
+      connect_result = gameModeController->Disconnect();
+      if (!connect_result) {
+        std::cout << "[FlightForge] Disconect was not Disconnected succesfully." << connect_result << std::endl;
+      }
+
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+
+      while (true) {
+        connect_result = gameModeController->Connect();
+        if (connect_result != 1) {
+          std::cout << "[FlightForge] Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
+        } else {
+          break;
+        }
+        // ros::Duration(1.0).sleep();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    
+    }
+
+    else if (choice_char == 'a') {
+      
+      //std::string s = "high";
+      // res = gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
+      
+      int id;
+      bool parse_res = parseInt(choice, id);
+
+      res = gameModeController->SetGraphicsSettings(id);
+      if (res) {
+        std::cout << "SetGraphicsSettings successful." << std::endl;
+      } else {
+        std::cout << "SetGraphicsSettings error !!!" << std::endl;
+      }
+    }
+
+    else if (choice_char == 'b') {
+  
+      int enabled;
+      bool parse_res = parseInt(choice, enabled);
+
+      res = gameModeController->SetMutualDroneVisibility(enabled);
+      if (res) {
+        std::cout << "SetMutualVisibility successful." << std::endl;
+      } else {
+        std::cout << "SetMutualVisibility error !!!" << std::endl;
+      }
+    }
+
     else {
       err = true;
     }

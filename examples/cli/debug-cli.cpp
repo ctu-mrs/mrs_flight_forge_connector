@@ -9,6 +9,8 @@
 #include <memory>
 #include <tuple>
 #include <utility>
+#include "fpng/src/fpng.cpp"
+#include <vector>
 
 #include "flight_forge_connector/flight_forge_connector.h"
 
@@ -253,6 +255,7 @@ int main(int argc, char* argv[]) {
       const auto [res, config] = UedsConnector->GetLidarConfig();
       if (res) {
         std::cout << "GetLidarConfig successful: (Enable: " << config.Enable
+                  << ", Livox: " << config.Livox
                   << "showBeams: " << config.showBeams
                    << ", beamLength: " << config.beamLength
                   << ", BeamHorRays: " << config.BeamHorRays << ", BeamVertRays: " << config.BeamVertRays 
@@ -268,6 +271,7 @@ int main(int argc, char* argv[]) {
     } else if (choice_char == '9') {
       ueds_connector::LidarConfig config{};
       config.Enable = false;
+      config.Livox = true;
       config.showBeams = true;
       config.BeamHorRays = 64;
       config.BeamVertRays = 20;
@@ -345,22 +349,49 @@ int main(int argc, char* argv[]) {
       const auto [res, camera_data, stamp, size] = UedsConnector->GetRgbSegmented();
       if (res) {
         std::cout
-            << "camera_data(ms): "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
-            << std::endl;
+          << "camera_data(ms): "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+          << std::endl;
         std::cout << "GetCameraData successful. Size: " << size << std::endl;
         std::cout
-            << "Elapsed to get img (ms): "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
-            << std::endl;
+          << "Elapsed to get img (ms): "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+          << std::endl;
+        int width, height;
+        const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
+        width = config.width_;
+        height = config.height_;
+        if (size != width * height * 4) {
+          std::cerr << "Size error: expected " << (width * height * 4) << ", got " << size << std::endl;
+          continue; 
+        }
+        // Create a new vector to hold the converted RGB data.
+        std::vector<uint8_t> rgb_data(width * height * 3);
 
-        std::ofstream file;
-        file.open("SegImage.png", std::ios::binary);
-        //        file.write(reinterpret_cast<const char*>(camera_data.get()), size);
-        copy(camera_data.cbegin(), camera_data.cend(), std::ostreambuf_iterator<char>(file));
-        file.close();
+        // **BGRA to RGB Conversion Loop**
+        const uint8_t* bgra_data = camera_data.data(); // Cast for easier indexing
+        uint8_t*       rgb_ptr   = rgb_data.data();
+        for (int i = 0; i < width * height; ++i) {
+          rgb_ptr[i * 3 + 0] = bgra_data[i * 3 + 2]; // R
+          rgb_ptr[i * 3 + 1] = bgra_data[i * 3 + 1]; // G
+          rgb_ptr[i * 3 + 2] = bgra_data[i * 3 + 0]; // B
+        }
+        fpng::fpng_init();
+        std::vector<uint8_t> png_data;
+        if (fpng::fpng_encode_image_to_memory(rgb_data.data(), width, height, 3, png_data)) {
+          std::ofstream file("SegImage.png", std::ios::binary);
+          if (file.is_open()) {
+            file.write(reinterpret_cast<const char*>(png_data.data()), png_data.size());
+            file.close();
+            std::cout << "Wrote segmented image to SegImage.png" << std::endl;
+          } else {
+            std::cerr << "Failed to open output file!" << std::endl;
+          }
+        } else {
+          std::cerr << "fpng encoding failed!" << std::endl;
+        }
       } else {
-        std::cout << "GetCameraData errored, size was 0" << std::endl;
+        std::cout << "GetRgbSegmented errored, size was 0" << std::endl;
       }
     }
     else if (choice_char == 'e') {

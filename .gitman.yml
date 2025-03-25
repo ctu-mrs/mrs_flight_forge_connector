@@ -1,0 +1,18 @@
+location: .gitman
+sources:
+  - repo: https://github.com/richgel999/fpng.git
+    name: fpng 
+    rev: main
+    type: git
+    params:
+    sparse_paths:
+      -
+    links:
+      - source: ''
+        target: include/fpng
+
+    scripts:
+      -
+default_group: ''
+groups:
+  -

@@ -9,7 +9,8 @@
 #include <memory>
 #include <tuple>
 #include <utility>
-#include "fpng/src/fpng.cpp"
+// #include "fpng/src/fpng.cpp"
+#include <fpng.h>
 #include <vector>
 
 #include "flight_forge_connector/flight_forge_connector.h"

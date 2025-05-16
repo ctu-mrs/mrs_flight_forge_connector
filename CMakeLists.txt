@@ -12,6 +12,25 @@ if (WIN32)
     link_libraries(ws2_32 wsock32)
 endif()
 
+# Add the fpng library from gitman
+add_library(fpng STATIC
+    .gitman/fpng/src/fpng.cpp
+    .gitman/fpng/src/lodepng.cpp
+    .gitman/fpng/src/pvpngreader.cpp
+)
+target_include_directories(fpng PUBLIC .gitman/fpng/src)
+
+option(SSE "Enable SSE4.1" ON)
+
+if (SSE)
+  target_compile_definitions(fpng PRIVATE FPNG_NO_SSE=0)
+  target_compile_options(fpng PRIVATE -msse4.1 -mpclmul)
+else()
+  target_compile_definitions(fpng PRIVATE FPNG_NO_SSE=1)
+endif()
+# End of fpng library
+
+# add_subdirectory(.gitman/fpng)
 add_subdirectory(src)
 
 option(BUILD_EXAMPLES "Build examples" ON)

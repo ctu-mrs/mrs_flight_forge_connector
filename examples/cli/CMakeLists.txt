@@ -1,7 +1,9 @@
 add_executable(debug_cli debug-cli.cpp)
+target_link_libraries(debug_cli PRIVATE ${LIBRARY_NAME} fpng)
+
 add_executable(debug_game_mode_cli debug_game_mode_cli.cpp)
-target_link_libraries(debug_cli PRIVATE ${LIBRARY_NAME})
 target_link_libraries(debug_game_mode_cli PRIVATE ${LIBRARY_NAME})
+
 # add_executable(bench_fps benchmarkFPS.cpp)
 # target_link_libraries(bench_fps PRIVATE ${LIBRARY_NAME})
 # add_executable(bench_camera cameraFPS.cpp)

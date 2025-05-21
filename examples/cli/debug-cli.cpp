@@ -147,6 +147,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Get rangefinder range data: c" << std::endl;
     std::cout << "Get camera seg data: d" << std::endl;
     std::cout << "Get seg lidar data: e" << std::endl;
+    std::cout << "Get camera depth data: f" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -407,6 +408,114 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
       } else {
         std::cout << "GetLidarSegData error" << std::endl;
+      }
+    }
+    else if (choice_char == 'f') {
+      const auto [res, camera_data, stamp, size] = UedsConnector->GetDepthCameraData();
+      if (res) {
+        std::cout
+            << "camera_data(ms): "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+            << std::endl;
+        std::cout << "GetDepthCameraData successful. Size: " << size << std::endl;
+        std::cout
+            << "Elapsed to get img (ms): "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+            << std::endl;
+            
+        // for (int i = 0; i < size; ++i) {
+        //   std::cout << camera_data[i] << " ";
+        // }
+
+        int width, height;
+        const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
+        width = config.width_;
+        height = config.height_;
+
+        // Each pixel is 2 bytes (uint16_t), size should be width * height * 2
+        if (size != width * height) {
+          std::cerr << "Size error: expected " << (width * height * 2) << ", got " << size << std::endl;
+        } else {
+          const uint16_t* depth_data = reinterpret_cast<const uint16_t*>(camera_data.data());
+          for (int i = 0; i < width * height; ++i) {
+            uint16_t val = depth_data[i];
+            // Convert uint16_t to IEEE 754 half-precision float (float16)
+            // We'll print the raw bits as hex and as float (converted to float32 for printing)
+            // If you want to decode float16 to float32:
+            uint16_t h = val;
+            uint32_t sign = (h & 0x8000) << 16;
+            uint32_t exp = (h & 0x7C00) >> 10;
+            uint32_t mant = (h & 0x03FF);
+            uint32_t f;
+            if (exp == 0) {
+              if (mant == 0) {
+                f = sign;
+              } else {
+                // subnormal
+                exp = 1;
+                while ((mant & 0x0400) == 0) {
+                  mant <<= 1;
+                  exp--;
+                }
+                mant &= 0x03FF;
+                exp = exp + (127 - 15);
+                f = sign | (exp << 23) | (mant << 13);
+              }
+            } else if (exp == 0x1F) {
+              // Inf/NaN
+              f = sign | 0x7F800000 | (mant << 13);
+            } else {
+              // normal
+              exp = exp + (127 - 15);
+              f = sign | (exp << 23) | (mant << 13);
+            }
+            float float_val;
+            std::memcpy(&float_val, &f, sizeof(float));
+            std::cout << "Pixel " << i << ": uint16=0x" << std::hex << val << std::dec << " float16=" << float_val << std::endl;
+            if (i > 10) break; // print only first 10 pixels for brevity
+          }
+        }
+
+        // std::ofstream file;
+        // file.open("testDepthImage.png", std::ios::binary);
+        // //        file.write(reinterpret_cast<const char*>(camera_data.get()), size);
+        // copy(camera_data.cbegin(), camera_data.cend(), std::ostreambuf_iterator<char>(file));
+        // file.close();
+        // int width, height;
+        // const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
+        // width = config.width_;
+        // height = config.height_;
+        // if (size != width * height * 4) {
+        //   std::cerr << "Size error: expected " << (width * height * 4) << ", got " << size << std::endl;
+        //   continue; 
+        // }
+        // // Create a new vector to hold the converted RGB data.
+        // std::vector<uint8_t> rgb_data(width * height * 3);
+
+        // // **BGRA to RGB Conversion Loop**
+        // const uint8_t* bgra_data = camera_data.data(); // Cast for easier indexing
+        // uint8_t*       rgb_ptr   = rgb_data.data();
+        // for (int i = 0; i < width * height; ++i) {
+        //   rgb_ptr[i * 3 + 0] = bgra_data[i * 3 + 3]; // R
+        //   rgb_ptr[i * 3 + 1] = bgra_data[i * 3 + 1]; // G
+        //   rgb_ptr[i * 3 + 2] = bgra_data[i * 3 + 0]; // B
+        // }
+        // fpng::fpng_init();
+        // std::vector<uint8_t> png_data;
+        // if (fpng::fpng_encode_image_to_memory(rgb_data.data(), width, height, 3, png_data)) {
+        //   std::ofstream file("SegImage.png", std::ios::binary);
+        //   if (file.is_open()) {
+        //     file.write(reinterpret_cast<const char*>(png_data.data()), png_data.size());
+        //     file.close();
+        //     std::cout << "Wrote segmented image to SegImage.png" << std::endl;
+        //   } else {
+        //     std::cerr << "Failed to open output file!" << std::endl;
+        //   }
+        // } else {
+        //   std::cerr << "fpng encoding failed!" << std::endl;
+        // }
+      } else {
+        std::cout << "GetDepthCameraData errored, size was 0" << std::endl;
       }
     }
     else {

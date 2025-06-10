@@ -427,14 +427,89 @@ int main(int argc, char* argv[]) {
         //   std::cout << camera_data[i] << " ";
         // }
 
+        // Save normalized depth image as PNG (float16 -> float32 -> normalize -> uint8)
         int width, height;
         const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
         width = config.width_;
         height = config.height_;
 
+        if (size != width * height) {
+          std::cerr << "Size error: expected " << (width * height) << ", got " << size << std::endl;
+        } else {
+          const uint16_t* depth_data = reinterpret_cast<const uint16_t*>(camera_data.data());
+          std::vector<float> float_depths(width * height);
+          float min_val = std::numeric_limits<float>::max();
+          float max_val = std::numeric_limits<float>::lowest();
+
+          // Convert float16 to float32 and find min/max
+          for (int i = 0; i < width * height; ++i) {
+            uint16_t h = depth_data[i];
+            uint32_t sign = (h & 0x8000) << 16;
+            uint32_t exp = (h & 0x7C00) >> 10;
+            uint32_t mant = (h & 0x03FF);
+            uint32_t f;
+            if (exp == 0) {
+              if (mant == 0) {
+                f = sign;
+              } else {
+                exp = 1;
+                while ((mant & 0x0400) == 0) {
+                  mant <<= 1;
+                  exp--;
+                }
+                mant &= 0x03FF;
+                exp = exp + (127 - 15);
+                f = sign | (exp << 23) | (mant << 13);
+              }
+            } else if (exp == 0x1F) {
+              f = sign | 0x7F800000 | (mant << 13);
+            } else {
+              exp = exp + (127 - 15);
+              f = sign | (exp << 23) | (mant << 13);
+            }
+            float float_val;
+            std::memcpy(&float_val, &f, sizeof(float));
+            float_depths[i] = float_val;
+            if (float_val < min_val) min_val = float_val;
+            if (float_val > max_val) max_val = float_val;
+          }
+
+          // Avoid division by zero
+          if (max_val - min_val < 1e-6f) max_val = min_val + 1.0f;
+
+          // Normalize and convert to uint8
+          std::vector<uint8_t> norm_img(width * height);
+          for (int i = 0; i < width * height; ++i) {
+            float norm = (float_depths[i] - min_val) / (max_val - min_val);
+            norm_img[i] = static_cast<uint8_t>(std::clamp(norm, 0.0f, 1.0f) * 255.0f);
+          }
+
+          // Convert grayscale to RGB (3 channels)
+          std::vector<uint8_t> rgb_img(width * height * 3);
+          for (int i = 0; i < width * height; ++i) {
+            rgb_img[i * 3 + 0] = norm_img[i];
+            rgb_img[i * 3 + 1] = norm_img[i];
+            rgb_img[i * 3 + 2] = norm_img[i];
+          }
+          fpng::fpng_init();
+          std::vector<uint8_t> png_data;
+          if (fpng::fpng_encode_image_to_memory(rgb_img.data(), width, height, 3, png_data)) {
+            std::ofstream file("DepthImage.png", std::ios::binary);
+            if (file.is_open()) {
+              file.write(reinterpret_cast<const char*>(png_data.data()), png_data.size());
+              file.close();
+              std::cout << "Wrote normalized depth image to DepthImage.png" << std::endl;
+            } else {
+              std::cerr << "Failed to open output file!" << std::endl;
+            }
+          } else {
+            std::cerr << "fpng encoding failed!" << std::endl;
+          }
+        }
+        
         // Each pixel is 2 bytes (uint16_t), size should be width * height * 2
         if (size != width * height) {
-          std::cerr << "Size error: expected " << (width * height * 2) << ", got " << size << std::endl;
+          std::cerr << "Size error: expected " << (width * height) << ", got " << size << std::endl;
         } else {
           const uint16_t* depth_data = reinterpret_cast<const uint16_t*>(camera_data.data());
           for (int i = 0; i < width * height; ++i) {
@@ -472,7 +547,7 @@ int main(int argc, char* argv[]) {
             float float_val;
             std::memcpy(&float_val, &f, sizeof(float));
             std::cout << "Pixel " << i << ": uint16=0x" << std::hex << val << std::dec << " float16=" << float_val << std::endl;
-            if (i > 10) break; // print only first 10 pixels for brevity
+            if (i > 10) break;
           }
         }
 

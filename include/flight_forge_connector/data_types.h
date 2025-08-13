@@ -59,7 +59,7 @@ struct WorldName
             {"cave", 4},
             {"erding_airbase", 5},
             {"temesvar", 6},
-            {"eletric_towers", 7},
+            {"electric_towers", 7},
             {"race_1", 8},
             {"race_2", 9},
             {"industrial_warehouse", 10},

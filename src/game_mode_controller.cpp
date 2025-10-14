@@ -201,7 +201,7 @@ bool GameModeController::SetCameraCaptureMode(const CameraCaptureModeEnum& camer
 
 //}
 
-/* setGraphicsSettings() {*/
+/* setGraphicsSettings() //{*/
 bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 
   Serializable::GameMode::SetGraphicsSettings::Request request{};
@@ -215,7 +215,7 @@ bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 }
 //}
 
-/* SwitchWorldLevel() {*/
+/* SwitchWorldLevel() //{*/
 bool GameModeController::SwitchWorldLevel(const short& worldLevelEnum){
 
   Serializable::GameMode::SwitchWorldLevel::Request request{};

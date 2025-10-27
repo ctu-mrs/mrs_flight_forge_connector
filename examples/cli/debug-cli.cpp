@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
                   << "), Data: " << std::endl;
         for (auto& i : data) {
           std::cout << "(distance: " << i.distance << ", directionX: " << i.directionX
-                    << ", directionY: " << i.directionY << ", directionZ: " << i.directionZ << ", segmentation: " << i.segmentation << ")" << std::endl;
+                    << ", directionY: " << i.directionY << ", directionZ: " << i.directionZ << ", segmentation: " << std::to_string(i.segmentation) << ")" << std::endl;
         }
         std::cout << std::endl;
       } else {

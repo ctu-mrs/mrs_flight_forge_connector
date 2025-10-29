@@ -65,7 +65,9 @@ struct WorldName
             {"industrial_warehouse", 10},
             {"service_tunnel", 11},
             {"dead_spruce_forest", 12},
-            {"race_3", 13}
+            {"race_3", 13},
+            {"mala_skala", 14},
+            {"kayenta_mine", 15}
         };
         return map;
     }

@@ -57,9 +57,9 @@ public:
 
   bool SetRgbCameraConfig(const RgbCameraConfig& config);
 
-  std::pair<bool, StereoCameraConfig> GetStereoCameraConfig();
+  std::pair<bool, Serializable::Drone::StereoCameraConfig> GetStereoCameraConfig();
 
-  bool SetStereoCameraConfig(const StereoCameraConfig& config);
+  bool SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config);
 
   std::pair<bool, bool> GetMoveLineVisible();
 

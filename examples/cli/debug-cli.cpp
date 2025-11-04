@@ -147,6 +147,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Get rangefinder range data: c" << std::endl;
     std::cout << "Get camera seg data: d" << std::endl;
     std::cout << "Get seg lidar data: e" << std::endl;
+    std::cout << "Set stereo config: f" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -407,6 +408,34 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
       } else {
         std::cout << "GetLidarSegData error" << std::endl;
+      }
+    }
+    else if (choice_char == 'f') {
+      Serializable::Drone::StereoCameraConfig config{};
+      config.show_debug_camera_ = true;
+      config.fov_ = 120;
+      config.offset_x_left_ = 0;
+      config.offset_y_left_ = 10;
+      config.offset_z_left_ = 0;
+      config.offset_x_right_ = 0;
+      config.offset_y_right_ = -10; 
+      config.offset_z_right_ = 0;
+      config.rotation_pitch_left_ = 0;
+      config.rotation_yaw_left_ = 0;
+      config.rotation_roll_left_ = 0;
+      config.rotation_pitch_right_ = 0;
+      config.rotation_yaw_right_ = 0; 
+      config.rotation_roll_right_ = 0;
+      config.width_ = 640;
+      config.height_ = 480;
+      config.enable_hdr_ = true;
+      config.enable_raytracing_ = false;
+      config.enable_temporal_aa_ = false;
+      const auto res = UedsConnector->SetStereoCameraConfig(config);
+      if (res) {
+        std::cout << "SetStereoCameraConfig successful." << std::endl;
+      } else {
+        std::cout << "SetStereoCameraConfig error" << std::endl;
       }
     }
     else {

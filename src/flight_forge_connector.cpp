@@ -492,7 +492,7 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig() {
 
 /* getStereoCameraConfig() //{ */
 
-std::pair<bool, StereoCameraConfig> UedsConnector::GetStereoCameraConfig() {
+std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStereoCameraConfig() {
 
   Serializable::Drone::GetStereoCameraConfig::Request request{};
 
@@ -500,10 +500,11 @@ std::pair<bool, StereoCameraConfig> UedsConnector::GetStereoCameraConfig() {
   const auto                                           status  = Request(request, response);
   const auto                                           success = status && response.status;
 
-  StereoCameraConfig config{};
+  Serializable::Drone::StereoCameraConfig config{};
 
   if (success) {
-
+    config = response.config;
+/* 
     config.show_debug_camera_ = response.config.show_debug_camera_;
 
     config.fov_ = response.config.fov_;
@@ -519,7 +520,7 @@ std::pair<bool, StereoCameraConfig> UedsConnector::GetStereoCameraConfig() {
 
     config.enable_temporal_aa_ = response.config.enable_temporal_aa_;
     config.enable_hdr_         = response.config.enable_hdr_;
-    config.enable_raytracing_  = response.config.enable_raytracing_;
+    config.enable_raytracing_  = response.config.enable_raytracing_; */
   }
 
   return std::make_pair(success, config);
@@ -569,12 +570,12 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config) {
 
 /* setStereoCameraConfig() //{ */
 
-bool UedsConnector::SetStereoCameraConfig(const StereoCameraConfig& config) {
+bool UedsConnector::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config) {
 
   Serializable::Drone::SetStereoCameraConfig::Request request{};
 
-  request.config                    = Serializable::Drone::StereoCameraConfig{};
-  request.config.show_debug_camera_ = config.show_debug_camera_;
+  request.config                    = config;
+/*   request.config.show_debug_camera_ = config.show_debug_camera_;
 
   request.config.fov_ = config.fov_;
 
@@ -594,7 +595,7 @@ bool UedsConnector::SetStereoCameraConfig(const StereoCameraConfig& config) {
   request.config.enable_temporal_aa_ = config.enable_temporal_aa_;
   request.config.enable_hdr_         = config.enable_hdr_;
   request.config.enable_raytracing_  = config.enable_raytracing_;
-
+ */
   Serializable::Drone::SetStereoCameraConfig::Response response{};
 
   const auto status  = Request(request, response);

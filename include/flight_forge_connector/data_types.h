@@ -67,7 +67,8 @@ struct WorldName
             {"dead_spruce_forest", 12},
             {"race_3", 13},
             {"mala_skala", 14},
-            {"kayenta_mine", 15}
+            {"kayenta_mine", 15},
+            {"sprind_lab", 16}
         };
         return map;
     }

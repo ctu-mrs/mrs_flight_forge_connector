@@ -261,7 +261,7 @@ std::tuple<bool> UedsConnector::SetLocationAndRotationAsync(const Coordinates& c
 
 /* getLidarData() //{ */
 
-std::tuple<bool, std::vector<LidarData>, Coordinates> UedsConnector::GetLidarData() {
+std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::GetLidarData() {
 
   /* std::cout << "GetLidarData()" << std::endl; */
   Serializable::Drone::GetLidarData::Request request{};
@@ -271,6 +271,7 @@ std::tuple<bool, std::vector<LidarData>, Coordinates> UedsConnector::GetLidarDat
   const auto                                  success = status && response.status;
   std::vector<LidarData>                      lidarData;
   Coordinates                                 start{};
+  double stamp;
 
   if (success) {
 
@@ -288,10 +289,12 @@ std::tuple<bool, std::vector<LidarData>, Coordinates> UedsConnector::GetLidarDat
     start.x = response.startX;
     start.y = response.startY;
     start.z = response.startZ;
+
+    stamp = response.stamp_;
   }
 
   // std::cout << "Get lidar data drone controller: " << success << std::endl;
-  return std::make_tuple(success, lidarData, start);
+  return std::make_tuple(success, lidarData, start, stamp);
 }
 
 std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData()
@@ -307,7 +310,7 @@ std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData()
 
 /* getLidarSegData() //{ */
 
-std::tuple<bool, std::vector<LidarSegData>, Coordinates> UedsConnector::GetLidarSegData() {
+std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::GetLidarSegData() {
   Serializable::Drone::GetLidarSegData::Request request{};
 
   Serializable::Drone::GetLidarSegData::Response response{};
@@ -315,6 +318,7 @@ std::tuple<bool, std::vector<LidarSegData>, Coordinates> UedsConnector::GetLidar
   const auto                                     success = status && response.status;
   std::vector<LidarSegData>                      lidarSegData;
   Coordinates                                    start{};
+  double stamp;
 
   if (success) {
 
@@ -333,16 +337,17 @@ std::tuple<bool, std::vector<LidarSegData>, Coordinates> UedsConnector::GetLidar
     start.x = response.startX;
     start.y = response.startY;
     start.z = response.startZ;
+    stamp = response.stamp_;
   }
 
   // std::cout << "Get lidar data drone controller: " << success << std::endl;
-  return std::make_tuple(success, lidarSegData, start);
+  return std::make_tuple(success, lidarSegData, start, stamp);
 }
 //}
 
 /* getLidarIntData() //{ */
 
-std::tuple<bool, std::vector<LidarIntData>, Coordinates> UedsConnector::GetLidarIntData() {
+std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::GetLidarIntData() {
 
   /* std::cout << "GetLidarIntData()" << std::endl; */
 
@@ -353,6 +358,7 @@ std::tuple<bool, std::vector<LidarIntData>, Coordinates> UedsConnector::GetLidar
   const auto                                     success = status && response.status;
   std::vector<LidarIntData>                      lidarIntData;
   Coordinates                                    start{};
+  double stamp;
 
   if (success) {
 
@@ -371,9 +377,10 @@ std::tuple<bool, std::vector<LidarIntData>, Coordinates> UedsConnector::GetLidar
     start.x = response.startX;
     start.y = response.startY;
     start.z = response.startZ;
+    stamp = response.stamp_;
   }
 
-  return std::make_tuple(success, lidarIntData, start);
+  return std::make_tuple(success, lidarIntData, start, stamp);
 }
 //}
 

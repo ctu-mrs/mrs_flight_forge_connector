@@ -241,10 +241,10 @@ int main(int argc, char* argv[]) {
         std::cout << "SetLocationAndRotation error" << std::endl;
       }
     } else if (choice_char == '7') {
-      const auto [res, data, start] = UedsConnector->GetLidarData();
+      const auto [res, data, start, stamp] = UedsConnector->GetLidarData();
       if (res) {
         std::cout << "GetLidarData successful. Start: (" << start.x << ", " << start.y << ", " << start.z
-                  << "), Data: " << std::endl;
+                  << "), Stamp: " << stamp << ", Data: " << std::endl;
         for (auto& i : data) {
           std::cout << "(distance: " << i.distance << ", directionX: " << i.directionX
                     << ", directionY: " << i.directionY << ", directionZ: " << i.directionZ << ")" << std::endl;
@@ -397,10 +397,10 @@ int main(int argc, char* argv[]) {
       }
     }
     else if (choice_char == 'e') {
-      const auto [res, data, start] = UedsConnector->GetLidarSegData();
+      const auto [res, data, start, stamp] = UedsConnector->GetLidarSegData();
       if (res) {
         std::cout << "GetLidarSegData successful. Start: (" << start.x << ", " << start.y << ", " << start.z
-                  << "), Data: " << std::endl;
+                  << "), Stamp: " << stamp << ", Data: " << std::endl;
         for (auto& i : data) {
           std::cout << "(distance: " << i.distance << ", directionX: " << i.directionX
                     << ", directionY: " << i.directionY << ", directionZ: " << i.directionZ << ", segmentation: " << i.segmentation << ")" << std::endl;

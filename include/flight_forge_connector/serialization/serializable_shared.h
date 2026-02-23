@@ -618,10 +618,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarData> lidarData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarData, stamp_);
   }
 };
 }  // namespace GetLidarData
@@ -665,10 +666,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarSegData> lidarSegData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarSegData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarSegData, stamp_);
   }
 };
 }  // namespace GetLidarSegData
@@ -712,10 +714,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarIntData> lidarIntData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarIntData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarIntData, stamp_);
   }
 };
 }  // namespace GetLidarIntData

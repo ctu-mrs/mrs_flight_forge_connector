@@ -11,7 +11,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 11
+#define API_VERSION_MINOR 12
 
 namespace ueds_connector
 {
@@ -27,7 +27,7 @@ public:
 
   std::pair<bool, int> SpawnDrone();
 
-  std::pair<bool, int> SpawnDroneAtLocation(ueds_connector::Coordinates &Location, int &TypeUavID);
+  std::pair<bool, int> SpawnDroneAtLocation(ueds_connector::Coordinates &Location, std::string &TypeUav);
 
   bool RemoveDrone(const int port);
 

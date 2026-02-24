@@ -43,7 +43,7 @@ public:
   
   bool SetGraphicsSettings(const int& graphicsSettings);
 
-  bool SwitchWorldLevel(const short& worldLevelEnum);
+  bool SwitchWorldLevel(const std::string &worldLevelName);
 
   bool SetForestDensity(const int DensityLevel);
 

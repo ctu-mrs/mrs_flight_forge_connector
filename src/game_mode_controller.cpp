@@ -216,10 +216,10 @@ bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 //}
 
 /* SwitchWorldLevel() {*/
-bool GameModeController::SwitchWorldLevel(const short& worldLevelEnum){
+bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
 
   Serializable::GameMode::SwitchWorldLevel::Request request{};
-  request.worldLevelEnum = worldLevelEnum;
+  request.worldLevelName = worldLevelName;
 
   Serializable::GameMode::SwitchWorldLevel::Response response{};
   const auto                                             status  = Request(request, response);

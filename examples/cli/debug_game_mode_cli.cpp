@@ -118,14 +118,14 @@ int main() {
     std::cout << "Exit: x" << std::endl;
     std::cout << "Ping: 0" << std::endl;
     std::cout << "Get drones: 1" << std::endl;
-    std::cout << "Spawn drone: 2 [FRAME ID]" << std::endl;
+    std::cout << "Spawn drone: 2 [FRAME NAME]" << std::endl;
     std::cout << "Remove drone: 3 [PORT]" << std::endl;
     std::cout << "Get camera capture mode: 4" << std::endl;
     std::cout << "Set camera capture mode: 5 [MODE] (0 - all frames, 1 - on movement, 2 - on demand)" << std::endl;
     std::cout << "Get FPS: 6" << std::endl;
     std::cout << "Set Weather: 7 [WEATHER ID]" << std::endl;
     std::cout << "Set Time: 8 [HOURS] [MINUTES]" << std::endl;
-    std::cout << "Switch Wordl: 9 [ID] (0-Valley 1-Forest 2-InfForest 3-Warehouse 4-Cave)" << std::endl;
+    std::cout << "Switch Wordl: 9 [NAME] (0-valley 1-forest 2-infinite_forest 3-warehouse 4-cave)" << std::endl;
     std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
     std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
     std::cout << "----------------" << std::endl;
@@ -278,9 +278,9 @@ int main() {
       //gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
 
       int id_world;
-      bool parse_res = parseInt(choice, id_world);
+      bool parse_res = parseString(choice);
       
-      gameModeController->SwitchWorldLevel(id_world);
+      gameModeController->SwitchWorldLevel(choice);
 
       connect_result = gameModeController->Disconnect();
       if (!connect_result) {
@@ -330,7 +330,7 @@ int main() {
         std::cout << "SetMutualVisibility error !!!" << std::endl;
       }
     }
-    else if (choice_char == 't') {
+    else if (choice_char == 'f') {
       ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,2.0);
       auto [res,origin] = gameModeController->GetWorldOrigin();
       if (res) {
@@ -355,10 +355,40 @@ int main() {
         } else {
           std::cout << "SpawnDrone error, maybe invalid coordinates or UAV type " << uav_type << std::endl;
         }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+      }
+    }else if(choice_char == 'w'){
+      std::map<std::string, short> maps = ueds_connector::WorldName::Name2Id();
+     
+      for(int i = 0; i < maps.size(); i++){
+        std::string map = std::next(maps.begin(), i)->first;
+        std::cout << "World: " << i << " - " << map << std::endl;
+      
+        gameModeController->SwitchWorldLevel(map);
+
+      connect_result = gameModeController->Disconnect();
+      if (!connect_result) {
+        std::cout << "[FlightForge] Disconect was not Disconnected succesfully." << connect_result << std::endl;
+      }
+
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+
+      while (true) {
+        connect_result = gameModeController->Connect();
+        if (connect_result != 1) {
+          std::cout << "[FlightForge] Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
+        } else {
+          break;
+        }
+        // ros::Duration(1.0).sleep();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+       
+        std::this_thread::sleep_for(std::chrono::seconds(5));
 
       }
     }
-
     else {
       err = true;
     }

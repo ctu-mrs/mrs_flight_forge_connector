@@ -12,6 +12,7 @@ using ueds_connector::LidarData;
 using ueds_connector::LidarIntData;
 using ueds_connector::LidarSegData;
 using ueds_connector::RgbCameraConfig;
+using ueds_connector::DepthCameraConfig;
 using ueds_connector::Rotation;
 using ueds_connector::StereoCameraConfig;
 using ueds_connector::UedsConnector;
@@ -99,6 +100,17 @@ std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::Ge
   const auto success = status && response.status;
 
   return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0,
+                         success ? response.image_.size() : 0);
+}
+
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetDepthCameraData() {
+  Serializable::Drone::GetDepthCameraData::Request request{};
+
+  Serializable::Drone::GetDepthCameraData::Response response{};
+  const auto status = Request(request, response);
+  const auto success = status && response.status;
+
+  return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0, 
                          success ? response.image_.size() : 0);
 }
 
@@ -488,6 +500,35 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig() {
   return std::make_pair(success, config);
 }
 
+std::pair<bool, DepthCameraConfig> UedsConnector::GetDepthCameraConfig() {
+
+  Serializable::Drone::GetDepthCameraConfig::Request request{};
+
+  Serializable::Drone::GetDepthCameraConfig::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  DepthCameraConfig config{};
+
+  if (success) {
+
+    config.show_debug_camera_ = response.config.show_debug_camera_;
+
+    config.fov_ = response.config.fov_;
+
+    config.offset_ = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
+
+    config.orientation_ = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
+
+    config.width_  = response.config.width_;
+    config.height_ = response.config.height_;
+	config.max_distance_ = response.config.max_distance_;
+
+  }
+
+  return std::make_pair(success, config);
+}
+
 //}
 
 /* getStereoCameraConfig() //{ */
@@ -565,6 +606,36 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config) {
   return success;
 }
 
+
+bool UedsConnector::SetDepthCameraConfig(const DepthCameraConfig& config) {
+
+  Serializable::Drone::SetDepthCameraConfig::Request request{};
+
+  request.config                    = Serializable::Drone::DepthCameraConfig{};
+  request.config.show_debug_camera_ = config.show_debug_camera_;
+
+  request.config.fov_ = config.fov_;
+
+  request.config.offset_x_ = config.offset_.x;
+  request.config.offset_y_ = config.offset_.y;
+  request.config.offset_z_ = config.offset_.z;
+
+  request.config.rotation_pitch_ = config.orientation_.pitch;
+  request.config.rotation_yaw_   = config.orientation_.yaw;
+  request.config.rotation_roll_  = config.orientation_.roll;
+
+  request.config.width_  = config.width_;
+  request.config.height_ = config.height_;
+
+  request.config.max_distance_ = config.max_distance_; 
+
+  Serializable::Drone::SetDepthCameraConfig::Response response{};
+
+  const auto status  = Request(request, response);
+  const auto success = status && response.status;
+
+  return success;
+}
 //}
 
 /* setStereoCameraConfig() //{ */

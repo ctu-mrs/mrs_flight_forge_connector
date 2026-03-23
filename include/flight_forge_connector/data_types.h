@@ -255,6 +255,35 @@ struct RgbCameraConfig
   double   motion_blur_distortion_;
 };
 
+
+struct DepthCameraConfig
+{
+    DepthCameraConfig() = default;
+    DepthCameraConfig(bool show_debug_camera, const Coordinates offset, const Rotation orientation, double fov, int width, int height, float max_distance)
+        : show_debug_camera_(show_debug_camera),
+        offset_(offset),
+        orientation_(orientation),
+        fov_(fov),
+        width_(width),
+        height_(height),
+		max_distance_(max_distance)
+    {
+    }
+
+    bool show_debug_camera_;
+
+    Coordinates offset_;
+
+    Rotation orientation_;
+
+    double fov_;
+
+    int width_;
+    int height_;
+
+	float max_distance_;
+};
+
 struct StereoCameraConfig
 {
   StereoCameraConfig() = default;

@@ -29,6 +29,8 @@ public:
 
   std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetRgbCameraData();
 
+  std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetDepthCameraData();
+
   std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> GetStereoCameraData();
 
   std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetRgbSegmented();
@@ -55,7 +57,11 @@ public:
 
   std::pair<bool, RgbCameraConfig> GetRgbCameraConfig();
 
+  std::pair<bool, DepthCameraConfig> GetDepthCameraConfig();
+
   bool SetRgbCameraConfig(const RgbCameraConfig& config);
+
+  bool SetDepthCameraConfig(const DepthCameraConfig& config);
 
   std::pair<bool, StereoCameraConfig> GetStereoCameraConfig();
 

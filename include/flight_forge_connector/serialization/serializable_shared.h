@@ -106,9 +106,8 @@ enum MessageType : unsigned short
   get_crash_state                 = 21,
   get_lidar_int                   = 22,
   get_rangefinder_data            = 23,
-  get_depth_camera_data                  = 24,
-  get_depth_camera_config         = 25,
-  set_depth_camera_config         = 26,
+  get_depth_camera_data           = 24,
+
 };
 
 /* struct LidarConfig //{ */
@@ -181,31 +180,6 @@ struct RgbCameraConfig
   }
 };
 
-
-struct DepthCameraConfig {
-    bool show_debug_camera_;
-
-    double offset_x_;
-    double offset_y_;
-    double offset_z_;
-
-    double rotation_pitch_;
-    double rotation_yaw_;
-    double rotation_roll_;
-
-    double fov_;
-
-    int width_;
-    int height_;
-
-    float max_distance_;
-
-    template <class Archive>
-    void serialize(Archive& archive) {
-        archive(show_debug_camera_, offset_x_, offset_y_, offset_z_, rotation_pitch_, rotation_yaw_, rotation_roll_, fov_, width_, height_, max_distance_);
-    }
-
-};
 
 //}
 
@@ -387,11 +361,13 @@ namespace GetDepthCameraData
         Response() : Common::NetworkResponse(static_cast<unsigned short>(MessageType::get_depth_camera_data)) {}
         explicit Response(bool _status) : Common::NetworkResponse(MessageType::get_depth_camera_data, _status) {}
 
-        std::vector<unsigned char> image_;
-        double                     stamp_;
+        std::vector<uint16_t> image_;
+        double                stamp_;
         template <class Archive>
         void serialize(Archive& archive) {
+
             archive(cereal::base_class<Common::NetworkResponse>(this), image_, stamp_);
+
         }
     };
 }
@@ -868,43 +844,7 @@ struct Response : public Common::NetworkResponse
 };
 }  // namespace SetRgbCameraConfig
 
-namespace GetDepthCameraConfig
-{
-    struct Request : public Common::NetworkRequest
-    {
-        Request() : Common::NetworkRequest(static_cast<unsigned short>(MessageType::get_depth_camera_config)) {};
-    };
-    struct Response : public Common::NetworkResponse
-    {
-        Response() : Common::NetworkResponse(static_cast<unsigned short>(MessageType::get_depth_camera_config)) {};
-        explicit Response(bool _status) : Common::NetworkResponse(MessageType::get_depth_camera_config, _status) {};
-        
-        DepthCameraConfig config;
 
-        template <class Archive>
-        void serialize(Archive& archive) {
-            archive(cereal::base_class<Common::NetworkResponse>(this), config);
-        }
-    };
-}  // namespace GetDepthCameraConfig
-
-namespace SetDepthCameraConfig
-{
-    struct Request : public Common::NetworkRequest
-    {
-        Request() : Common::NetworkRequest(static_cast<unsigned short>(MessageType::set_depth_camera_config)) {};
-        DepthCameraConfig config;
-        template <class Archive>
-        void serialize(Archive& archive) {
-            archive(cereal::base_class<Common::NetworkRequest>(this), config);
-        }
-    };
-    struct Response : public Common::NetworkResponse
-    {
-        Response() : Common::NetworkResponse(static_cast<unsigned short>(MessageType::set_depth_camera_config)) {};
-        explicit Response(bool _status) : Common::NetworkResponse(MessageType::set_depth_camera_config, _status) {};
-    };
-}  // namespace SetDepthCameraConfig
 
 
 //}

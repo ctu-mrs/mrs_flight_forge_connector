@@ -194,7 +194,7 @@ bool SocketClient::GetMessage(std::string& message) {
     message += chunk_str;
 
     if (socket_->bytes_available() == 0 && message[message.size() - 1] == END_OF_MESSAGE && message[message.size() - 2] == END_OF_MESSAGE && message[message.size() - 3] == END_OF_MESSAGE) {
-      // std::cout << "received: "<< message[message.size()-1] << std::endl;
+       std::cout << "received: "<< message.size() << std::endl;
       break;
     }
   }

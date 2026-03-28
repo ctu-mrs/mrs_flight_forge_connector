@@ -145,8 +145,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Get camera seg data: d" << std::endl;
     std::cout << "Get seg lidar data: e" << std::endl;
 	std::cout << "Get depth data: f" << std::endl;
-	std::cout << "Get depth camera config: g" << std::endl;
-	std::cout << "Set depth camera config: h" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -387,56 +385,19 @@ int main(int argc, char* argv[]) {
                 << "depth_data(ms): "
                 << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
                 << std::endl;
-            std::cout << "GetCameraData successful. Size: " << size << std::endl;
+            std::cout << "GetDepthData successful. Size: " << size << std::endl;
             std::cout
                 << "Elapsed to get img (ms): "
                 << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
                 << std::endl;
 
-            std::ofstream file;
+            std::ofstream file;                                                      
             file.open("DepthTestImage.png", std::ios::binary);
-            copy(depth_data.cbegin(), depth_data.cend(), std::ostreambuf_iterator<char>(file));
+            file.write(reinterpret_cast<const char*>(depth_data.data()), depth_data.size() * sizeof(uint16_t));
             file.close();
         }
         else {
             std::cout << "GetDepthData errored, size was 0" << std::endl;
-        }
-    }
-    else if (choice_char == 'g') {
-        const auto [res, config] = UedsConnector->GetDepthCameraConfig();
-        if (res) {
-            std::cout << "GetDepthCameraConfig successful: (showDebugCamera: " << config.show_debug_camera_
-                << ", offset: " << config.offset_.toString()
-                << ", rotation: " << config.orientation_.toString() << ", Width: " << config.width_ << ", Height: " << config.height_ << ", Max Distance:  " << config.max_distance_ << std::endl;
-        }
-        else {
-            std::cout << "GetDepthCameraConfig error" << std::endl;
-        }
-    }
-    else if (choice_char == 'h') {
-        ueds_connector::DepthCameraConfig config{};
-
-        config.show_debug_camera_ = true;
-
-        config.fov_ = 120;
-
-        config.offset_ = ueds_connector::Coordinates(0, 0, 0);
-
-        config.orientation_ = ueds_connector::Rotation(0, 0, 0);
-
-        config.width_ = 999;//640; <1000
-
-        config.height_ = 999;//480; limit <1000
-
-        config.max_distance_ = 3500;
-
-        const auto res = UedsConnector->SetDepthCameraConfig(config);
-
-        if (res) {
-            std::cout << "SetDepthCameraConfig successful" << std::endl;
-        }
-        else {
-            std::cout << "SetDepthCameraConfig error" << std::endl;
         }
     }
     else {

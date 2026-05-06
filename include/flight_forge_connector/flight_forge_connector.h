@@ -33,6 +33,8 @@ public:
 
   std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetRgbSegmented();
 
+  std::tuple<bool, std::vector<uint16_t>, double, uint32_t> GetDepthCameraData();
+
   std::pair<bool, Rotation> GetRotation();
 
   std::tuple<bool, Rotation, bool, Coordinates> SetRotation(const Rotation& rotation);

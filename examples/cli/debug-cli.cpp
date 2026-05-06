@@ -148,6 +148,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Get camera seg data: d" << std::endl;
     std::cout << "Get seg lidar data: e" << std::endl;
     std::cout << "Set stereo config: f" << std::endl;
+    std::cout << "Get depth data: g" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -438,7 +439,64 @@ int main(int argc, char* argv[]) {
         std::cout << "SetStereoCameraConfig error" << std::endl;
       }
     }
-    else {
+    else if (choice_char == 'g'){
+  const auto [res, depth_data, stamp, size] = UedsConnector->GetDepthCameraData();
+      if (res) {
+        std::cout
+          << "depth data(ms): "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+          << std::endl;
+        std::cout << "GetDepthData  successful. Size: " << size << std::endl;
+        std::cout
+          << "Elapsed to get img (ms): "
+          << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+          << std::endl;
+          
+        int width, height;
+        const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
+        width = config.width_;
+        height = config.height_;
+        if (size != width * height * 2) {
+          std::cerr << "Size error: expected " << (width * height * 2) << ", got " << size << std::endl;
+          continue; 
+        }
+        std::vector<uint8_t> gray_image(width * height * 3);
+        uint8_t*       gray_ptr   = gray_image.data();
+
+        double max_depth = 65535;
+
+        for (int i = 0; i < width * height; ++i) {
+          double ratio =  (depth_data[i] / max_depth);
+
+          if (ratio > 1.0)
+            ratio = 1.0;
+
+          uint8_t cur = ratio * 255;
+
+          gray_ptr[i * 3 + 0] = cur; 
+          gray_ptr[i * 3 + 1] = cur; 
+          gray_ptr[i * 3 + 2] = cur; 
+        }
+        fpng::fpng_init();
+        std::vector<uint8_t> png_data;
+        if (fpng::fpng_encode_image_to_memory(gray_image.data(), width, height, 3, png_data)) {
+          std::ofstream file("DepthImage.png", std::ios::binary);
+          if (file.is_open()) {
+            file.write(reinterpret_cast<const char*>(png_data.data()), png_data.size());
+            file.close();
+            std::cout << "Wrote depth image to DepthImage.png" << std::endl;
+          } else {
+            std::cerr << "Failed to open output file!" << std::endl;
+          }
+        } else {
+          std::cerr << "fpng encoding failed!" << std::endl;
+        }
+      } else {
+        std::cout << "GetDepthCameraData errored, size was 0" << std::endl;
+      }
+    }
+    
+    else{
       err = true;
     }
 

@@ -456,23 +456,26 @@ int main(int argc, char* argv[]) {
         const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
         width = config.width_;
         height = config.height_;
-        if (size != width * height) {
-          std::cerr << "Size error: expected " << (width * height) << ", got " << size << std::endl;
+        if (size != width * height * 2) {
+          std::cerr << "Size error: expected " << (width * height * 2) << ", got " << size << std::endl;
           continue; 
         }
         std::vector<uint8_t> gray_image(width * height * 3);
-
-        // **BGRA to RGB Conversion Loop**
-        const uint16_t* bgra_data = reinterpret_cast<const uint16_t*>(depth_data.data()); // Cast for easier indexing
         uint8_t*       gray_ptr   = gray_image.data();
 
-        uint16_t max_depth = 65535;
+        double max_depth = 65535;
 
         for (int i = 0; i < width * height; ++i) {
-          uint8_t cur =  bgra_data[i] / 65535;
-          gray_ptr[i * 3 + 0] = cur; // R
-          gray_ptr[i * 3 + 1] = cur; // G
-          gray_ptr[i * 3 + 2] = cur; // B
+          double ratio =  (depth_data[i] / max_depth);
+
+          if (ratio > 1.0)
+            ratio = 1.0;
+
+          uint8_t cur = ratio * 255;
+
+          gray_ptr[i * 3 + 0] = cur; 
+          gray_ptr[i * 3 + 1] = cur; 
+          gray_ptr[i * 3 + 2] = cur; 
         }
         fpng::fpng_init();
         std::vector<uint8_t> png_data;

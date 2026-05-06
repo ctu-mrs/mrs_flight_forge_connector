@@ -144,7 +144,7 @@ std::tuple<bool, std::vector<uint16_t>, double, uint32_t> UedsConnector::GetDept
   const auto                                         success = status && response.status;
 
   return std::make_tuple(success, success ? response.image_ : std::vector<uint16_t>(), success ? response.stamp_ : 0.0,
-                         success ? response.image_.size() : 0);
+                         success ? response.image_.size() * 2 : 0);
 }
 
 

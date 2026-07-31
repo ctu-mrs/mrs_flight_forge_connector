@@ -60,7 +60,20 @@ void interruptHandler(int s) {
   exit(1);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+  // Optional args: [port] [address]
+  // Port defaults to 8551 (FlightForgeGameModePort default).
+  // Address defaults to 127.0.0.1 (FlightForgeBindAddr default).
+  int         port    = 8551;
+  std::string address = LOCALHOST;
+  if (argc >= 2) {
+    port = atoi(argv[1]);
+  }
+  if (argc >= 3) {
+    address = argv[2];
+  }
+  std::cout << "Connecting to game-mode controller at " << address << ":" << port << std::endl;
+
 #ifdef _WIN32
   signal(SIGINT, interruptHandler);
   signal(SIGTERM, interruptHandler);
@@ -73,7 +86,7 @@ int main() {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  gameModeController = std::make_unique<ueds_connector::GameModeController>(LOCALHOST, 8551);
+  gameModeController = std::make_unique<ueds_connector::GameModeController>(address, port);
   bool connect_result = gameModeController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;

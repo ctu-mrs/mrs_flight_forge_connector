@@ -193,9 +193,14 @@ bool SocketClient::GetMessage(std::string& message) {
     std::string chunk_str(chunk, receive_size);
     message += chunk_str;
 
-    if (socket_->bytes_available() == 0 && message[message.size() - 1] == END_OF_MESSAGE && message[message.size() - 2] == END_OF_MESSAGE && message[message.size() - 3] == END_OF_MESSAGE) {
-      // std::cout << "received: "<< message[message.size()-1] << std::endl;
-      break;
+    if (message[message.size() - 1] == END_OF_MESSAGE && message[message.size() - 2] == END_OF_MESSAGE && message[message.size() - 3] == END_OF_MESSAGE) {
+      // Give in-flight TCP segments time to land before declaring the message complete.
+      // Without this, bytes_available() returns 0 between segments in a proxy chain (nginx+socat),
+      // causing false-positive EOM detection on binary payloads that contain '$$$' sequences.
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      if (socket_->bytes_available() == 0) {
+        break;
+      }
     }
   }
 

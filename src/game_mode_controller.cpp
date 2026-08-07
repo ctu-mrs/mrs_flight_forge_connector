@@ -64,13 +64,13 @@ std::pair<bool, int> GameModeController::SpawnDrone() {
 
 /* spawnDrone() //{ */
 
-std::pair<bool, int> GameModeController::SpawnDroneAtLocation(ueds_connector::Coordinates &Location, int &TypeUavID) {
+std::pair<bool, int> GameModeController::SpawnDroneAtLocation(ueds_connector::Coordinates &Location, std::string &TypeUav) {
 
   Serializable::GameMode::SpawnDroneAtLocation::Request request{};
   request.x = Location.x;
   request.y = Location.y;
   request.z = Location.z;
-  request.idMesh = TypeUavID;
+  request.MeshName = TypeUav;
 
   Serializable::GameMode::SpawnDroneAtLocation::Response response{};
   const auto                                   status  = Request(request, response);
@@ -216,10 +216,10 @@ bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 //}
 
 /* SwitchWorldLevel() {*/
-bool GameModeController::SwitchWorldLevel(const short& worldLevelEnum){
+bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
 
   Serializable::GameMode::SwitchWorldLevel::Request request{};
-  request.worldLevelEnum = worldLevelEnum;
+  request.worldLevelName = worldLevelName;
 
   Serializable::GameMode::SwitchWorldLevel::Response response{};
   const auto                                             status  = Request(request, response);

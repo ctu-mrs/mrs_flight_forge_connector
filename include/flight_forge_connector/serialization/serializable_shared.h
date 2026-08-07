@@ -4,7 +4,9 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
+#include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
 namespace Serializable
@@ -616,10 +618,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarData> lidarData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarData, stamp_);
   }
 };
 }  // namespace GetLidarData
@@ -663,10 +666,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarSegData> lidarSegData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarSegData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarSegData, stamp_);
   }
 };
 }  // namespace GetLidarSegData
@@ -710,10 +714,11 @@ struct Response : public Common::NetworkResponse
   double startZ;
 
   std::vector<LidarIntData> lidarIntData;
+  double                     stamp_;
 
   template <class Archive>
   void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarIntData);
+    archive(cereal::base_class<Common::NetworkResponse>(this), startX, startY, startZ, lidarIntData, stamp_);
   }
 };
 }  // namespace GetLidarIntData
@@ -1071,10 +1076,11 @@ namespace SpawnDroneAtLocation
     double x;
     double y;
     double z;
-    int idMesh;
+    std::string MeshName;
+
     template <class Archive>
     void serialize(Archive& archive) {
-      archive(cereal::base_class<Common::NetworkRequest>(this), x, y, z, idMesh);
+      archive(cereal::base_class<Common::NetworkRequest>(this), x, y, z, MeshName);
     }
   };
 
@@ -1262,11 +1268,11 @@ namespace SwitchWorldLevel
   {
     Request() : Common::NetworkRequest(MessageType::switch_world_level){};
 
-    short worldLevelEnum;
+    std::string worldLevelName;
 
     template <class Archive>
     void serialize(Archive& archive) {
-    archive(cereal::base_class<Common::NetworkRequest>(this), worldLevelEnum);
+    archive(cereal::base_class<Common::NetworkRequest>(this), worldLevelName);
     }
   };
 

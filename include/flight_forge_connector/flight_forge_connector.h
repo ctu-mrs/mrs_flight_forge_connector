@@ -43,11 +43,11 @@ public:
 
   std::tuple<bool, double> GetRangefinderData();
 
-  std::tuple<bool, std::vector<LidarData>, Coordinates> GetLidarData();
+  std::tuple<bool, std::vector<LidarData>, Coordinates, double> GetLidarData();
 
-  std::tuple<bool, std::vector<LidarSegData>, Coordinates> GetLidarSegData();
+  std::tuple<bool, std::vector<LidarSegData>, Coordinates, double > GetLidarSegData();
   
-  std::tuple<bool, std::vector<LidarIntData>, Coordinates> GetLidarIntData();
+  std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> GetLidarIntData();
 
   std::pair<bool, LidarConfig> GetLidarConfig();
 

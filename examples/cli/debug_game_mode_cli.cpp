@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "flight_forge_connector/game_mode_controller.h"
+#include "flight_forge_connector/data_types.h"
 
 bool parseInt(std::string choice, int& _int) {
   int x;
@@ -22,6 +23,17 @@ bool parseInt(std::string choice, int& _int) {
 
   x = std::stoi(choice);
   _int = x;
+
+  return true;
+}
+
+bool parseString(std::string &choice) {
+  auto delimiter_position = choice.find(' ');
+  if (delimiter_position == std::string::npos) {
+    return false;
+  }
+  // trim '2 '
+  choice.erase(0, delimiter_position + 1);
 
   return true;
 }
@@ -119,14 +131,14 @@ int main(int argc, char* argv[]) {
     std::cout << "Exit: x" << std::endl;
     std::cout << "Ping: 0" << std::endl;
     std::cout << "Get drones: 1" << std::endl;
-    std::cout << "Spawn drone: 2 [FRAME ID]" << std::endl;
+    std::cout << "Spawn drone: 2 [FRAME NAME]" << std::endl;
     std::cout << "Remove drone: 3 [PORT]" << std::endl;
     std::cout << "Get camera capture mode: 4" << std::endl;
     std::cout << "Set camera capture mode: 5 [MODE] (0 - all frames, 1 - on movement, 2 - on demand)" << std::endl;
     std::cout << "Get FPS: 6" << std::endl;
     std::cout << "Set Weather: 7 [WEATHER ID]" << std::endl;
     std::cout << "Set Time: 8 [HOURS] [MINUTES]" << std::endl;
-    std::cout << "Switch Wordl: 9 [ID] (0-Valley 1-Forest 2-InfForest 3-Warehouse 4-Cave)" << std::endl;
+    std::cout << "Switch Wordl: 9 [NAME] (0-valley 1-forest 2-infinite_forest 3-warehouse 4-cave)" << std::endl;
     std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
     std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
     std::cout << "----------------" << std::endl;
@@ -159,31 +171,29 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
       }
     } else if (choice_char == '2') {
-      
-      ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,0.0);
-
-      const auto [result, world_origin] = gameModeController->GetWorldOrigin();
-
-      if (!result) {
-        std::cout << "GetWorldOrigin error" << std::endl;
+      ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,2.0);
+      auto [res,origin] = gameModeController->GetWorldOrigin();
+      if (res) {
+        std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
+        spawn_coord = origin;
       } else {
-        spawn_coord = world_origin;
+        std::cout << "GetWorldOrigin error" << std::endl;
       }
+ 
 
-      int uav_type_id = 0; //example: "robofly" has ID=3 ;
-
-      bool parse_res = parseInt(choice, uav_type_id);
+      bool parse_res = parseString(choice);
 
       if(!parse_res){
         std::cout << "Parse error!!!" << std::endl;
       }else{
 
-      const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, uav_type_id);
+
+      const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, choice);
 
       if (res) {
         std::cout << "SpawnDrone successful, port: " << port << std::endl;
       } else {
-        std::cout << "SpawnDrone error" << std::endl;
+        std::cout << "SpawnDrone error, maybe invalid coordinates or UAV type " << choice << std::endl;
       }
 
       }
@@ -281,9 +291,9 @@ int main(int argc, char* argv[]) {
       //gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
 
       int id_world;
-      bool parse_res = parseInt(choice, id_world);
+      bool parse_res = parseString(choice);
       
-      gameModeController->SwitchWorldLevel(id_world);
+      gameModeController->SwitchWorldLevel(choice);
 
       connect_result = gameModeController->Disconnect();
       if (!connect_result) {
@@ -333,7 +343,65 @@ int main(int argc, char* argv[]) {
         std::cout << "SetMutualVisibility error !!!" << std::endl;
       }
     }
+    else if (choice_char == 'f') {
+      ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,2.0);
+      auto [res,origin] = gameModeController->GetWorldOrigin();
+      if (res) {
+        std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
+        spawn_coord = origin;
+      } else {
+        std::cout << "GetWorldOrigin error" << std::endl;
+      }
 
+      
+
+      std::map<std::string, int> uav_type_map = ueds_connector::UavFrameType::Type2IdMesh();
+     
+      for(int i = 0; i < uav_type_map.size(); i++){
+        std::string uav_type = std::next(uav_type_map.begin(), i)->first;
+        std::cout << "UAV type: " << i << " - " << uav_type << std::endl;
+        spawn_coord.z += i*100;
+        const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, uav_type);
+
+        if (res) {
+          std::cout << "SpawnDrone successful, port: " << port << std::endl;
+        } else {
+          std::cout << "SpawnDrone error, maybe invalid coordinates or UAV type " << uav_type << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+      }
+    }else if(choice_char == 'w'){
+      std::map<std::string, short> maps = ueds_connector::WorldName::Name2Id();
+     
+      for(int i = 0; i < maps.size(); i++){
+        std::string map = std::next(maps.begin(), i)->first;
+        std::cout << "World: " << i << " - " << map << std::endl;
+      
+        gameModeController->SwitchWorldLevel(map);
+
+      connect_result = gameModeController->Disconnect();
+      if (!connect_result) {
+        std::cout << "[FlightForge] Disconect was not Disconnected succesfully." << connect_result << std::endl;
+      }
+
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+
+      while (true) {
+        connect_result = gameModeController->Connect();
+        if (connect_result != 1) {
+          std::cout << "[FlightForge] Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
+        } else {
+          break;
+        }
+        // ros::Duration(1.0).sleep();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+       
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+      }
+    }
     else {
       err = true;
     }

@@ -239,5 +239,47 @@ class Simulator:
         _check(ok, "RemoveAllSpawnedObjects")
         return removed
 
+    def move_object(self, object_id, position, orientation=(0.0, 0.0, 0.0), scale=(1.0, 1.0, 1.0)):
+        """Repositions a spawned object. The pose is in the spawn config's frame:
+        right-handed (ROS) metres and degrees (roll, pitch, yaw) relative to the
+        world origin."""
+        ok = self._raw.MoveSpawnedObject(
+            object_id,
+            [float(v) for v in position],
+            [float(v) for v in orientation],
+            [float(v) for v in scale],
+        )
+        _check(ok, f"MoveSpawnedObject({object_id})")
+
+    def objects(self):
+        """Current objects as {id: {asset, stencil, position, orientation, scale}},
+        with poses reflecting any moves since spawning."""
+        ok, infos = self._raw.ListSpawnedObjects()
+        _check(ok, "ListSpawnedObjects")
+        return {
+            o.id: {
+                "asset": o.asset,
+                "stencil": o.stencil,
+                "position": np.array(o.position),
+                "orientation": np.array(o.orientation),
+                "scale": np.array(o.scale),
+            }
+            for o in infos
+        }
+
+    def export_scene(self):
+        """The current spawned objects as a spawn-config YAML document; feeding it
+        back to spawn_objects recreates the scene, stencils included."""
+        ok, yaml_text = self._raw.ExportScene()
+        _check(ok, "ExportScene")
+        return yaml_text
+
+    def assets(self, path_prefix="", name_filter=""):
+        """Spawnable asset names (cooked object paths + on-disk glTF model names).
+        Returns (names, truncated)."""
+        ok, names, truncated = self._raw.ListAssets(path_prefix, name_filter)
+        _check(ok, "ListAssets")
+        return list(names), truncated
+
     def close(self):
         self._raw.Disconnect()

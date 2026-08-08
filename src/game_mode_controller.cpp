@@ -317,3 +317,72 @@ std::pair<bool, int> GameModeController::RemoveAllSpawnedObjects() {
 }
 
 //}
+
+/* moveSpawnedObject() //{ */
+
+bool GameModeController::MoveSpawnedObject(const int object_id, const std::array<double, 3>& position, const std::array<double, 3>& orientation,
+                                           const std::array<double, 3>& scale) {
+
+  Serializable::GameMode::MoveSpawnedObject::Request request{};
+  request.object_id   = object_id;
+  request.position    = position;
+  request.orientation = orientation;
+  request.scale       = scale;
+
+  Serializable::GameMode::MoveSpawnedObject::Response response{};
+  const auto                                          status = Request(request, response);
+
+  return status && response.status;
+}
+
+//}
+
+/* listSpawnedObjects() //{ */
+
+std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> GameModeController::ListSpawnedObjects() {
+
+  Serializable::GameMode::ListSpawnedObjects::Request request{};
+
+  Serializable::GameMode::ListSpawnedObjects::Response response{};
+  const auto                                           status  = Request(request, response);
+  const auto                                           success = status && response.status;
+
+  return std::make_pair(success, success ? response.objects : std::vector<Serializable::GameMode::SpawnedObjectInfo>());
+}
+
+//}
+
+/* exportScene() //{ */
+
+std::pair<bool, std::string> GameModeController::ExportScene() {
+
+  Serializable::GameMode::ExportScene::Request request{};
+
+  Serializable::GameMode::ExportScene::Response response{};
+  const auto                                    status  = Request(request, response);
+  const auto                                    success = status && response.status;
+
+  return std::make_pair(success, success ? response.yaml : std::string());
+}
+
+//}
+
+/* listAssets() //{ */
+
+std::pair<bool, std::vector<std::string>> GameModeController::ListAssets(const std::string& path_prefix, const std::string& name_filter,
+                                                                         bool& OutTruncated) {
+
+  Serializable::GameMode::ListAssets::Request request{};
+  request.path_prefix = path_prefix;
+  request.name_filter = name_filter;
+
+  Serializable::GameMode::ListAssets::Response response{};
+  const auto                                   status  = Request(request, response);
+  const auto                                   success = status && response.status;
+
+  OutTruncated = success && response.truncated;
+
+  return std::make_pair(success, success ? response.assets : std::vector<std::string>());
+}
+
+//}

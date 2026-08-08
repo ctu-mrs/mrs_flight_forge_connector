@@ -72,6 +72,29 @@ public:
 
   /** Removes every object placed by the spawn tool, returning how many were removed. */
   std::pair<bool, int> RemoveAllSpawnedObjects();
+
+  /**
+   * Repositions a spawned object. The pose is in the spawn config's frame: right-handed
+   * (ROS) metres and degrees (roll, pitch, yaw) relative to the world origin.
+   */
+  bool MoveSpawnedObject(const int object_id, const std::array<double, 3>& position, const std::array<double, 3>& orientation,
+                         const std::array<double, 3>& scale = {1.0, 1.0, 1.0});
+
+  /** Lists every spawned object with its CURRENT pose, in the same frame MoveSpawnedObject takes. */
+  std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> ListSpawnedObjects();
+
+  /**
+   * Serializes the currently spawned objects back into a spawn configuration document
+   * (stencils included), so feeding it to SpawnObjectsFromYaml recreates the scene.
+   */
+  std::pair<bool, std::string> ExportScene();
+
+  /**
+   * Enumerates what the spawn tool could place: cooked assets under path_prefix (empty
+   * means /Game) plus on-disk glTF models, optionally filtered by a case-insensitive
+   * substring of the name. OutTruncated is set when the server-side cap was hit.
+   */
+  std::pair<bool, std::vector<std::string>> ListAssets(const std::string& path_prefix, const std::string& name_filter, bool& OutTruncated);
 };
 
 }  // namespace ueds_connector

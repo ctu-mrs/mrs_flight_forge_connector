@@ -83,8 +83,27 @@ def main():
     ok, object_ids, error = game_mode.SpawnObjectsFromYaml(SPAWN_YAML)
     print(f"spawned objects: {object_ids} (error: '{error}')")
 
+    # --- scene editing: move, list, export ---
+    ok, assets, truncated = game_mode.ListAssets(name_filter="cube")
+    print(f"assets matching 'cube': {assets[:5]}{' (truncated)' if truncated else ''}")
+
+    if object_ids:
+        game_mode.MoveSpawnedObject(object_ids[0], position=[8.0, 2.0, 1.5], orientation=[0.0, 0.0, 90.0])
+
+    ok, objects = game_mode.ListSpawnedObjects()
+    for o in objects:
+        print(f"object {o.id}: {o.asset} at {list(o.position)} rpy {list(o.orientation)} stencil {o.stencil}")
+
+    ok, scene_yaml = game_mode.ExportScene()
+    print(f"exported scene:\n{scene_yaml}")
+
     if object_ids:
         game_mode.RemoveSpawnedObject(object_ids[0])
+    game_mode.RemoveAllSpawnedObjects()
+
+    # the exported document is a valid spawn config: this recreates the scene
+    ok, object_ids, error = game_mode.SpawnObjectsFromYaml(scene_yaml)
+    print(f"scene recreated from export: {object_ids} (error: '{error}')")
     game_mode.RemoveAllSpawnedObjects()
 
     drone.Disconnect()

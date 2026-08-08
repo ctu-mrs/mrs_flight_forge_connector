@@ -17,6 +17,14 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
       .value("CAPTURE_ON_MOVEMENT", CameraCaptureModeEnum::CAPTURE_ON_MOVEMENT)
       .value("CAPTURE_ON_DEMAND", CameraCaptureModeEnum::CAPTURE_ON_DEMAND);
 
+  py::class_<Serializable::GameMode::SpawnedObjectInfo>(m, "SpawnedObjectInfo")
+      .def_readonly("id", &Serializable::GameMode::SpawnedObjectInfo::id)
+      .def_readonly("asset", &Serializable::GameMode::SpawnedObjectInfo::asset)
+      .def_readonly("stencil", &Serializable::GameMode::SpawnedObjectInfo::stencil)
+      .def_readonly("position", &Serializable::GameMode::SpawnedObjectInfo::position)
+      .def_readonly("orientation", &Serializable::GameMode::SpawnedObjectInfo::orientation)
+      .def_readonly("scale", &Serializable::GameMode::SpawnedObjectInfo::scale);
+
   py::class_<GameModeController>(m, "GameModeController")
       .def(py::init<const std::string&, uint16_t>())
       .def("ConnectSimple", &GameModeController::ConnectSimple, py::call_guard<py::gil_scoped_release>())
@@ -53,6 +61,22 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("yaml"), "Returns (success, object_ids, error).")
       .def("RemoveSpawnedObject", &GameModeController::RemoveSpawnedObject, py::call_guard<py::gil_scoped_release>())
       .def("RemoveAllSpawnedObjects", &GameModeController::RemoveAllSpawnedObjects, py::call_guard<py::gil_scoped_release>())
+      .def("MoveSpawnedObject", &GameModeController::MoveSpawnedObject, py::call_guard<py::gil_scoped_release>(), py::arg("object_id"), py::arg("position"),
+           py::arg("orientation"), py::arg("scale") = std::array<double, 3>{1.0, 1.0, 1.0})
+      .def("ListSpawnedObjects", &GameModeController::ListSpawnedObjects, py::call_guard<py::gil_scoped_release>())
+      .def("ExportScene", &GameModeController::ExportScene, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "ListAssets",
+          [](GameModeController& controller, const std::string& path_prefix, const std::string& name_filter) {
+            bool                                      truncated = false;
+            std::pair<bool, std::vector<std::string>> result;
+            {
+              py::gil_scoped_release release;
+              result = controller.ListAssets(path_prefix, name_filter, truncated);
+            }
+            return py::make_tuple(result.first, result.second, truncated);
+          },
+          py::arg("path_prefix") = "", py::arg("name_filter") = "", "Returns (success, assets, truncated).")
       .def(py::pickle(
           [](const GameModeController& controller) { return py::make_tuple(controller.getAddress(), controller.getPort()); },
           [](py::tuple t) {

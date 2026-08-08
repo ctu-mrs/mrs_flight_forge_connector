@@ -77,5 +77,17 @@ network I/O, so sensor requests genuinely overlap):
 sim.set_mutual_visibility(False)   # every drone sees the world as if alone
 ```
 
+**Scene editing** — build, rearrange, save and reload a scene over the wire
+(poses in ROS metres/degrees relative to the world origin):
+
+```python
+ids = sim.spawn_objects(yaml_text)     # returns handles
+sim.move_object(ids[0], (8, 2, 1.5), (0, 0, 90))
+sim.objects()                          # {id: {asset, stencil, position, ...}}
+yaml_text = sim.export_scene()         # round-trippable, stencils included
+sim.assets(name_filter="cube")         # what the simulator can spawn
+```
+
 See `python/examples/` for runnable versions of all of the above
-(`parallel_drones.py` for the multi-robot demo).
+(`parallel_drones.py` for the multi-robot demo, `scene_editor.py` for the
+scene-editing loop).

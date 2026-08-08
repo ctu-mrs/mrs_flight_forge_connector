@@ -89,7 +89,7 @@ class UEdsCameraEnv(gym.Env):
     def get_observation(self, location):
         observation = self.observation_space.sample()
         
-        [res, camera_data, size] = self.drone_controller.GetCameraData()
+        [res, camera_data, stamp, size] = self.drone_controller.GetRgbCameraData()
         assert res is True
         assert size > 0
 

@@ -13,7 +13,11 @@ using ueds_connector::LidarIntData;
 using ueds_connector::LidarSegData;
 using ueds_connector::RgbCameraConfig;
 using ueds_connector::Rotation;
-using ueds_connector::StereoCameraConfig;
+using ueds_connector::CameraEvent;
+using ueds_connector::DeviceInfo;
+using ueds_connector::EventCameraConfig;
+using ueds_connector::FisheyeCameraConfig;
+using ueds_connector::SensorInfo;
 using ueds_connector::UedsConnector;
 
 /* getLocation() //{ */
@@ -89,9 +93,10 @@ std::tuple<bool, Coordinates, bool, Coordinates> UedsConnector::SetLocation(cons
 
 /* GetRgbCameraData() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbCameraData() {
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbCameraData(int sensorId) {
 
   Serializable::Drone::GetRgbCameraData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetRgbCameraData::Response response{};
 
@@ -106,9 +111,10 @@ std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::Ge
 
 /* GetStereoCameraData() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> UedsConnector::GetStereoCameraData() {
+std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> UedsConnector::GetStereoCameraData(int sensorId) {
 
   Serializable::Drone::GetStereoCameraData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetStereoCameraData::Response response{};
 
@@ -123,9 +129,10 @@ std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double>
 
 /* GetRgbSegmented() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbSegmented() {
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbSegmented(int sensorId) {
 
   Serializable::Drone::GetRgbSegCameraData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetRgbSegCameraData::Response response{};
   const auto                                         status  = Request(request, response);
@@ -261,10 +268,11 @@ std::tuple<bool> UedsConnector::SetLocationAndRotationAsync(const Coordinates& c
 
 /* getLidarData() //{ */
 
-std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::GetLidarData() {
+std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::GetLidarData(int sensorId) {
 
   /* std::cout << "GetLidarData()" << std::endl; */
   Serializable::Drone::GetLidarData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetLidarData::Response response{};
   const auto                                  status  = Request(request, response);
@@ -297,9 +305,10 @@ std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::Get
   return std::make_tuple(success, lidarData, start, stamp);
 }
 
-std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData()
+std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData(int sensorId)
 {
   Serializable::Drone::GetRangefinderData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetRangefinderData::Response response{};
   const auto                                        status  = Request(request, response);
@@ -310,8 +319,9 @@ std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData()
 
 /* getLidarSegData() //{ */
 
-std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::GetLidarSegData() {
+std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::GetLidarSegData(int sensorId) {
   Serializable::Drone::GetLidarSegData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetLidarSegData::Response response{};
   const auto                                     status  = Request(request, response);
@@ -347,11 +357,12 @@ std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::
 
 /* getLidarIntData() //{ */
 
-std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::GetLidarIntData() {
+std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::GetLidarIntData(int sensorId) {
 
   /* std::cout << "GetLidarIntData()" << std::endl; */
 
   Serializable::Drone::GetLidarIntData::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetLidarIntData::Response response{};
   const auto                                     status  = Request(request, response);
@@ -386,9 +397,10 @@ std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::
 
 /* getLidarConfig() //{ */
 
-std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
+std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig(int sensorId) {
 
   Serializable::Drone::GetLidarConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetLidarConfig::Response response{};
   const auto                                    status  = Request(request, response);
@@ -413,7 +425,8 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
     config.FOVHorRight = response.config.FOVHorRight;
     config.FOVVertUp = response.config.FOVVertUp;
     config.FOVVertDown = response.config.FOVVertDown;
-    config.Livox        = response.config.Livox;
+    config.Livox       = response.config.Livox;
+    config.LivoxSensor = response.config.LivoxSensor;
   }
 
   return std::make_pair(success, config);
@@ -423,9 +436,10 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig() {
 
 /* setLidarConfig() //{ */
 
-bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
+bool UedsConnector::SetLidarConfig(const LidarConfig& config, int sensorId) {
 
   Serializable::Drone::SetLidarConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   request.config              = Serializable::Drone::LidarConfig{};
   request.config.Enable       = config.Enable;
@@ -450,7 +464,8 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
   request.config.FOVHorRight = config.FOVHorRight;
   request.config.FOVVertUp   = config.FOVVertUp;
   request.config.FOVVertDown = config.FOVVertDown;
-  request.config.Livox        = config.Livox;
+  request.config.Livox       = config.Livox;
+  request.config.LivoxSensor = config.LivoxSensor;
 
   Serializable::Drone::SetLidarConfig::Response response{};
 
@@ -464,9 +479,10 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config) {
 
 /* getRgbCameraConfig() //{ */
 
-std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig() {
+std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId) {
 
   Serializable::Drone::GetRgbCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetRgbCameraConfig::Response response{};
   const auto                                        status  = Request(request, response);
@@ -490,6 +506,26 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig() {
     config.enable_temporal_aa_ = response.config.enable_temporal_aa_;
     config.enable_hdr_         = response.config.enable_hdr_;
     config.enable_raytracing_  = response.config.enable_raytracing_;
+
+    config.enable_motion_blur_     = response.config.enable_motion_blur_;
+    config.motion_blur_amount_     = response.config.motion_blur_amount_;
+    config.motion_blur_distortion_ = response.config.motion_blur_distortion_;
+
+    config.exposure_.manual_          = response.config.exposure_.manual_;
+    config.exposure_.shutter_time_    = response.config.exposure_.shutter_time_;
+    config.exposure_.iso_             = response.config.exposure_.iso_;
+    config.exposure_.ev_compensation_ = response.config.exposure_.ev_compensation_;
+
+    config.lens_.fstop_                    = response.config.lens_.fstop_;
+    config.lens_.focal_distance_           = response.config.lens_.focal_distance_;
+    config.lens_.sensor_width_mm_          = response.config.lens_.sensor_width_mm_;
+    config.lens_.vignette_intensity_       = response.config.lens_.vignette_intensity_;
+    config.lens_.chromatic_aberration_     = response.config.lens_.chromatic_aberration_;
+    config.lens_.bloom_intensity_          = response.config.lens_.bloom_intensity_;
+    config.lens_.lens_flare_intensity_     = response.config.lens_.lens_flare_intensity_;
+    config.lens_.white_temp_               = response.config.lens_.white_temp_;
+    config.lens_.white_tint_               = response.config.lens_.white_tint_;
+    config.lens_.motion_blur_from_shutter_ = response.config.lens_.motion_blur_from_shutter_;
   }
 
   return std::make_pair(success, config);
@@ -499,9 +535,10 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig() {
 
 /* getStereoCameraConfig() //{ */
 
-std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStereoCameraConfig() {
+std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStereoCameraConfig(int sensorId) {
 
   Serializable::Drone::GetStereoCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   Serializable::Drone::GetStereoCameraConfig::Response response{};
   const auto                                           status  = Request(request, response);
@@ -537,9 +574,10 @@ std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStere
 
 /* setRgbCameraConfig() //{ */
 
-bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config) {
+bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetRgbCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   request.config                    = Serializable::Drone::RgbCameraConfig{};
   request.config.show_debug_camera_ = config.show_debug_camera_;
@@ -565,6 +603,22 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config) {
   request.config.motion_blur_amount_ = config.motion_blur_amount_;
   request.config.motion_blur_distortion_ = config.motion_blur_distortion_;
 
+  request.config.exposure_.manual_          = config.exposure_.manual_;
+  request.config.exposure_.shutter_time_    = config.exposure_.shutter_time_;
+  request.config.exposure_.iso_             = config.exposure_.iso_;
+  request.config.exposure_.ev_compensation_ = config.exposure_.ev_compensation_;
+
+  request.config.lens_.fstop_                    = config.lens_.fstop_;
+  request.config.lens_.focal_distance_           = config.lens_.focal_distance_;
+  request.config.lens_.sensor_width_mm_          = config.lens_.sensor_width_mm_;
+  request.config.lens_.vignette_intensity_       = config.lens_.vignette_intensity_;
+  request.config.lens_.chromatic_aberration_     = config.lens_.chromatic_aberration_;
+  request.config.lens_.bloom_intensity_          = config.lens_.bloom_intensity_;
+  request.config.lens_.lens_flare_intensity_     = config.lens_.lens_flare_intensity_;
+  request.config.lens_.white_temp_               = config.lens_.white_temp_;
+  request.config.lens_.white_tint_               = config.lens_.white_tint_;
+  request.config.lens_.motion_blur_from_shutter_ = config.lens_.motion_blur_from_shutter_;
+
   Serializable::Drone::SetRgbCameraConfig::Response response{};
 
   const auto status  = Request(request, response);
@@ -577,9 +631,10 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config) {
 
 /* setStereoCameraConfig() //{ */
 
-bool UedsConnector::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config) {
+bool UedsConnector::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetStereoCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
 
   request.config                    = config;
 /*   request.config.show_debug_camera_ = config.show_debug_camera_;
@@ -640,6 +695,254 @@ bool UedsConnector::SetMoveLineVisible(bool visible) {
   const auto                                        success = status && response.status;
 
   return success;
+}
+
+//}
+
+/* GetEventCameraData() //{ */
+
+std::tuple<bool, std::vector<CameraEvent>, double> UedsConnector::GetEventCameraData(int sensorId) {
+
+  Serializable::Drone::GetEventCameraData::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetEventCameraData::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  std::vector<CameraEvent> events;
+
+  if (success) {
+    events.resize(response.events_.size());
+    for (size_t i = 0; i < response.events_.size(); i++) {
+      events[i].x        = response.events_[i].x;
+      events[i].y        = response.events_[i].y;
+      events[i].polarity = response.events_[i].polarity;
+      events[i].stamp    = response.events_[i].stamp;
+    }
+  }
+
+  return std::make_tuple(success, events, success ? response.stamp_ : 0.0);
+}
+
+//}
+
+/* Get/SetEventCameraConfig() //{ */
+
+std::pair<bool, EventCameraConfig> UedsConnector::GetEventCameraConfig(int sensorId) {
+
+  Serializable::Drone::GetEventCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetEventCameraConfig::Response response{};
+  const auto                                          status  = Request(request, response);
+  const auto                                          success = status && response.status;
+
+  EventCameraConfig config{};
+
+  if (success) {
+    config.show_debug_camera_      = response.config.show_debug_camera_;
+    config.offset_                 = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
+    config.orientation_            = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
+    config.fov_                    = response.config.fov_;
+    config.width_                  = response.config.width_;
+    config.height_                 = response.config.height_;
+    config.contrast_threshold_pos_ = response.config.contrast_threshold_pos_;
+    config.contrast_threshold_neg_ = response.config.contrast_threshold_neg_;
+    config.use_sim_time_           = response.config.use_sim_time_;
+  }
+
+  return std::make_pair(success, config);
+}
+
+bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int sensorId) {
+
+  Serializable::Drone::SetEventCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
+
+  request.config.show_debug_camera_      = config.show_debug_camera_;
+  request.config.offset_x_               = config.offset_.x;
+  request.config.offset_y_               = config.offset_.y;
+  request.config.offset_z_               = config.offset_.z;
+  request.config.rotation_pitch_         = config.orientation_.pitch;
+  request.config.rotation_yaw_           = config.orientation_.yaw;
+  request.config.rotation_roll_          = config.orientation_.roll;
+  request.config.fov_                    = config.fov_;
+  request.config.width_                  = config.width_;
+  request.config.height_                 = config.height_;
+  request.config.contrast_threshold_pos_ = config.contrast_threshold_pos_;
+  request.config.contrast_threshold_neg_ = config.contrast_threshold_neg_;
+  request.config.use_sim_time_           = config.use_sim_time_;
+
+  Serializable::Drone::SetEventCameraConfig::Response response{};
+  const auto                                          status = Request(request, response);
+
+  return status && response.status;
+}
+
+//}
+
+/* GetFisheyeCameraData() //{ */
+
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetFisheyeCameraData(int sensorId) {
+
+  Serializable::Drone::GetFisheyeCameraData::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetFisheyeCameraData::Response response{};
+  const auto                                          status  = Request(request, response);
+  const auto                                          success = status && response.status;
+
+  return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0,
+                         success ? response.image_.size() : 0);
+}
+
+//}
+
+/* Get/SetFisheyeCameraConfig() //{ */
+
+std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int sensorId) {
+
+  Serializable::Drone::GetFisheyeCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetFisheyeCameraConfig::Response response{};
+  const auto                                            status  = Request(request, response);
+  const auto                                            success = status && response.status;
+
+  FisheyeCameraConfig config{};
+
+  if (success) {
+    config.show_debug_camera_ = response.config.show_debug_camera_;
+    config.offset_            = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
+    config.orientation_       = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
+    config.fov_               = response.config.fov_;
+    config.width_             = response.config.width_;
+    config.height_            = response.config.height_;
+    config.lens_model_        = response.config.lens_model_;
+  }
+
+  return std::make_pair(success, config);
+}
+
+bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId) {
+
+  Serializable::Drone::SetFisheyeCameraConfig::Request request{};
+  request.sensor_id_ = sensorId;
+
+  request.config.show_debug_camera_ = config.show_debug_camera_;
+  request.config.offset_x_          = config.offset_.x;
+  request.config.offset_y_          = config.offset_.y;
+  request.config.offset_z_          = config.offset_.z;
+  request.config.rotation_pitch_    = config.orientation_.pitch;
+  request.config.rotation_yaw_      = config.orientation_.yaw;
+  request.config.rotation_roll_     = config.orientation_.roll;
+  request.config.fov_               = config.fov_;
+  request.config.width_             = config.width_;
+  request.config.height_            = config.height_;
+  request.config.lens_model_        = config.lens_model_;
+
+  Serializable::Drone::SetFisheyeCameraConfig::Response response{};
+  const auto                                            status = Request(request, response);
+
+  return status && response.status;
+}
+
+//}
+
+/* sensor management //{ */
+
+std::pair<bool, int> UedsConnector::AddSensor(int sensorType) {
+
+  Serializable::Drone::AddSensor::Request request{};
+  request.sensor_type_ = sensorType;
+
+  Serializable::Drone::AddSensor::Response response{};
+  const auto                               status  = Request(request, response);
+  const auto                               success = status && response.status;
+
+  return std::make_pair(success, success ? response.sensor_id_ : -1);
+}
+
+bool UedsConnector::RemoveSensor(int sensorId) {
+
+  Serializable::Drone::RemoveSensor::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::RemoveSensor::Response response{};
+  const auto                                  status = Request(request, response);
+
+  return status && response.status;
+}
+
+std::pair<bool, std::vector<SensorInfo>> UedsConnector::ListSensors() {
+
+  Serializable::Drone::ListSensors::Request request{};
+
+  Serializable::Drone::ListSensors::Response response{};
+  const auto                                 status  = Request(request, response);
+  const auto                                 success = status && response.status;
+
+  std::vector<SensorInfo> sensors;
+
+  if (success) {
+    for (size_t i = 0; i < response.sensor_ids_.size() && i < response.sensor_types_.size(); i++) {
+      sensors.push_back(SensorInfo{response.sensor_ids_[i], response.sensor_types_[i]});
+    }
+  }
+
+  return std::make_pair(success, sensors);
+}
+
+//}
+
+/* device management //{ */
+
+std::pair<bool, std::vector<SensorInfo>> UedsConnector::AddDevice(const std::string& deviceName, const Coordinates& offset, const Rotation& rotation,
+                                                                  bool showMesh) {
+
+  Serializable::Drone::AddDevice::Request request{};
+  request.device_name_    = deviceName;
+  request.offset_x_       = offset.x;
+  request.offset_y_       = offset.y;
+  request.offset_z_       = offset.z;
+  request.rotation_pitch_ = rotation.pitch;
+  request.rotation_yaw_   = rotation.yaw;
+  request.rotation_roll_  = rotation.roll;
+  request.show_mesh_      = showMesh;
+
+  Serializable::Drone::AddDevice::Response response{};
+  const auto                               status  = Request(request, response);
+  const auto                               success = status && response.status;
+
+  std::vector<SensorInfo> sensors;
+
+  if (success) {
+    for (size_t i = 0; i < response.sensor_ids_.size() && i < response.sensor_types_.size(); i++) {
+      sensors.push_back(SensorInfo{response.sensor_ids_[i], response.sensor_types_[i]});
+    }
+  }
+
+  return std::make_pair(success, sensors);
+}
+
+std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
+
+  Serializable::Drone::ListDevices::Request request{};
+
+  Serializable::Drone::ListDevices::Response response{};
+  const auto                                 status  = Request(request, response);
+  const auto                                 success = status && response.status;
+
+  std::vector<DeviceInfo> devices;
+
+  if (success) {
+    for (size_t i = 0; i < response.names_.size() && i < response.descriptions_.size(); i++) {
+      devices.push_back(DeviceInfo{response.names_[i], response.descriptions_[i]});
+    }
+  }
+
+  return std::make_pair(success, devices);
 }
 
 //}

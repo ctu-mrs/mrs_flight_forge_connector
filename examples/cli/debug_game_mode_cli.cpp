@@ -399,10 +399,10 @@ int main(int argc, char* argv[]) {
 
       
 
-      std::map<std::string, int> uav_type_map = ueds_connector::UavFrameType::Type2IdMesh();
-     
-      for(int i = 0; i < uav_type_map.size(); i++){
-        std::string uav_type = std::next(uav_type_map.begin(), i)->first;
+      const std::vector<std::string>& uav_types = ueds_connector::UavFrameType::KnownNames();
+
+      for(size_t i = 0; i < uav_types.size(); i++){
+        std::string uav_type = uav_types[i];
         std::cout << "UAV type: " << i << " - " << uav_type << std::endl;
         spawn_coord.z += i*100;
         const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, uav_type);
@@ -416,13 +416,13 @@ int main(int argc, char* argv[]) {
 
       }
     }else if(choice_char == 'w'){
-      std::map<std::string, short> maps = ueds_connector::WorldName::Name2Id();
-     
-      for(int i = 0; i < maps.size(); i++){
-        std::string map = std::next(maps.begin(), i)->first;
-        std::cout << "World: " << i << " - " << map << std::endl;
-      
-        gameModeController->SwitchWorldLevel(map);
+      const std::map<std::string, std::string>& maps = ueds_connector::WorldName::Name2Level();
+
+      for(size_t i = 0; i < maps.size(); i++){
+        const auto& entry = *std::next(maps.begin(), i);
+        std::cout << "World: " << i << " - " << entry.first << " (level " << entry.second << ")" << std::endl;
+
+        gameModeController->SwitchWorldLevel(entry.second);
 
       connect_result = gameModeController->Disconnect();
       if (!connect_result) {

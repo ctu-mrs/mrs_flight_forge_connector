@@ -5,6 +5,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 namespace ueds_connector
 {
@@ -13,86 +14,99 @@ struct Daytime
 {
   int hour;
   int minute;
-};  
+};
 
-  
+/* sensor + device identity //{ */
+
+// Matches the simulator's SensorType enum. Sensor requests take a sensor id;
+// -1 addresses the default (lazily created) sensor of the message's type.
+enum SensorTypeEnum : int
+{
+  SENSOR_RGB_CAMERA     = 0,
+  SENSOR_LIDAR          = 1,
+  SENSOR_RANGEFINDER    = 2,
+  SENSOR_LIDAR_LIVOX    = 3,
+  SENSOR_RGB_SEG_CAMERA = 4,
+  SENSOR_STEREO_CAMERA  = 5,
+  SENSOR_EVENT_CAMERA   = 6,
+  SENSOR_FISHEYE_CAMERA = 7,
+};
+
+struct SensorInfo
+{
+  int id;
+  int type;
+};
+
+struct DeviceInfo
+{
+  std::string name;
+  std::string description;
+};
+
+//}
+
+/* name helpers //{ */
+
 struct UavFrameType
 {
-    static const std::map<std::string, int>& Type2IdMesh() {
-        static const std::map<std::string, int> map = {
-            {"x500", 0},
-            {"t650", 1},
-            {"a300", 2},
-            {"robofly", 3},
-            {"wing", 4},
-            {"wing_2", 5},
-            {"gimbal", 6},
-            {"empty", 7}
-        };
-        return map;
-    }
+  // Frames are addressed by mesh name since API 0.12; any name resolving to a
+  // packed mesh or an on-disk .glb (with optional YAML propeller sidecar) works.
+  static const std::vector<std::string>& KnownNames() {
+    static const std::vector<std::string> names = {"x500", "t650", "a300", "robofly", "wing", "wing_2", "gimbal", "empty", "drone10", "drone20"};
+    return names;
+  }
 };
 
 struct GraphicsSettings
 {
-    static const std::map<std::string, int>& Name2Id() {
-        static const std::map<std::string, int> map = {
-            {"low", 0},
-            {"medium", 1},
-            {"high", 2},
-            {"epic", 3},
-            {"cinematic", 4},
-            {"custom", 5}
-        };
-        return map;
-    }
-};  
+  static const std::map<std::string, int>& Name2Id() {
+    static const std::map<std::string, int> map = {{"low", 0}, {"medium", 1}, {"high", 2}, {"epic", 3}, {"cinematic", 4}, {"custom", 5}};
+    return map;
+  }
+};
 
 struct WorldName
 {
-    static const std::map<std::string, short>& Name2Id() {
-        static const std::map<std::string, short> map = {
-            {"valley", 0},
-            {"forest", 1},
-            {"infinite_forest", 2},
-            {"warehouse", 3},
-            {"cave", 4},
-            {"erding_airbase", 5},
-            {"temesvar", 6},
-            {"electric_towers", 7},
-            {"race_1", 8},
-            {"race_2", 9},
-            {"industrial_warehouse", 10},
-            {"service_tunnel", 11},
-            {"dead_spruce_forest", 12},
-            {"race_3", 13},
-            {"mala_skala", 14},
-            {"kayenta_mine", 15},
-            {"sprind_lab", 16}
-        };
-        return map;
-    }
+  // Since API 0.12 worlds are addressed by level name (or a full package path,
+  // which additionally goes through the fast-switch loading screen). This maps
+  // the legacy friendly names onto the actual level names.
+  static const std::map<std::string, std::string>& Name2Level() {
+    static const std::map<std::string, std::string> map = {
+        {"valley", "Valley"},
+        {"forest", "Forest"},
+        {"infinite_forest", "InfinityForest"},
+        {"warehouse", "Warehouse"},
+        {"cave", "CaveTunnel"},
+        {"erding_airbase", "ErdingAirBase"},
+        {"temesvar", "Temesvar_annotated"},
+        {"electric_towers", "ElectricTowers"},
+        {"race_1", "Race_1"},
+        {"race_2", "Race_2"},
+        {"race_3", "Race_3"},
+        {"industrial_warehouse", "IndustialWarehouse"},
+        {"service_tunnel", "ServiceTunnel"},
+        {"dead_spruce_forest", "DeadSpruceForestBiome_Example_Daytime"},
+        {"mala_skala", "MalaSkala"},
+        {"spring_lab", "SprindLab"},
+    };
+    return map;
+  }
 };
 
 struct WeatherType
 {
-    static const std::map<std::string, int>& Type2Id() {
-        static const std::map<std::string, int> map = {
-            {"sunny", 0},
-            {"cloudy", 1},
-            {"foggy", 2},
-            {"rain", 3},
-            {"rain_light", 4},
-            {"rain_thunderstorm", 5},
-            {"sand_dust_calm", 6},
-            {"sand_dust_storm", 7},
-            {"snow", 8},
-            {"snow_blizzards", 9},
-            {"overcast", 10}
-        };
-        return map;
-    }
+  static const std::map<std::string, int>& Type2Id() {
+    static const std::map<std::string, int> map = {{"sunny", 0},           {"cloudy", 1},          {"foggy", 2},     {"rain", 3},
+                                                   {"rain_light", 4},      {"rain_thunderstorm", 5}, {"sand_dust_calm", 6}, {"sand_dust_storm", 7},
+                                                   {"snow", 8},            {"snow_blizzards", 9},  {"overcast", 10}};
+    return map;
+  }
 };
+
+//}
+
+/* Coordinates / Rotation //{ */
 
 struct Coordinates
 {
@@ -123,6 +137,10 @@ struct Rotation
     return "(pitch: " + std::to_string(pitch) + ", yaw: " + std::to_string(yaw) + ", roll: " + std::to_string(roll) + ")";
   }
 };
+
+//}
+
+/* lidar data //{ */
 
 struct LidarData
 {
@@ -162,7 +180,7 @@ struct LidarIntData
   double      directionX;
   double      directionY;
   double      directionZ;
-  int      intensity;
+  int         intensity;
   std::string toString() const {
     return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
            ", directionZ: " + std::to_string(directionZ) + ", intensity: " + std::to_string(intensity) + ")";
@@ -172,23 +190,6 @@ struct LidarIntData
 struct LidarConfig
 {
   LidarConfig() = default;
-  LidarConfig(bool Enable, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
-              const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown, bool Livox)
-      : Enable(Enable),
-        showBeams(showBeams),
-        beamLength(beamLength),
-        BeamHorRays(BeamHorRays),
-        BeamVertRays(BeamVertRays),
-        Frequency(Frequency),
-        offset(offset),
-        orientation(orientation),
-        FOVHorLeft(FOVHorLeft),
-        FOVHorRight(FOVHorRight),
-        FOVVertUp(FOVVertUp),
-        FOVVertDown(FOVVertDown),
-        Livox(Livox)
-  {
-  }
 
   bool        Enable;
   bool        showBeams;
@@ -198,17 +199,23 @@ struct LidarConfig
   double      Frequency;
   Coordinates offset;
   Rotation    orientation;
-  double      FOVHorLeft; 
+  double      FOVHorLeft;
   double      FOVHorRight;
   double      FOVVertUp;
   double      FOVVertDown;
-  bool       Livox;
+  bool        Livox;
+
+  // Which non-repetitive scan pattern to replay when Livox is set ("avia",
+  // "mid360"); matches the simulator's Content/Lidar/<name>.ffpat stem.
+  std::string LivoxSensor = "mid360";
 
   std::string toString() const {
     return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +
            ", orientation: " + orientation.toString() + ")";
   }
 };
+
+//}
 
 enum CameraCaptureModeEnum : unsigned short
 {
@@ -217,31 +224,43 @@ enum CameraCaptureModeEnum : unsigned short
   CAPTURE_ON_DEMAND   = 0x2,
 };
 
+/* camera configs //{ */
+
+// Physically-based exposure: when manual_ is set, auto-exposure is replaced by
+// the EV100 model driven by shutter time, ISO and the lens f-stop.
+struct CameraExposure
+{
+  bool   manual_          = false;
+  double shutter_time_    = 1.0 / 120.0;  // seconds
+  double iso_             = 100.0;
+  double ev_compensation_ = 0.0;
+};
+
+struct CameraLensEffects
+{
+  double fstop_                = 4.0;
+  double focal_distance_       = 0.0;  // meters; <= 0 disables depth of field
+  double sensor_width_mm_      = 23.76;
+  double vignette_intensity_   = 0.0;
+  double chromatic_aberration_ = 0.0;
+  double bloom_intensity_      = 0.675;
+  double lens_flare_intensity_ = 0.0;
+  double white_temp_           = 0.0;  // Kelvin; <= 0 keeps engine default
+  double white_tint_           = 0.0;
+
+  // derive the motion blur length from shutter_time_/frame time instead of
+  // the free-standing motion_blur_amount_
+  bool motion_blur_from_shutter_ = false;
+};
+
 struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
-  RgbCameraConfig(bool show_debug_camera, const Coordinates offset, const Rotation orientation, double fov, int width, int height, bool enable_temporal_aa,
-                  bool enable_raytracing, bool enable_hdr, bool enable_motion_blur, double motion_blur_amount, double motion_blur_distortion)
-      : show_debug_camera_(show_debug_camera),
-        offset_(offset),
-        orientation_(orientation),
-        fov_(fov),
-        width_(width),
-        height_(height),
-        enable_temporal_aa_(enable_temporal_aa),
-        enable_raytracing_(enable_raytracing),
-        enable_hdr_(enable_hdr),
-        enable_motion_blur_(enable_motion_blur),
-        motion_blur_amount_(motion_blur_amount),
-        motion_blur_distortion_(motion_blur_distortion) 
-  {
-  }
 
   bool show_debug_camera_;
 
   Coordinates offset_;
-
-  Rotation orientation_;
+  Rotation    orientation_;
 
   double fov_;
 
@@ -252,44 +271,70 @@ struct RgbCameraConfig
   bool enable_raytracing_;
   bool enable_hdr_;
 
-  bool     enable_motion_blur_;
-  double   motion_blur_amount_;
-  double   motion_blur_distortion_;
+  bool   enable_motion_blur_;
+  double motion_blur_amount_;
+  double motion_blur_distortion_;
+
+  CameraExposure    exposure_;
+  CameraLensEffects lens_;
 };
 
-struct StereoCameraConfig
+struct EventCameraConfig
 {
-  StereoCameraConfig() = default;
-  StereoCameraConfig(bool show_debug_camera, const Coordinates offset, const Rotation orientation, double fov, int width, int height, double baseline,
-                     bool enable_temporal_aa, bool enable_raytracing, bool enable_hdr)
-      : show_debug_camera_(show_debug_camera),
-        offset_(offset),
-        orientation_(orientation),
-        fov_(fov),
-        width_(width),
-        height_(height),
-        baseline_(baseline),
-        enable_temporal_aa_(enable_temporal_aa),
-        enable_raytracing_(enable_raytracing),
-        enable_hdr_(enable_hdr) {
-  }
+  EventCameraConfig() = default;
 
-  bool show_debug_camera_;
+  bool show_debug_camera_ = false;
 
   Coordinates offset_;
+  Rotation    orientation_;
 
-  Rotation orientation_;
+  double fov_    = 90.0;
+  int    width_  = 640;
+  int    height_ = 480;
 
-  double fov_;
+  // log-intensity contrast thresholds; an event fires each time a pixel's log
+  // intensity moves by one threshold since its last event
+  double contrast_threshold_pos_ = 0.2;
+  double contrast_threshold_neg_ = 0.2;
 
-  int width_;
-  int height_;
-
-  double baseline_;
-
-  bool enable_temporal_aa_;
-  bool enable_raytracing_;
-  bool enable_hdr_;
+  // stamp events with simulation time instead of wall clock; pair with a
+  // fixed engine timestep for an exact-rate stream regardless of GPU load
+  bool use_sim_time_ = false;
 };
+
+struct CameraEvent
+{
+  unsigned short x;
+  unsigned short y;
+  signed char    polarity;  // +1 brighter, -1 darker
+  double         stamp;
+};
+
+enum FisheyeLensModelEnum : int
+{
+  FISHEYE_EQUIDISTANT   = 0,  // r = f * theta
+  FISHEYE_EQUISOLID     = 1,  // r = 2f * sin(theta/2)
+  FISHEYE_STEREOGRAPHIC = 2,  // r = 2f * tan(theta/2)
+};
+
+struct FisheyeCameraConfig
+{
+  FisheyeCameraConfig() = default;
+
+  bool show_debug_camera_ = false;
+
+  Coordinates offset_;
+  Rotation    orientation_;
+
+  // full field of view in degrees, up to 220
+  double fov_ = 180.0;
+
+  int width_  = 640;
+  int height_ = 640;
+
+  int lens_model_ = FISHEYE_EQUIDISTANT;
+};
+
+//}
 
 }  // namespace ueds_connector

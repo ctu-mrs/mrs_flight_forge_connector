@@ -38,25 +38,23 @@ if (BUILD_EXAMPLES)
     add_subdirectory(examples/cli)
 endif()
 
-# option(BUILD_PYTHON_LIB "Build python lib" ON)
-# if (BUILD_PYTHON_LIB)
-#     add_subdirectory(extern/pybind11)
+option(BUILD_PYTHON_LIB "Build python lib" OFF)
+if (BUILD_PYTHON_LIB)
+    add_subdirectory(extern/pybind11)
 
-#     file (GLOB PYTHON_LIB_SOURCE_FILES "src/*.cpp")
+    pybind11_add_module(
+            flight_forge_game_mode
+            src/game_mode_controller.cpp
+            src/socket_client.cpp
+            src/python-modules/game-mode-controller-module.cpp
+            )
+    target_include_directories(flight_forge_game_mode PRIVATE include)
 
-#     include_directories("./include")
-
-#     pybind11_add_module(
-#             _uedsGameModeController
-#             ${PYTHON_LIB_SOURCE_FILES}
-#             src/python-modules/game-mode-controller-module.cpp
-#             )
-#     target_link_libraries(_uedsGameModeController PUBLIC)
-
-#     pybind11_add_module(
-#             _uedsDroneController
-#             ${PYTHON_LIB_SOURCE_FILES}
-#             src/python-modules/drone-controller-module.cpp
-#     )
-#     target_link_libraries(_uedsDroneController PUBLIC)
-# endif()
+    pybind11_add_module(
+            flight_forge_drone
+            src/flight_forge_connector.cpp
+            src/socket_client.cpp
+            src/python-modules/drone-controller-module.cpp
+            )
+    target_include_directories(flight_forge_drone PRIVATE include)
+endif()

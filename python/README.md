@@ -69,4 +69,13 @@ image, stamp = drone.rgb()   # photorealistic render of the MuJoCo state
 Any consumer of the MuJoCo state works the same way — MJX/JAX rollouts,
 MATLAB-exported trajectories — as long as something fills `qpos`.
 
-See `python/examples/` for runnable versions of all of the above.
+**Parallel multi-robot** — N drones in one world, mutually invisible, each
+stepped and polled from its own thread (the bindings release the GIL during
+network I/O, so sensor requests genuinely overlap):
+
+```python
+sim.set_mutual_visibility(False)   # every drone sees the world as if alone
+```
+
+See `python/examples/` for runnable versions of all of the above
+(`parallel_drones.py` for the multi-robot demo).

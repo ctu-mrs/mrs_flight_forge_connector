@@ -19,36 +19,40 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
 
   py::class_<GameModeController>(m, "GameModeController")
       .def(py::init<const std::string&, uint16_t>())
-      .def("ConnectSimple", &GameModeController::ConnectSimple)
-      .def("Ping", &GameModeController::Ping)
-      .def("Disconnect", &GameModeController::Disconnect)
-      .def("GetDrones", &GameModeController::GetDrones)
-      .def("SpawnDrone", &GameModeController::SpawnDrone)
-      .def("SpawnDroneAtLocation", &GameModeController::SpawnDroneAtLocation, py::arg("location"), py::arg("frame_name"))
-      .def("RemoveDrone", &GameModeController::RemoveDrone)
-      .def("GetCameraCaptureMode", &GameModeController::GetCameraCaptureMode)
-      .def("SetCameraCaptureMode", &GameModeController::SetCameraCaptureMode)
-      .def("GetFps", &GameModeController::GetFps)
-      .def("GetApiVersion", &GameModeController::GetApiVersion)
-      .def("GetTime", &GameModeController::GetTime)
-      .def("SetGraphicsSettings", &GameModeController::SetGraphicsSettings)
-      .def("SwitchWorldLevel", &GameModeController::SwitchWorldLevel, py::arg("level_name_or_package_path"))
-      .def("SetForestDensity", &GameModeController::SetForestDensity)
-      .def("SetForestHillyLevel", &GameModeController::SetForestHillyLevel)
-      .def("GetWorldOrigin", &GameModeController::GetWorldOrigin)
-      .def("SetWeather", &GameModeController::SetWeather)
-      .def("SetDatetime", &GameModeController::SetDatetime)
-      .def("SetMutualDroneVisibility", &GameModeController::SetMutualDroneVisibility)
+      .def("ConnectSimple", &GameModeController::ConnectSimple, py::call_guard<py::gil_scoped_release>())
+      .def("Ping", &GameModeController::Ping, py::call_guard<py::gil_scoped_release>())
+      .def("Disconnect", &GameModeController::Disconnect, py::call_guard<py::gil_scoped_release>())
+      .def("GetDrones", &GameModeController::GetDrones, py::call_guard<py::gil_scoped_release>())
+      .def("SpawnDrone", &GameModeController::SpawnDrone, py::call_guard<py::gil_scoped_release>())
+      .def("SpawnDroneAtLocation", &GameModeController::SpawnDroneAtLocation, py::call_guard<py::gil_scoped_release>(), py::arg("location"), py::arg("frame_name"))
+      .def("RemoveDrone", &GameModeController::RemoveDrone, py::call_guard<py::gil_scoped_release>())
+      .def("GetCameraCaptureMode", &GameModeController::GetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
+      .def("SetCameraCaptureMode", &GameModeController::SetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
+      .def("GetFps", &GameModeController::GetFps, py::call_guard<py::gil_scoped_release>())
+      .def("GetApiVersion", &GameModeController::GetApiVersion, py::call_guard<py::gil_scoped_release>())
+      .def("GetTime", &GameModeController::GetTime, py::call_guard<py::gil_scoped_release>())
+      .def("SetGraphicsSettings", &GameModeController::SetGraphicsSettings, py::call_guard<py::gil_scoped_release>())
+      .def("SwitchWorldLevel", &GameModeController::SwitchWorldLevel, py::call_guard<py::gil_scoped_release>(), py::arg("level_name_or_package_path"))
+      .def("SetForestDensity", &GameModeController::SetForestDensity, py::call_guard<py::gil_scoped_release>())
+      .def("SetForestHillyLevel", &GameModeController::SetForestHillyLevel, py::call_guard<py::gil_scoped_release>())
+      .def("GetWorldOrigin", &GameModeController::GetWorldOrigin, py::call_guard<py::gil_scoped_release>())
+      .def("SetWeather", &GameModeController::SetWeather, py::call_guard<py::gil_scoped_release>())
+      .def("SetDatetime", &GameModeController::SetDatetime, py::call_guard<py::gil_scoped_release>())
+      .def("SetMutualDroneVisibility", &GameModeController::SetMutualDroneVisibility, py::call_guard<py::gil_scoped_release>())
       .def(
           "SpawnObjectsFromYaml",
           [](GameModeController& controller, const std::string& yaml) {
-            std::string error;
-            auto        result = controller.SpawnObjectsFromYaml(yaml, error);
+            std::string                       error;
+            std::pair<bool, std::vector<int>> result;
+            {
+              py::gil_scoped_release release;
+              result = controller.SpawnObjectsFromYaml(yaml, error);
+            }
             return py::make_tuple(result.first, result.second, error);
           },
           py::arg("yaml"), "Returns (success, object_ids, error).")
-      .def("RemoveSpawnedObject", &GameModeController::RemoveSpawnedObject)
-      .def("RemoveAllSpawnedObjects", &GameModeController::RemoveAllSpawnedObjects)
+      .def("RemoveSpawnedObject", &GameModeController::RemoveSpawnedObject, py::call_guard<py::gil_scoped_release>())
+      .def("RemoveAllSpawnedObjects", &GameModeController::RemoveAllSpawnedObjects, py::call_guard<py::gil_scoped_release>())
       .def(py::pickle(
           [](const GameModeController& controller) { return py::make_tuple(controller.getAddress(), controller.getPort()); },
           [](py::tuple t) {

@@ -204,6 +204,12 @@ class Simulator:
         _check(ok, "GetWorldOrigin")
         return np.array([coords.x, coords.y, coords.z])
 
+    def set_mutual_visibility(self, enabled):
+        """When False, drones are hidden from each other's cameras and lidars —
+        each robot perceives the world as if it were alone, which is what makes
+        N robots in one world equivalent to N parallel single-robot worlds."""
+        return self._raw.SetMutualDroneVisibility(enabled)
+
     def set_weather(self, type_id):
         return self._raw.SetWeather(type_id)
 

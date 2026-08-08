@@ -11,7 +11,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 12
+#define API_VERSION_MINOR 13
 
 namespace ueds_connector
 {
@@ -56,6 +56,22 @@ public:
   bool SetDatetime(const int& hour, const int& minute);
 
   bool SetMutualDroneVisibility(const bool& enabled);
+
+  /**
+   * Places objects described by a spawn configuration document. Assets already cooked into
+   * the simulator are used as-is; those that are not are loaded from disk on the machine
+   * running the simulator, which is what allows a packaged binary to be extended.
+   *
+   * Returns the handles of the objects that were placed, for RemoveSpawnedObject. On
+   * failure the second element of the pair is empty and the error is written to OutError.
+   */
+  std::pair<bool, std::vector<int>> SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError);
+
+  /** Removes one previously spawned object. */
+  std::pair<bool, int> RemoveSpawnedObject(const int object_id);
+
+  /** Removes every object placed by the spawn tool, returning how many were removed. */
+  std::pair<bool, int> RemoveAllSpawnedObjects();
 };
 
 }  // namespace ueds_connector

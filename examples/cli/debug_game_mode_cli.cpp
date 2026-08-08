@@ -6,6 +6,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
 
@@ -141,6 +142,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Switch Wordl: 9 [NAME] (0-valley 1-forest 2-infinite_forest 3-warehouse 4-cave)" << std::endl;
     std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
     std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
+    std::cout << "Spawn objects from YAML: c [PATH TO CONFIG]" << std::endl;
+    std::cout << "Remove spawned object: d [OBJECT ID] (negative removes all)" << std::endl;
     std::cout << "----------------" << std::endl;
 
     std::string choice;
@@ -341,6 +344,47 @@ int main(int argc, char* argv[]) {
         std::cout << "SetMutualVisibility successful." << std::endl;
       } else {
         std::cout << "SetMutualVisibility error !!!" << std::endl;
+      }
+    }
+    else if (choice_char == 'c') {
+
+      // The config is read here and sent as a document, so the file only has to exist on
+      // this machine; any models it names are resolved on the simulator side.
+      std::ifstream config_file(choice);
+      if (!config_file.is_open()) {
+        std::cout << "Could not open '" << choice << "'" << std::endl;
+        continue;
+      }
+
+      const std::string yaml((std::istreambuf_iterator<char>(config_file)), std::istreambuf_iterator<char>());
+
+      std::string error;
+      const auto [spawn_res, object_ids] = gameModeController->SpawnObjectsFromYaml(yaml, error);
+
+      if (spawn_res) {
+        std::cout << "SpawnObjectsFromYaml successful, " << object_ids.size() << " object(s) placed. Ids: ";
+        for (const auto& object_id : object_ids) {
+          std::cout << object_id << " ";
+        }
+        std::cout << std::endl;
+      } else {
+        std::cout << "SpawnObjectsFromYaml error: " << error << std::endl;
+      }
+    }
+    else if (choice_char == 'd') {
+
+      int object_id;
+      if (!parseInt(choice, object_id)) {
+        std::cout << "Parse error!!!" << std::endl;
+        continue;
+      }
+
+      const auto [remove_res, removed_count] = gameModeController->RemoveSpawnedObject(object_id);
+
+      if (remove_res) {
+        std::cout << "RemoveSpawnedObject successful, removed " << removed_count << " object(s)." << std::endl;
+      } else {
+        std::cout << "RemoveSpawnedObject error, no such object?" << std::endl;
       }
     }
     else if (choice_char == 'f') {

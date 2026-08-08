@@ -53,8 +53,24 @@ public:
       return std::make_tuple(0, kissnet::socket_status::errored);
     }
 
-    std::string str = outputStream.str();
-    return SendMessage_(reinterpret_cast<const std::byte*>(str.c_str()), str.size());
+    const std::string str = outputStream.str();
+
+    // A single send() may write only part of a large payload, which would truncate the
+    // request. Keep writing until the whole message is out.
+    const auto* buffer = reinterpret_cast<const std::byte*>(str.data());
+    uint32_t    sent   = 0;
+
+    while (sent < str.size()) {
+      const auto [chunk_size, chunk_status] = SendMessage_(buffer + sent, str.size() - sent);
+
+      if (chunk_status != kissnet::socket_status::valid || chunk_size == 0) {
+        return std::make_tuple(sent, chunk_status);
+      }
+
+      sent += chunk_size;
+    }
+
+    return std::make_tuple(sent, kissnet::socket_status::valid);
   }
 
   template <typename TRequest, typename TResponse>

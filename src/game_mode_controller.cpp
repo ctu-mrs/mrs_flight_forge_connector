@@ -273,3 +273,47 @@ std::pair<bool, double> GameModeController::GetTime() {
 }
 
 //}
+
+/* spawnObjectsFromYaml() //{ */
+
+std::pair<bool, std::vector<int>> GameModeController::SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError) {
+
+  Serializable::GameMode::SpawnObjectsFromYaml::Request request{};
+  request.yaml = yaml;
+
+  Serializable::GameMode::SpawnObjectsFromYaml::Response response{};
+  const auto                                            status  = Request(request, response);
+  const auto                                            success = status && response.status;
+
+  OutError = status ? response.error : "no response from the simulator";
+
+  return std::make_pair(success, success ? response.object_ids : std::vector<int>());
+}
+
+//}
+
+/* removeSpawnedObject() //{ */
+
+std::pair<bool, int> GameModeController::RemoveSpawnedObject(const int object_id) {
+
+  Serializable::GameMode::RemoveSpawnedObject::Request request{};
+  request.object_id = object_id;
+
+  Serializable::GameMode::RemoveSpawnedObject::Response response{};
+  const auto                                           status  = Request(request, response);
+  const auto                                           success = status && response.status;
+
+  return std::make_pair(success, success ? response.removed_count : 0);
+}
+
+//}
+
+/* removeAllSpawnedObjects() //{ */
+
+std::pair<bool, int> GameModeController::RemoveAllSpawnedObjects() {
+
+  // A negative id is the clear-everything sentinel.
+  return RemoveSpawnedObject(-1);
+}
+
+//}

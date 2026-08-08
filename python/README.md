@@ -1,0 +1,72 @@
+# flightforge — Python API
+
+Pythonic client, [Gymnasium](https://gymnasium.farama.org) environments and a
+MuJoCo dynamics bridge for the FlightForge simulator (API 0.14).
+
+## Install
+
+Build the native bindings once, then install the package:
+
+```bash
+# in the connector checkout
+cmake -S . -B build -DBUILD_PYTHON_LIB=ON && cmake --build build -j
+pip install -e python[all]        # or [gym], [mujoco], [vision] selectively
+```
+
+The package finds the compiled modules in `build/` automatically; override
+with `FLIGHTFORGE_NATIVE_PATH` if they live elsewhere.
+
+## Layers
+
+**Raw bindings** — everything the wire protocol offers, 1:1:
+
+```python
+from flightforge import DroneController, GameModeController
+```
+
+**Pythonic client** — raises on failure, numpy in and out:
+
+```python
+from flightforge import Simulator
+
+sim = Simulator()                              # game mode on :8551
+drone = sim.spawn_drone((0, 0, 200), "x500")
+
+image, stamp = drone.rgb()                     # HxWx3 uint8
+points, origin, stamp = drone.lidar()          # (N,4) distances + directions
+events, stamp = drone.events()                 # (N,4) event camera batch
+drone.add_device("realsense_d435i", offset=(12, 0, -2))
+ids = sim.spawn_objects(open("scene.yaml").read())
+```
+
+**Gymnasium** — `FlightForge/CameraNav-v0`, `FlightForge/LidarNav-v0`
+(auto-registered via the `gymnasium.envs` entry point):
+
+```python
+import gymnasium
+env = gymnasium.make("FlightForge/CameraNav-v0", render_mode="rgb_array")
+observation, info = env.reset()
+observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
+Both environments teleport-with-collision-check, so they need no dynamics
+model; wrap your own dynamics for realism, or:
+
+**MuJoCo bridge** — MuJoCo integrates, FlightForge renders:
+
+```python
+from flightforge import Simulator, MujocoBridge
+
+sim = Simulator()
+drone = sim.spawn_drone((0, 0, 200), "x500")
+bridge = MujocoBridge(drone, "quadrotor.xml", world_origin_uu=sim.world_origin())
+
+bridge.data.ctrl[:] = thrusts
+bridge.step()                # mj_step + pose push
+image, stamp = drone.rgb()   # photorealistic render of the MuJoCo state
+```
+
+Any consumer of the MuJoCo state works the same way — MJX/JAX rollouts,
+MATLAB-exported trajectories — as long as something fills `qpos`.
+
+See `python/examples/` for runnable versions of all of the above.

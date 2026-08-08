@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flightforge"
+version = "0.14.0"
+description = "Python API for the FlightForge UAV simulator: pythonic client, Gymnasium environments and a MuJoCo dynamics bridge"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+gym = ["gymnasium>=0.29"]
+mujoco = ["mujoco>=3.0"]
+vision = ["opencv-python"]
+all = ["gymnasium>=0.29", "mujoco>=3.0", "opencv-python"]
+
+[project.entry-points."gymnasium.envs"]
+flightforge = "flightforge.gym_envs:register_envs"
+
+[tool.setuptools.packages.find]
+include = ["flightforge*"]

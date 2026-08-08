@@ -108,6 +108,29 @@ class Drone:
         _check(ok, "GetFisheyeCameraData")
         return _decode_image(data), stamp
 
+    def camera_intrinsics(self, sensor_id=-1):
+        """The RGB camera's effective pinhole intrinsics as a 3x3 K matrix plus
+        (width, height). Valid whether the camera runs on a FOV or on custom
+        intrinsics — the server always reports what the rendered image has."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        i = config.intrinsics
+        K = np.array([[i.fx, 0.0, i.cx], [0.0, i.fy, i.cy], [0.0, 0.0, 1.0]])
+        return K, (config.width, config.height)
+
+    def set_camera_intrinsics(self, fx, fy, cx, cy, sensor_id=-1):
+        """Switches the RGB camera (and its projection) to explicit pinhole
+        intrinsics in pixels; resolution stays as configured."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        config.intrinsics.use_custom = True
+        config.intrinsics.fx = float(fx)
+        config.intrinsics.fy = float(fy)
+        config.intrinsics.cx = float(cx)
+        config.intrinsics.cy = float(cy)
+        ok = self._raw.SetRgbCameraConfig(config, sensor_id)
+        _check(ok, "SetRgbCameraConfig")
+
     def events(self, sensor_id=-1):
         """((N,4) float array of x, y, polarity, stamp — time-sorted; batch stamp)."""
         ok, events, stamp = self._raw.GetEventCameraData(sensor_id)

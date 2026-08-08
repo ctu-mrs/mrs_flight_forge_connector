@@ -253,6 +253,18 @@ struct CameraLensEffects
   bool motion_blur_from_shutter_ = false;
 };
 
+// Pinhole intrinsics in pixels, image origin top-left. Leave use_custom_ unset to
+// drive the projection from fov_; Get always returns the effective values, derived
+// from fov_ and the resolution when not custom.
+struct CameraIntrinsics
+{
+  bool   use_custom_ = false;
+  double fx_         = 0.0;
+  double fy_         = 0.0;
+  double cx_         = 0.0;
+  double cy_         = 0.0;
+};
+
 struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
@@ -277,6 +289,7 @@ struct RgbCameraConfig
 
   CameraExposure    exposure_;
   CameraLensEffects lens_;
+  CameraIntrinsics  intrinsics_;
 };
 
 struct EventCameraConfig

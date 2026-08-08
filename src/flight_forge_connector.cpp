@@ -526,6 +526,12 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
     config.lens_.white_temp_               = response.config.lens_.white_temp_;
     config.lens_.white_tint_               = response.config.lens_.white_tint_;
     config.lens_.motion_blur_from_shutter_ = response.config.lens_.motion_blur_from_shutter_;
+
+    config.intrinsics_.use_custom_ = response.config.intrinsics_.use_custom_;
+    config.intrinsics_.fx_         = response.config.intrinsics_.fx_;
+    config.intrinsics_.fy_         = response.config.intrinsics_.fy_;
+    config.intrinsics_.cx_         = response.config.intrinsics_.cx_;
+    config.intrinsics_.cy_         = response.config.intrinsics_.cy_;
   }
 
   return std::make_pair(success, config);
@@ -618,6 +624,12 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
   request.config.lens_.white_temp_               = config.lens_.white_temp_;
   request.config.lens_.white_tint_               = config.lens_.white_tint_;
   request.config.lens_.motion_blur_from_shutter_ = config.lens_.motion_blur_from_shutter_;
+
+  request.config.intrinsics_.use_custom_ = config.intrinsics_.use_custom_;
+  request.config.intrinsics_.fx_         = config.intrinsics_.fx_;
+  request.config.intrinsics_.fy_         = config.intrinsics_.fy_;
+  request.config.intrinsics_.cx_         = config.intrinsics_.cx_;
+  request.config.intrinsics_.cy_         = config.intrinsics_.cy_;
 
   Serializable::Drone::SetRgbCameraConfig::Response response{};
 

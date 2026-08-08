@@ -7,6 +7,7 @@ namespace py = pybind11;
 
 using ueds_connector::CameraEvent;
 using ueds_connector::CameraExposure;
+using ueds_connector::CameraIntrinsics;
 using ueds_connector::CameraLensEffects;
 using ueds_connector::Coordinates;
 using ueds_connector::DeviceInfo;
@@ -137,6 +138,14 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("white_tint", &CameraLensEffects::white_tint_)
       .def_readwrite("motion_blur_from_shutter", &CameraLensEffects::motion_blur_from_shutter_);
 
+  py::class_<CameraIntrinsics>(m, "CameraIntrinsics")
+      .def(py::init<>())
+      .def_readwrite("use_custom", &CameraIntrinsics::use_custom_)
+      .def_readwrite("fx", &CameraIntrinsics::fx_)
+      .def_readwrite("fy", &CameraIntrinsics::fy_)
+      .def_readwrite("cx", &CameraIntrinsics::cx_)
+      .def_readwrite("cy", &CameraIntrinsics::cy_);
+
   py::class_<RgbCameraConfig>(m, "RgbCameraConfig")
       .def(py::init<>())
       .def_readwrite("show_debug_camera", &RgbCameraConfig::show_debug_camera_)
@@ -152,7 +161,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("motion_blur_amount", &RgbCameraConfig::motion_blur_amount_)
       .def_readwrite("motion_blur_distortion", &RgbCameraConfig::motion_blur_distortion_)
       .def_readwrite("exposure", &RgbCameraConfig::exposure_)
-      .def_readwrite("lens", &RgbCameraConfig::lens_);
+      .def_readwrite("lens", &RgbCameraConfig::lens_)
+      .def_readwrite("intrinsics", &RgbCameraConfig::intrinsics_);
 
   py::class_<StereoCameraConfig>(m, "StereoCameraConfig")
       .def(py::init<>())
@@ -172,6 +182,25 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("fov", &StereoCameraConfig::fov_)
       .def_readwrite("width", &StereoCameraConfig::width_)
       .def_readwrite("height", &StereoCameraConfig::height_)
+      // the wire struct holds its own intrinsics type; convert so Python sees one CameraIntrinsics class
+      .def_property(
+          "intrinsics",
+          [](const StereoCameraConfig& config) {
+            CameraIntrinsics intrinsics;
+            intrinsics.use_custom_ = config.intrinsics_.use_custom_;
+            intrinsics.fx_         = config.intrinsics_.fx_;
+            intrinsics.fy_         = config.intrinsics_.fy_;
+            intrinsics.cx_         = config.intrinsics_.cx_;
+            intrinsics.cy_         = config.intrinsics_.cy_;
+            return intrinsics;
+          },
+          [](StereoCameraConfig& config, const CameraIntrinsics& intrinsics) {
+            config.intrinsics_.use_custom_ = intrinsics.use_custom_;
+            config.intrinsics_.fx_         = intrinsics.fx_;
+            config.intrinsics_.fy_         = intrinsics.fy_;
+            config.intrinsics_.cx_         = intrinsics.cx_;
+            config.intrinsics_.cy_         = intrinsics.cy_;
+          })
       .def_readwrite("enable_temporal_aa", &StereoCameraConfig::enable_temporal_aa_)
       .def_readwrite("enable_raytracing", &StereoCameraConfig::enable_raytracing_)
       .def_readwrite("enable_hdr", &StereoCameraConfig::enable_hdr_);

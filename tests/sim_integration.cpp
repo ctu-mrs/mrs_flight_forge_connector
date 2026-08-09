@@ -1,13 +1,3 @@
-// Live-simulator integration suite (C++, the primary client surface).
-//
-// Connects to a running FlightForge simulator on localhost and exercises the
-// whole API 0.14 surface: drone lifecycle, cameras and calibration
-// round-trips, the scene editor, mutual visibility, sensors/devices and
-// instance segmentation. When no simulator is reachable the binary exits with
-// code 77, which ctest reports as SKIPPED (not failed).
-//
-//   ctest --test-dir build -R sim_integration       # with the sim running
-
 #include <cmath>
 #include <memory>
 #include <string>
@@ -24,7 +14,6 @@ namespace
 constexpr const char* kAddress      = "127.0.0.1";
 constexpr uint16_t    kGameModePort = 8551;
 
-// session-wide handles; created in main before RunAll, torn down after
 std::unique_ptr<ueds_connector::GameModeController> GameMode;
 std::unique_ptr<ueds_connector::UedsConnector>      Drone;
 int                                                 DronePort = -1;
@@ -239,6 +228,32 @@ FF_TEST(DevicesListed)
     bFound = bFound || Device.name == "realsense_d435i";
   }
   FF_CHECK(bFound);
+}
+
+/* //} */
+
+/* depth camera //{ */
+
+FF_TEST(DepthCapture)
+{
+  std::vector<uint16_t> Depth;
+  int                   Width  = 0;
+  int                   Height = 0;
+  double                Stamp  = 0.0;
+
+  FF_REQUIRE(Drone->GetDepthCameraData(Depth, Width, Height, Stamp));
+  FF_CHECK(Width > 0 && Height > 0);
+  FF_CHECK(static_cast<int>(Depth.size()) == Width * Height);
+  FF_CHECK(Stamp > 0.0);
+
+  // over open ground something must be in range: not all zeros, not all clamp
+  size_t NonZero = 0, Clamped = 0;
+  for (const uint16_t Value : Depth) {
+    NonZero += Value > 0 ? 1 : 0;
+    Clamped += Value == 65535 ? 1 : 0;
+  }
+  FF_CHECK(NonZero > 0);
+  FF_CHECK(Clamped < Depth.size());
 }
 
 /* //} */

@@ -1,10 +1,3 @@
-// Wire-protocol round-trip tests: every high-churn message is filled with
-// sentinel values, run through cereal binary serialize -> deserialize, and
-// compared field by field. This is the test that catches "added a struct field
-// but forgot it in the archive list" - the one mistake the compiler cannot.
-//
-// Exits non-zero on the first failure; run via ctest or directly.
-
 #include <sstream>
 #include <string>
 
@@ -318,6 +311,34 @@ FF_TEST(TestInstanceSegMessages)
 
     const GetInstanceSegMap::Response Out = RoundTrip(In);
     Check(Out.entries_.size() == 1 && Out.entries_[0].id == 42 && Out.entries_[0].actor == Entry.actor, "GetInstanceSegMap::Response");
+  }
+}
+
+//}
+
+/* depth camera message //{ */
+
+FF_TEST(TestDepthCameraMessage)
+{
+  using namespace Serializable::Drone;
+
+  {
+    GetDepthCameraData::Request In{};
+    In.sensor_id_ = 3;
+
+    const GetDepthCameraData::Request Out = RoundTrip(In);
+    Check(Out.sensor_id_ == 3, "GetDepthCameraData::Request");
+  }
+
+  {
+    GetDepthCameraData::Response In{};
+    In.image_  = {0, 1000, 65535, 500};
+    In.width_  = 2;
+    In.height_ = 2;
+    In.stamp_  = 3.25;
+
+    const GetDepthCameraData::Response Out = RoundTrip(In);
+    Check(Out.image_ == In.image_ && Out.width_ == In.width_ && Out.height_ == In.height_ && Out.stamp_ == In.stamp_, "GetDepthCameraData::Response");
   }
 }
 

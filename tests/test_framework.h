@@ -1,13 +1,3 @@
-// Minimal dependency-free test framework for the connector's C++ suites.
-//
-//   FF_TEST(MyCase) { FF_CHECK(1 + 1 == 2); }
-//   int main() { return fftest::RunAll(); }
-//
-// FF_CHECK records a failure and continues; FF_REQUIRE aborts the current test
-// (use it for prerequisites like "connected"). fftest::Skip("...") marks the
-// current test skipped. RunAll returns 0 on success, 1 on any failure, and
-// FF_SKIP_EXIT_CODE (77, the ctest convention) when every test skipped.
-
 #pragma once
 
 #include <cmath>

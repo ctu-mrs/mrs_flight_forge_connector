@@ -200,6 +200,14 @@ class Drone:
         _check(ok, "GetInstanceSegMap")
         return {e.id: e.actor for e in entries}
 
+    def depth(self, sensor_id=-1):
+        """Depth as an (H, W) uint16 array in millimetres (0 = invalid,
+        65535 = clamp - the Kinect/RealSense convention) plus the stamp."""
+        ok, data, width, height, stamp = self._raw.GetDepthCameraData(sensor_id)
+        _check(ok, "GetDepthCameraData")
+        depth_mm = np.frombuffer(data, dtype=np.uint16).reshape(height, width)
+        return depth_mm, stamp
+
     # --- lidar + rangefinder ---
 
     def lidar(self, sensor_id=-1):

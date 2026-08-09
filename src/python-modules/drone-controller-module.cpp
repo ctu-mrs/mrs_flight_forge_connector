@@ -74,6 +74,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .value("EVENT_CAMERA", ueds_connector::SENSOR_EVENT_CAMERA)
       .value("FISHEYE_CAMERA", ueds_connector::SENSOR_FISHEYE_CAMERA)
       .value("INSTANCE_SEG_CAMERA", ueds_connector::SENSOR_INSTANCE_SEG_CAMERA)
+      .value("DEPTH_CAMERA", ueds_connector::SENSOR_DEPTH_CAMERA)
       .export_values();
 
   //}
@@ -343,7 +344,21 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             return py::make_tuple(success, py::bytes(reinterpret_cast<const char*>(image.data()), image.size()), stamp);
           },
           py::arg("sensor_id") = -1, "Returns (success, png_bytes, stamp).")
-      .def("GetInstanceSegMap", &UedsConnector::GetInstanceSegMap, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1);
+      .def("GetInstanceSegMap", &UedsConnector::GetInstanceSegMap, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def(
+          "GetDepthCameraData",
+          [](UedsConnector& connector, int sensor_id) {
+            std::vector<uint16_t> image;
+            int                   width = 0, height = 0;
+            double                stamp   = 0.0;
+            bool                  success = false;
+            {
+              py::gil_scoped_release release;
+              success = connector.GetDepthCameraData(image, width, height, stamp, sensor_id);
+            }
+            return py::make_tuple(success, py::bytes(reinterpret_cast<const char*>(image.data()), image.size() * sizeof(uint16_t)), width, height, stamp);
+          },
+          py::arg("sensor_id") = -1, "Returns (success, uint16le_mm_bytes, width, height, stamp).");
 
   //}
 }

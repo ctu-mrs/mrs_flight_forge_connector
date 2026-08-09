@@ -1,10 +1,6 @@
-# Three suites:
 #   serialization_roundtrip - wire structs through cereal, no I/O
 #   unit_tests              - pure connector logic, no I/O
 #   sim_integration         - full API against a live simulator; exits 77
-#                             (reported SKIPPED) when none is reachable
-# Plus header_mirror: the connector's serializable_shared.h must be
-# byte-identical to the plugin's whenever the plugin repo sits next to this one.
 
 add_executable(serialization_roundtrip serialization_roundtrip.cpp)
 target_include_directories(serialization_roundtrip PRIVATE ${PROJECT_SOURCE_DIR}/include)

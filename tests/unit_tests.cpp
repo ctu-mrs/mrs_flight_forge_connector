@@ -1,6 +1,3 @@
-// Pure-logic unit tests for the connector: name catalogs, defaults and the
-// id-encoding conventions the clients rely on. No simulator, no sockets.
-
 #include <algorithm>
 #include <cstdint>
 
@@ -72,6 +69,7 @@ FF_TEST(SensorTypeValues)
   FF_CHECK(static_cast<int>(SENSOR_EVENT_CAMERA) == 6);
   FF_CHECK(static_cast<int>(SENSOR_FISHEYE_CAMERA) == 7);
   FF_CHECK(static_cast<int>(SENSOR_INSTANCE_SEG_CAMERA) == 8);
+  FF_CHECK(static_cast<int>(SENSOR_DEPTH_CAMERA) == 9);
 }
 
 /* //} */

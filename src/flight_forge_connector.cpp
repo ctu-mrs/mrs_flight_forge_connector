@@ -1025,3 +1025,26 @@ std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConne
 }
 
 //}
+
+/* getDepthCameraData() //{ */
+
+bool UedsConnector::GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId) {
+
+  Serializable::Drone::GetDepthCameraData::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetDepthCameraData::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  if (success) {
+    image  = response.image_;
+    width  = response.width_;
+    height = response.height_;
+    stamp  = response.stamp_;
+  }
+
+  return success;
+}
+
+//}

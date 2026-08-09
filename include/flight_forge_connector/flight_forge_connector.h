@@ -136,6 +136,12 @@ public:
   /** The id -> actor-path map snapshotted with the last instance-segmentation frame. */
   std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> GetInstanceSegMap(int sensorId = -1);
 
+  /**
+   * Depth image in uint16 millimetres (0 invalid, 65535 clamp - the
+   * Kinect/RealSense convention), row-major width x height, uncompressed.
+   */
+  bool GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId = -1);
+
   //}
 };
 

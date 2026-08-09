@@ -38,6 +38,12 @@ if (BUILD_EXAMPLES)
     add_subdirectory(examples/cli)
 endif()
 
+option(BUILD_TESTS "Build the wire-protocol tests" OFF)
+if (BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
 option(BUILD_PYTHON_LIB "Build python lib" OFF)
 if (BUILD_PYTHON_LIB)
     add_subdirectory(extern/pybind11)

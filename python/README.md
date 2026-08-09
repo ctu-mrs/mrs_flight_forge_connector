@@ -91,3 +91,27 @@ sim.assets(name_filter="cube")         # what the simulator can spawn
 See `python/examples/` for runnable versions of all of the above
 (`parallel_drones.py` for the multi-robot demo, `scene_editor.py` for the
 scene-editing loop).
+
+## Tests
+
+```bash
+# unit tests - run anywhere, no simulator (sim-marked tests skip cleanly)
+pip install -e python[test]
+pytest python/tests
+
+# integration suite - start the simulator first, then:
+pytest python/tests -m sim
+
+# wire-protocol round-trip (C++, catches serialize-list mistakes)
+cmake -B build -DBUILD_TESTS=ON && cmake --build build --target serialization_roundtrip
+ctest --test-dir build -R serialization_roundtrip
+```
+
+The `sim` suite doubles as the runtime validation harness: cameras and
+calibration round-trips, the scene-editor round-trip, mutual visibility,
+sensor lifecycle and instance segmentation. The engine-side math (frame
+conversions, distortion LUT inverse, noise determinism) is covered by the
+plugin's automation tests - in the editor: Tools > Test Automation, filter
+"FlightForge", or headless:
+
+    UnrealEditor-Cmd <project.uproject> -ExecCmds="Automation RunTests FlightForge" -unattended -nopause

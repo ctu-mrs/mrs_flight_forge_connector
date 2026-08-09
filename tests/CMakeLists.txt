@@ -1,0 +1,4 @@
+add_executable(serialization_roundtrip serialization_roundtrip.cpp)
+target_include_directories(serialization_roundtrip PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_test(NAME serialization_roundtrip COMMAND serialization_roundtrip)

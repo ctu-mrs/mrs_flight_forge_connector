@@ -18,9 +18,16 @@ gym = ["gymnasium>=0.29"]
 mujoco = ["mujoco>=3.0"]
 vision = ["opencv-python"]
 all = ["gymnasium>=0.29", "mujoco>=3.0", "opencv-python"]
+test = ["pytest>=7", "opencv-python", "gymnasium>=0.29", "mujoco>=3.0"]
 
 [project.entry-points."gymnasium.envs"]
 flightforge = "flightforge.gym_envs:register_envs"
 
 [tool.setuptools.packages.find]
 include = ["flightforge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "sim: needs a running FlightForge simulator on localhost (skips cleanly otherwise)",
+]

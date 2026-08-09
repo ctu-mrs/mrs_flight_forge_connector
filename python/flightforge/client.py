@@ -131,6 +131,28 @@ class Drone:
         ok = self._raw.SetRgbCameraConfig(config, sensor_id)
         _check(ok, "SetRgbCameraConfig")
 
+    def camera_distortion(self, sensor_id=-1):
+        """The RGB camera's Brown-Conrady coefficients as (enabled, [k1 k2 k3 p1 p2])."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        d = config.distortion
+        return d.enable, np.array([d.k1, d.k2, d.k3, d.p1, d.p2])
+
+    def set_camera_distortion(self, k1=0.0, k2=0.0, k3=0.0, p1=0.0, p2=0.0, enable=True, sensor_id=-1):
+        """Applies Brown-Conrady distortion (OpenCV convention) to the RGB camera.
+        The simulator renders an auto-sized overscan frustum and warps, so the
+        image matches a real camera calibrated as (K, [k1 k2 k3 p1 p2])."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        config.distortion.enable = enable
+        config.distortion.k1 = float(k1)
+        config.distortion.k2 = float(k2)
+        config.distortion.k3 = float(k3)
+        config.distortion.p1 = float(p1)
+        config.distortion.p2 = float(p2)
+        ok = self._raw.SetRgbCameraConfig(config, sensor_id)
+        _check(ok, "SetRgbCameraConfig")
+
     def events(self, sensor_id=-1):
         """((N,4) float array of x, y, polarity, stamp — time-sorted; batch stamp)."""
         ok, events, stamp = self._raw.GetEventCameraData(sensor_id)

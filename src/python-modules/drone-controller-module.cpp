@@ -6,6 +6,7 @@
 namespace py = pybind11;
 
 using ueds_connector::CameraEvent;
+using ueds_connector::CameraDistortion;
 using ueds_connector::CameraExposure;
 using ueds_connector::CameraIntrinsics;
 using ueds_connector::CameraLensEffects;
@@ -146,6 +147,15 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("cx", &CameraIntrinsics::cx_)
       .def_readwrite("cy", &CameraIntrinsics::cy_);
 
+  py::class_<CameraDistortion>(m, "CameraDistortion")
+      .def(py::init<>())
+      .def_readwrite("enable", &CameraDistortion::enable_)
+      .def_readwrite("k1", &CameraDistortion::k1_)
+      .def_readwrite("k2", &CameraDistortion::k2_)
+      .def_readwrite("k3", &CameraDistortion::k3_)
+      .def_readwrite("p1", &CameraDistortion::p1_)
+      .def_readwrite("p2", &CameraDistortion::p2_);
+
   py::class_<RgbCameraConfig>(m, "RgbCameraConfig")
       .def(py::init<>())
       .def_readwrite("show_debug_camera", &RgbCameraConfig::show_debug_camera_)
@@ -162,7 +172,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("motion_blur_distortion", &RgbCameraConfig::motion_blur_distortion_)
       .def_readwrite("exposure", &RgbCameraConfig::exposure_)
       .def_readwrite("lens", &RgbCameraConfig::lens_)
-      .def_readwrite("intrinsics", &RgbCameraConfig::intrinsics_);
+      .def_readwrite("intrinsics", &RgbCameraConfig::intrinsics_)
+      .def_readwrite("distortion", &RgbCameraConfig::distortion_);
 
   py::class_<StereoCameraConfig>(m, "StereoCameraConfig")
       .def(py::init<>())
@@ -200,6 +211,26 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             config.intrinsics_.fy_         = intrinsics.fy_;
             config.intrinsics_.cx_         = intrinsics.cx_;
             config.intrinsics_.cy_         = intrinsics.cy_;
+          })
+      .def_property(
+          "distortion",
+          [](const StereoCameraConfig& config) {
+            CameraDistortion distortion;
+            distortion.enable_ = config.distortion_.enable_;
+            distortion.k1_     = config.distortion_.k1_;
+            distortion.k2_     = config.distortion_.k2_;
+            distortion.k3_     = config.distortion_.k3_;
+            distortion.p1_     = config.distortion_.p1_;
+            distortion.p2_     = config.distortion_.p2_;
+            return distortion;
+          },
+          [](StereoCameraConfig& config, const CameraDistortion& distortion) {
+            config.distortion_.enable_ = distortion.enable_;
+            config.distortion_.k1_     = distortion.k1_;
+            config.distortion_.k2_     = distortion.k2_;
+            config.distortion_.k3_     = distortion.k3_;
+            config.distortion_.p1_     = distortion.p1_;
+            config.distortion_.p2_     = distortion.p2_;
           })
       .def_readwrite("enable_temporal_aa", &StereoCameraConfig::enable_temporal_aa_)
       .def_readwrite("enable_raytracing", &StereoCameraConfig::enable_raytracing_)

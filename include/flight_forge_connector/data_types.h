@@ -265,6 +265,20 @@ struct CameraIntrinsics
   double cy_         = 0.0;
 };
 
+// Brown-Conrady lens distortion (OpenCV convention). The simulator renders an
+// automatically-sized overscan frustum and warps: bilinear for RGB, nearest for
+// segmentation. K (camera_intrinsics) is unchanged by distortion - together they
+// are the calibration.
+struct CameraDistortion
+{
+  bool   enable_ = false;
+  double k1_     = 0.0;
+  double k2_     = 0.0;
+  double k3_     = 0.0;
+  double p1_     = 0.0;
+  double p2_     = 0.0;
+};
+
 struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
@@ -290,6 +304,7 @@ struct RgbCameraConfig
   CameraExposure    exposure_;
   CameraLensEffects lens_;
   CameraIntrinsics  intrinsics_;
+  CameraDistortion  distortion_;
 };
 
 struct EventCameraConfig

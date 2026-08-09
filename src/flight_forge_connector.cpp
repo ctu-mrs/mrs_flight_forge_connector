@@ -532,6 +532,13 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
     config.intrinsics_.fy_         = response.config.intrinsics_.fy_;
     config.intrinsics_.cx_         = response.config.intrinsics_.cx_;
     config.intrinsics_.cy_         = response.config.intrinsics_.cy_;
+
+    config.distortion_.enable_ = response.config.distortion_.enable_;
+    config.distortion_.k1_     = response.config.distortion_.k1_;
+    config.distortion_.k2_     = response.config.distortion_.k2_;
+    config.distortion_.k3_     = response.config.distortion_.k3_;
+    config.distortion_.p1_     = response.config.distortion_.p1_;
+    config.distortion_.p2_     = response.config.distortion_.p2_;
   }
 
   return std::make_pair(success, config);
@@ -630,6 +637,13 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
   request.config.intrinsics_.fy_         = config.intrinsics_.fy_;
   request.config.intrinsics_.cx_         = config.intrinsics_.cx_;
   request.config.intrinsics_.cy_         = config.intrinsics_.cy_;
+
+  request.config.distortion_.enable_ = config.distortion_.enable_;
+  request.config.distortion_.k1_     = config.distortion_.k1_;
+  request.config.distortion_.k2_     = config.distortion_.k2_;
+  request.config.distortion_.k3_     = config.distortion_.k3_;
+  request.config.distortion_.p1_     = config.distortion_.p1_;
+  request.config.distortion_.p2_     = config.distortion_.p2_;
 
   Serializable::Drone::SetRgbCameraConfig::Response response{};
 

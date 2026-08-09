@@ -223,11 +223,14 @@ FF_TEST(DevicesListed)
   const auto [Ok, Devices] = Drone->ListDevices();
   FF_REQUIRE(Ok);
 
-  bool bFound = false;
+  bool bFoundRealsense = false;
+  bool bFoundKinect    = false;
   for (const auto& Device : Devices) {
-    bFound = bFound || Device.name == "realsense_d435i";
+    bFoundRealsense = bFoundRealsense || Device.name == "realsense_d435i";
+    bFoundKinect    = bFoundKinect || Device.name == "azure_kinect_dk";
   }
-  FF_CHECK(bFound);
+  FF_CHECK(bFoundRealsense);
+  FF_CHECK(bFoundKinect);
 }
 
 /* //} */

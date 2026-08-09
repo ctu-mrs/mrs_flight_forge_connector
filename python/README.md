@@ -88,6 +88,12 @@ yaml_text = sim.export_scene()         # round-trippable, stencils included
 sim.assets(name_filter="cube")         # what the simulator can spawn
 ```
 
+**Depth** — `drone.depth()` returns an (H, W) uint16 array in millimetres
+(0 invalid, 65535 clamp - the Kinect/RealSense convention). Ground-truth
+depth: use it standalone for datasets, or via the `azure_kinect_dk` ToF
+preset; the `realsense_d435i` preset deliberately has no depth stream -
+its real depth is stereo matching, so match its stereo pair instead.
+
 See `python/examples/` for runnable versions of all of the above
 (`parallel_drones.py` for the multi-robot demo, `scene_editor.py` for the
 scene-editing loop).

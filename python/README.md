@@ -94,24 +94,29 @@ scene-editing loop).
 
 ## Tests
 
+The primary suite is C++ (`tests/`, the interface mrs_uav_unreal_simulation
+consumes):
+
 ```bash
-# unit tests - run anywhere, no simulator (sim-marked tests skip cleanly)
-pip install -e python[test]
-pytest python/tests
-
-# integration suite - start the simulator first, then:
-pytest python/tests -m sim
-
-# wire-protocol round-trip (C++, catches serialize-list mistakes)
-cmake -B build -DBUILD_TESTS=ON && cmake --build build --target serialization_roundtrip
-ctest --test-dir build -R serialization_roundtrip
+cmake -B build -DBUILD_TESTS=ON && cmake --build build
+ctest --test-dir build
 ```
 
-The `sim` suite doubles as the runtime validation harness: cameras and
-calibration round-trips, the scene-editor round-trip, mutual visibility,
-sensor lifecycle and instance segmentation. The engine-side math (frame
-conversions, distortion LUT inverse, noise determinism) is covered by the
-plugin's automation tests - in the editor: Tools > Test Automation, filter
+- `serialization_roundtrip` - every high-churn wire struct through cereal,
+  field-compared (catches fields missing from serialize() lists)
+- `unit_tests` - catalogs, defaults, id-encoding conventions
+- `sim_integration` - the full API against a live simulator on localhost:
+  cameras + calibration round-trips, the scene-editor round-trip, mutual
+  visibility, sensor/device lifecycle, instance segmentation. Reported
+  SKIPPED (exit 77) when no simulator is reachable, so plain `ctest` is safe
+  anywhere; run it with the sim up for the real validation pass.
+- `header_mirror` - the vendored serializable_shared.h must be byte-identical
+  to the plugin's (active when the plugin repo sits next to this checkout)
+
+The python layer keeps a thin pytest suite for the bindings themselves
+(`pytest python/tests`; `-m sim` for the live subset). Engine-side math
+(frame conversions, distortion LUT inverse, noise determinism) is covered by
+the plugin's automation tests - editor: Tools > Test Automation, filter
 "FlightForge", or headless:
 
     UnrealEditor-Cmd <project.uproject> -ExecCmds="Automation RunTests FlightForge" -unattended -nopause

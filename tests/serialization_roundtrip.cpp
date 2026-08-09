@@ -5,9 +5,6 @@
 //
 // Exits non-zero on the first failure; run via ctest or directly.
 
-#include <cassert>
-#include <cstdlib>
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -15,17 +12,14 @@
 
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
+#include "test_framework.h"
+
 namespace
 {
 
-int FailureCount = 0;
-
 void Check(const bool bCondition, const std::string& What)
 {
-  if (!bCondition) {
-    std::cerr << "FAIL: " << What << std::endl;
-    ++FailureCount;
-  }
+  fftest::Report(bCondition, What.c_str(), "serialization_roundtrip", 0);
 }
 
 /* RoundTrip //{ */
@@ -53,7 +47,7 @@ T RoundTrip(const T& Input)
 
 /* camera config blocks //{ */
 
-void TestCameraBlocks()
+FF_TEST(TestCameraBlocks)
 {
   using namespace Serializable::Drone;
 
@@ -121,7 +115,7 @@ void TestCameraBlocks()
 
 /* full RgbCameraConfig //{ */
 
-void TestRgbCameraConfig()
+FF_TEST(TestRgbCameraConfig)
 {
   using namespace Serializable::Drone;
 
@@ -185,7 +179,7 @@ void TestRgbCameraConfig()
 
 /* stereo config //{ */
 
-void TestStereoCameraConfig()
+FF_TEST(TestStereoCameraConfig)
 {
   using namespace Serializable::Drone;
 
@@ -229,7 +223,7 @@ void TestStereoCameraConfig()
 
 /* scene editor messages //{ */
 
-void TestSceneEditorMessages()
+FF_TEST(TestSceneEditorMessages)
 {
   using namespace Serializable::GameMode;
 
@@ -293,7 +287,7 @@ void TestSceneEditorMessages()
 
 /* instance segmentation messages //{ */
 
-void TestInstanceSegMessages()
+FF_TEST(TestInstanceSegMessages)
 {
   using namespace Serializable::Drone;
 
@@ -331,7 +325,7 @@ void TestInstanceSegMessages()
 
 /* lidar + event + fisheye configs //{ */
 
-void TestOtherSensorConfigs()
+FF_TEST(TestOtherSensorConfigs)
 {
   using namespace Serializable::Drone;
 
@@ -360,18 +354,5 @@ void TestOtherSensorConfigs()
 
 int main()
 {
-  TestCameraBlocks();
-  TestRgbCameraConfig();
-  TestStereoCameraConfig();
-  TestSceneEditorMessages();
-  TestInstanceSegMessages();
-  TestOtherSensorConfigs();
-
-  if (FailureCount > 0) {
-    std::cerr << FailureCount << " serialization round-trip failure(s)" << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  std::cout << "all serialization round-trips OK" << std::endl;
-  return EXIT_SUCCESS;
+  return fftest::RunAll();
 }

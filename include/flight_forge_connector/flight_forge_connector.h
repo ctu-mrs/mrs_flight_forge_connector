@@ -126,6 +126,16 @@ public:
 
   std::pair<bool, std::vector<DeviceInfo>> ListDevices();
 
+  /**
+   * The instance-segmentation image: each pixel is a 24-bit per-actor id
+   * (decode as r + (g<<8) + (b<<16); 0 = background), rendered by a dedicated
+   * mesh pass with correct occlusion and no 255-instance stencil cap.
+   */
+  bool GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId = -1);
+
+  /** The id -> actor-path map snapshotted with the last instance-segmentation frame. */
+  std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> GetInstanceSegMap(int sensorId = -1);
+
   //}
 };
 

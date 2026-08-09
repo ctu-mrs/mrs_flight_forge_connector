@@ -25,7 +25,8 @@ using ueds_connector::Rotation;
 using ueds_connector::SensorInfo;
 using ueds_connector::UedsConnector;
 
-using StereoCameraConfig = Serializable::Drone::StereoCameraConfig;
+using StereoCameraConfig  = Serializable::Drone::StereoCameraConfig;
+using InstanceSegMapEntry = Serializable::Drone::InstanceSegMapEntry;
 
 PYBIND11_MODULE(flight_forge_drone, m) {
   m.doc() = "FlightForge drone-side client (API 0.14). Sensor calls take sensor_id; -1 addresses the default sensor of that type.";
@@ -48,6 +49,11 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("roll", &Rotation::roll)
       .def("__repr__", &Rotation::toString);
 
+  py::class_<InstanceSegMapEntry>(m, "InstanceSegMapEntry")
+      .def(py::init<>())
+      .def_readonly("id", &InstanceSegMapEntry::id)
+      .def_readonly("actor", &InstanceSegMapEntry::actor);
+
   py::class_<SensorInfo>(m, "SensorInfo")
       .def(py::init<>())
       .def_readwrite("id", &SensorInfo::id)
@@ -67,6 +73,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .value("STEREO_CAMERA", ueds_connector::SENSOR_STEREO_CAMERA)
       .value("EVENT_CAMERA", ueds_connector::SENSOR_EVENT_CAMERA)
       .value("FISHEYE_CAMERA", ueds_connector::SENSOR_FISHEYE_CAMERA)
+      .value("INSTANCE_SEG_CAMERA", ueds_connector::SENSOR_INSTANCE_SEG_CAMERA)
       .export_values();
 
   //}
@@ -322,7 +329,21 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def("RemoveSensor", &UedsConnector::RemoveSensor, py::call_guard<py::gil_scoped_release>())
       .def("ListSensors", &UedsConnector::ListSensors, py::call_guard<py::gil_scoped_release>())
       .def("AddDevice", &UedsConnector::AddDevice, py::call_guard<py::gil_scoped_release>(), py::arg("device_name"), py::arg("offset"), py::arg("rotation"), py::arg("show_mesh") = true)
-      .def("ListDevices", &UedsConnector::ListDevices, py::call_guard<py::gil_scoped_release>());
+      .def("ListDevices", &UedsConnector::ListDevices, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "GetInstanceSegData",
+          [](UedsConnector& connector, int sensor_id) {
+            std::vector<unsigned char> image;
+            double                     stamp   = 0.0;
+            bool                       success = false;
+            {
+              py::gil_scoped_release release;
+              success = connector.GetInstanceSegData(image, stamp, sensor_id);
+            }
+            return py::make_tuple(success, py::bytes(reinterpret_cast<const char*>(image.data()), image.size()), stamp);
+          },
+          py::arg("sensor_id") = -1, "Returns (success, png_bytes, stamp).")
+      .def("GetInstanceSegMap", &UedsConnector::GetInstanceSegMap, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1);
 
   //}
 }

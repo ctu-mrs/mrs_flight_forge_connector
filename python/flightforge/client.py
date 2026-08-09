@@ -184,6 +184,22 @@ class Drone:
         arr = np.array([[e.x, e.y, e.polarity, e.stamp] for e in events], dtype=np.float64)
         return arr.reshape(-1, 4), stamp
 
+    def instance_segmentation(self, sensor_id=-1):
+        """Per-actor instance ids as an (H, W) uint32 array (0 = background) plus
+        the frame stamp. Rendered by a dedicated mesh pass: pixel-exact,
+        occlusion-correct, no 255-instance stencil cap."""
+        ok, data, stamp = self._raw.GetInstanceSegData(sensor_id)
+        _check(ok, "GetInstanceSegData")
+        rgb = _decode_image(data).astype(np.uint32)
+        ids = rgb[:, :, 0] + (rgb[:, :, 1] << 8) + (rgb[:, :, 2] << 16)
+        return ids, stamp
+
+    def instance_map(self, sensor_id=-1):
+        """{instance_id: actor_path} snapshotted with the last instance frame."""
+        ok, entries = self._raw.GetInstanceSegMap(sensor_id)
+        _check(ok, "GetInstanceSegMap")
+        return {e.id: e.actor for e in entries}
+
     # --- lidar + rangefinder ---
 
     def lidar(self, sensor_id=-1):

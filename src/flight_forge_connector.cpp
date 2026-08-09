@@ -988,3 +988,40 @@ std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
 }
 
 //}
+
+/* getInstanceSegData() //{ */
+
+bool UedsConnector::GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId) {
+
+  Serializable::Drone::GetInstanceSegData::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetInstanceSegData::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  if (success) {
+    image = response.image_;
+    stamp = response.stamp_;
+  }
+
+  return success;
+}
+
+//}
+
+/* getInstanceSegMap() //{ */
+
+std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConnector::GetInstanceSegMap(int sensorId) {
+
+  Serializable::Drone::GetInstanceSegMap::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetInstanceSegMap::Response response{};
+  const auto                                       status  = Request(request, response);
+  const auto                                       success = status && response.status;
+
+  return std::make_pair(success, success ? response.entries_ : std::vector<Serializable::Drone::InstanceSegMapEntry>());
+}
+
+//}

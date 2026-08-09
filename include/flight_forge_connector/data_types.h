@@ -30,6 +30,7 @@ enum SensorTypeEnum : int
   SENSOR_STEREO_CAMERA  = 5,
   SENSOR_EVENT_CAMERA   = 6,
   SENSOR_FISHEYE_CAMERA = 7,
+  SENSOR_INSTANCE_SEG_CAMERA = 8,
 };
 
 struct SensorInfo

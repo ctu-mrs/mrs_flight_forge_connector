@@ -539,6 +539,14 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
     config.distortion_.k3_     = response.config.distortion_.k3_;
     config.distortion_.p1_     = response.config.distortion_.p1_;
     config.distortion_.p2_     = response.config.distortion_.p2_;
+
+    config.noise_.enable_     = response.config.noise_.enable_;
+    config.noise_.shot_scale_ = response.config.noise_.shot_scale_;
+    config.noise_.read_sigma_ = response.config.noise_.read_sigma_;
+    config.noise_.row_sigma_  = response.config.noise_.row_sigma_;
+
+    config.rolling_shutter_.enable_       = response.config.rolling_shutter_.enable_;
+    config.rolling_shutter_.readout_time_ = response.config.rolling_shutter_.readout_time_;
   }
 
   return std::make_pair(success, config);
@@ -644,6 +652,14 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
   request.config.distortion_.k3_     = config.distortion_.k3_;
   request.config.distortion_.p1_     = config.distortion_.p1_;
   request.config.distortion_.p2_     = config.distortion_.p2_;
+
+  request.config.noise_.enable_     = config.noise_.enable_;
+  request.config.noise_.shot_scale_ = config.noise_.shot_scale_;
+  request.config.noise_.read_sigma_ = config.noise_.read_sigma_;
+  request.config.noise_.row_sigma_  = config.noise_.row_sigma_;
+
+  request.config.rolling_shutter_.enable_       = config.rolling_shutter_.enable_;
+  request.config.rolling_shutter_.readout_time_ = config.rolling_shutter_.readout_time_;
 
   Serializable::Drone::SetRgbCameraConfig::Response response{};
 

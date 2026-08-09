@@ -153,6 +153,30 @@ class Drone:
         ok = self._raw.SetRgbCameraConfig(config, sensor_id)
         _check(ok, "SetRgbCameraConfig")
 
+    def set_camera_noise(self, shot_scale=2.0e-4, read_sigma=3.0e-3, row_sigma=0.0, enable=True, sensor_id=-1):
+        """Enables sensor noise, applied server-side in the linearized domain:
+        per-channel sigma = sqrt(shot_scale * signal + read_sigma**2) with signal
+        in [0,1], plus optional per-row banding. Deterministic per frame stamp."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        config.noise.enable = enable
+        config.noise.shot_scale = float(shot_scale)
+        config.noise.read_sigma = float(read_sigma)
+        config.noise.row_sigma = float(row_sigma)
+        ok = self._raw.SetRgbCameraConfig(config, sensor_id)
+        _check(ok, "SetRgbCameraConfig")
+
+    def set_rolling_shutter(self, readout_time=0.03, enable=True, sensor_id=-1):
+        """Enables first-order rolling shutter: rows are shifted by the rotational
+        image flow over their readout delay (top-to-bottom readout_time seconds),
+        driven by the camera's measured angular velocity between captures."""
+        ok, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok, "GetRgbCameraConfig")
+        config.rolling_shutter.enable = enable
+        config.rolling_shutter.readout_time = float(readout_time)
+        ok = self._raw.SetRgbCameraConfig(config, sensor_id)
+        _check(ok, "SetRgbCameraConfig")
+
     def events(self, sensor_id=-1):
         """((N,4) float array of x, y, polarity, stamp — time-sorted; batch stamp)."""
         ok, events, stamp = self._raw.GetEventCameraData(sensor_id)

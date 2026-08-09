@@ -279,6 +279,26 @@ struct CameraDistortion
   double p2_     = 0.0;
 };
 
+// Sensor noise applied server-side in the linearized domain:
+// sigma = sqrt(shot_scale * signal + read_sigma^2) per channel (signal in [0,1]),
+// plus optional per-row offsets (CMOS banding). Deterministic per frame stamp.
+struct CameraNoise
+{
+  bool   enable_     = false;
+  double shot_scale_ = 2.0e-4;
+  double read_sigma_ = 3.0e-3;
+  double row_sigma_  = 0.0;
+};
+
+// First-order rolling shutter: rows shifted by the rotational image flow over
+// their readout delay, from the camera's measured angular velocity. Rotation
+// only (the standard gyro approximation) - translation parallax is ignored.
+struct CameraRollingShutter
+{
+  bool   enable_       = false;
+  double readout_time_ = 0.03;  // seconds, top-to-bottom
+};
+
 struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
@@ -301,10 +321,12 @@ struct RgbCameraConfig
   double motion_blur_amount_;
   double motion_blur_distortion_;
 
-  CameraExposure    exposure_;
-  CameraLensEffects lens_;
-  CameraIntrinsics  intrinsics_;
-  CameraDistortion  distortion_;
+  CameraExposure       exposure_;
+  CameraLensEffects    lens_;
+  CameraIntrinsics     intrinsics_;
+  CameraDistortion     distortion_;
+  CameraNoise          noise_;
+  CameraRollingShutter rolling_shutter_;
 };
 
 struct EventCameraConfig

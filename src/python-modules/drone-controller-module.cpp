@@ -7,6 +7,8 @@ namespace py = pybind11;
 
 using ueds_connector::CameraEvent;
 using ueds_connector::CameraDistortion;
+using ueds_connector::CameraNoise;
+using ueds_connector::CameraRollingShutter;
 using ueds_connector::CameraExposure;
 using ueds_connector::CameraIntrinsics;
 using ueds_connector::CameraLensEffects;
@@ -156,6 +158,18 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("p1", &CameraDistortion::p1_)
       .def_readwrite("p2", &CameraDistortion::p2_);
 
+  py::class_<CameraNoise>(m, "CameraNoise")
+      .def(py::init<>())
+      .def_readwrite("enable", &CameraNoise::enable_)
+      .def_readwrite("shot_scale", &CameraNoise::shot_scale_)
+      .def_readwrite("read_sigma", &CameraNoise::read_sigma_)
+      .def_readwrite("row_sigma", &CameraNoise::row_sigma_);
+
+  py::class_<CameraRollingShutter>(m, "CameraRollingShutter")
+      .def(py::init<>())
+      .def_readwrite("enable", &CameraRollingShutter::enable_)
+      .def_readwrite("readout_time", &CameraRollingShutter::readout_time_);
+
   py::class_<RgbCameraConfig>(m, "RgbCameraConfig")
       .def(py::init<>())
       .def_readwrite("show_debug_camera", &RgbCameraConfig::show_debug_camera_)
@@ -173,7 +187,9 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("exposure", &RgbCameraConfig::exposure_)
       .def_readwrite("lens", &RgbCameraConfig::lens_)
       .def_readwrite("intrinsics", &RgbCameraConfig::intrinsics_)
-      .def_readwrite("distortion", &RgbCameraConfig::distortion_);
+      .def_readwrite("distortion", &RgbCameraConfig::distortion_)
+      .def_readwrite("noise", &RgbCameraConfig::noise_)
+      .def_readwrite("rolling_shutter", &RgbCameraConfig::rolling_shutter_);
 
   py::class_<StereoCameraConfig>(m, "StereoCameraConfig")
       .def(py::init<>())

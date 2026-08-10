@@ -18,10 +18,12 @@ std::unique_ptr<ueds_connector::GameModeController> GameMode;
 std::unique_ptr<ueds_connector::UedsConnector>      Drone;
 int                                                 DronePort = -1;
 
+// An /Engine path resolves without search_paths and exists in every install, so the test
+// does not depend on what content the host project happens to have.
 const std::string kSceneYaml = "objects:\n"
-                               "  - asset: Cube\n"
+                               "  - asset: /Engine/BasicShapes/Cube\n"
                                "    position: [5.0, 0.0, 1.0]\n"
-                               "  - asset: Cube\n"
+                               "  - asset: /Engine/BasicShapes/Cube\n"
                                "    position: [5.0, 2.0, 1.0]\n"
                                "    scale: 0.5\n";
 

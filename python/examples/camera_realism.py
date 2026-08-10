@@ -18,7 +18,7 @@ Requires a running simulator:
 
 import time
 
-from flightforge import Simulator
+from ../flightforge import Simulator
 
 # a hand-written "datasheet": a 640x480 module with a slightly off-center
 # principal point, mild barrel lens, 5 ms shutter and a 25 ms readout

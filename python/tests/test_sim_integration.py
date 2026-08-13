@@ -143,3 +143,31 @@ def test_instance_segmentation_smoke(sim, drone):
 def test_devices_listed(drone):
     devices = drone.devices()
     assert "realsense_d435i" in devices
+
+
+def test_gym_envs_build_through_make(sim):
+    """Both environments must survive gymnasium.make(), not merely be registered.
+
+    make() wraps the env in PassiveEnvChecker, which validates observation_space at
+    construction. LidarNav left that space as None until the first reset, so it was
+    registered, importable and completely unusable through the standard entry point -
+    which is what checking gymnasium.spec() alone failed to notice.
+    """
+    gymnasium = pytest.importorskip("gymnasium")
+    pytest.importorskip("flightforge.gym_envs")
+
+    import flightforge.gym_envs  # noqa: F401 - registers the ids
+
+    for env_id in ("FlightForge/CameraNav-v0", "FlightForge/LidarNav-v0"):
+        env = gymnasium.make(env_id, simulator=sim, max_steps=4)
+        try:
+            assert isinstance(env.observation_space, gymnasium.spaces.Space), env_id
+
+            observation, _ = env.reset()
+            assert observation.shape == env.observation_space.shape, env_id
+
+            observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
+            assert np.isfinite(observation).all(), env_id
+            assert np.isfinite(reward), env_id
+        finally:
+            env.close()

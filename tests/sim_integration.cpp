@@ -135,6 +135,10 @@ FF_TEST(NoiseAndRollingShutterRoundTrip)
 
 FF_TEST(SceneEditorRoundTrip)
 {
+  // Counts and the exported document below are only meaningful against a known scene, and
+  // anything run before this against the same simulator may have left objects behind.
+  GameMode->RemoveAllSpawnedObjects();
+
   std::string Error;
   const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml(kSceneYaml, Error);
   FF_REQUIRE(SpawnOk && Error.empty());
@@ -285,6 +289,159 @@ FF_TEST(InstanceSegmentationSmoke)
   }
 
   GameMode->RemoveAllSpawnedObjects();
+}
+
+/* //} */
+
+/* regressions //{ */
+
+// Each of these covers a defect that shipped while returning a success status and a
+// correctly sized buffer, which is exactly why none of them was caught earlier.
+
+// A room the sensor sits inside, so "did the beams reach anything" has a known answer.
+const std::string kRoomYaml = "objects:\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [8.0, 0.0, 6.0]\n"
+                              "    scale: [0.5, 16.0, 16.0]\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [-8.0, 0.0, 6.0]\n"
+                              "    scale: [0.5, 16.0, 16.0]\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [0.0, 8.0, 6.0]\n"
+                              "    scale: [16.0, 0.5, 16.0]\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [0.0, -8.0, 6.0]\n"
+                              "    scale: [16.0, 0.5, 16.0]\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [0.0, 0.0, 14.0]\n"
+                              "    scale: [16.0, 16.0, 0.5]\n"
+                              "  - asset: /Engine/BasicShapes/Cube\n"
+                              "    position: [0.0, 0.0, -2.0]\n"
+                              "    scale: [16.0, 16.0, 0.5]\n";
+
+ueds_connector::LidarConfig LivoxConfig(const ueds_connector::LidarConfig& Base)
+{
+  ueds_connector::LidarConfig Config = Base;
+  Config.Enable                      = true;
+  Config.Livox                       = true;
+  Config.LivoxSensor                 = "mid360";
+  Config.beamLength                  = 7000.0;
+  return Config;
+}
+
+// The traces used to hit the drone's own airframe first, and because that hit sits inside
+// the sensor's minimum range it was dropped - so the beam was consumed and reported as
+// "nothing there". Inside a closed room almost every beam must come back.
+FF_TEST(LidarDoesNotSeeItsOwnAirframe)
+{
+  std::string Error;
+  const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml(kRoomYaml, Error);
+  FF_REQUIRE(SpawnOk);
+
+  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 600.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  FF_REQUIRE(AddOk && SensorId >= 0);
+
+  const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
+  FF_REQUIRE(ConfigOk);
+  FF_REQUIRE(Drone->SetLidarConfig(LivoxConfig(Base), SensorId));
+
+  Drone->GetLidarData(SensorId);  // drain the slice that spans the reconfigure
+
+  const auto [DataOk, Points, Start, Stamp] = Drone->GetLidarData(SensorId);
+  FF_REQUIRE(DataOk && !Points.empty());
+
+  size_t Hits = 0;
+  for (const auto& Point : Points) {
+    Hits += Point.distance > 0.0 ? 1 : 0;
+  }
+
+  const double HitFraction = static_cast<double>(Hits) / static_cast<double>(Points.size());
+  FF_CHECK(HitFraction > 0.5);
+
+  Drone->RemoveSensor(SensorId);
+  GameMode->RemoveAllSpawnedObjects();
+
+  // put the drone back where the other tests expect it
+  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 200.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+}
+
+// Every Livox cursor used to start at pattern position zero, so two of them created
+// together walked the pattern in lockstep and returned the same directions.
+FF_TEST(TwoLivoxesDoNotShareAPhase)
+{
+  const auto [AddA, SensorA] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  const auto [AddB, SensorB] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  FF_REQUIRE(AddA && AddB && SensorA != SensorB);
+
+  for (const int SensorId : {SensorA, SensorB}) {
+    const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
+    FF_REQUIRE(ConfigOk);
+    FF_REQUIRE(Drone->SetLidarConfig(LivoxConfig(Base), SensorId));
+  }
+
+  const auto [OkA, PointsA, StartA, StampA] = Drone->GetLidarData(SensorA);
+  const auto [OkB, PointsB, StartB, StampB] = Drone->GetLidarData(SensorB);
+  FF_REQUIRE(OkA && OkB);
+  FF_REQUIRE(!PointsA.empty() && !PointsB.empty());
+
+  const size_t Compared = std::min<size_t>(2000, std::min(PointsA.size(), PointsB.size()));
+  size_t       Same     = 0;
+  for (size_t i = 0; i < Compared; ++i) {
+    const bool bSameDirection = std::fabs(PointsA[i].directionX - PointsB[i].directionX) < 1e-6 &&
+                                std::fabs(PointsA[i].directionY - PointsB[i].directionY) < 1e-6 &&
+                                std::fabs(PointsA[i].directionZ - PointsB[i].directionZ) < 1e-6;
+    Same += bSameDirection ? 1 : 0;
+  }
+
+  // identical directions across the whole prefix means one shared playback position
+  FF_CHECK(Same < Compared);
+
+  Drone->RemoveSensor(SensorA);
+  Drone->RemoveSensor(SensorB);
+}
+
+// The segmentation camera silently degraded to an ordinary colour camera whenever its
+// post-process material was missing: same resolution, same byte count, plausible picture.
+// A class mask has a handful of flat colours; a photograph has thousands.
+FF_TEST(SegmentationReturnsAMaskNotAPhotograph)
+{
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_RGB_SEG_CAMERA));
+  FF_REQUIRE(AddOk && SensorId >= 0);
+
+  const auto [ConfigOk, Config] = Drone->GetRgbCameraConfig(SensorId);
+  FF_REQUIRE(ConfigOk);
+
+  const auto [DataOk, Raw, Stamp, Size] = Drone->GetRgbSegmented(SensorId);
+  FF_REQUIRE(DataOk);
+  FF_REQUIRE(Raw.size() >= static_cast<size_t>(Config.width_) * Config.height_ * 3);
+
+  std::vector<uint32_t> Colours;
+  Colours.reserve(4096);
+  for (size_t i = 0; i + 2 < Raw.size(); i += 3) {
+    const uint32_t Packed = (static_cast<uint32_t>(Raw[i]) << 16) | (static_cast<uint32_t>(Raw[i + 1]) << 8) | Raw[i + 2];
+    Colours.push_back(Packed);
+  }
+
+  std::sort(Colours.begin(), Colours.end());
+  Colours.erase(std::unique(Colours.begin(), Colours.end()), Colours.end());
+
+  FF_CHECK(Colours.size() > 1);     // a single colour means nothing is being labelled
+  FF_CHECK(Colours.size() < 512);   // thousands means this is scene colour, not a mask
+
+  Drone->RemoveSensor(SensorId);
+}
+
+// Clearing a scene that is already empty is the requested state, not a failure; reporting
+// otherwise silently broke every reset that happened to run twice.
+FF_TEST(ClearingAnEmptySceneSucceeds)
+{
+  GameMode->RemoveAllSpawnedObjects();
+
+  const auto [Ok, Removed] = GameMode->RemoveAllSpawnedObjects();
+  FF_CHECK(Ok);
+  FF_CHECK(Removed == 0);
 }
 
 /* //} */

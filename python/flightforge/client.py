@@ -317,9 +317,29 @@ class Simulator:
         return self._raw.SwitchWorldLevel(name_or_path)
 
     def world_origin(self):
+        """The scene frame's origin in world centimetres (the "UAV" PlayerStart)."""
         ok, coords = self._raw.GetWorldOrigin()
         _check(ok, "GetWorldOrigin")
         return np.array([coords.x, coords.y, coords.z])
+
+    # --- frames ---
+    #
+    # The two halves of the API do not share a frame, and mixing them silently puts
+    # things in the wrong place:
+    #
+    #   spawn_objects / objects / move_object   metres, relative to world_origin
+    #   spawn_drone / set_pose / get_position   centimetres, absolute world
+    #
+    # so an object at [0, 0, 0] is NOT where a drone at (0, 0, 0) sits - they differ by
+    # world_origin, which is wherever the level's "UAV" PlayerStart happens to be.
+
+    def scene_to_world(self, position_m):
+        """Scene position in metres -> world position in centimetres."""
+        return self.world_origin() + np.asarray(position_m, dtype=np.float64) * 100.0
+
+    def world_to_scene(self, position_cm):
+        """World position in centimetres -> scene position in metres."""
+        return (np.asarray(position_cm, dtype=np.float64) - self.world_origin()) / 100.0
 
     def set_mutual_visibility(self, enabled):
         """When False, drones are hidden from each other's cameras and lidars —

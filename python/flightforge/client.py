@@ -43,11 +43,17 @@ class Drone:
 
     def __init__(self, address, port):
         self._raw = _d.DroneController(address, port)
+        self._port = port
         _check(self._raw.ConnectSimple(), "drone connect")
 
     @property
     def raw(self):
         return self._raw
+
+    @property
+    def port(self):
+        """The drone's own server port, which is also its handle for removal."""
+        return self._port
 
     # --- pose ---
 
@@ -99,9 +105,27 @@ class Drone:
         return _decode_image(left), _decode_image(right), stamp
 
     def segmentation(self, sensor_id=-1):
+        """Class mask as an (H, W, 3) uint8 RGB array plus the stamp.
+
+        Unlike the other cameras this one ships raw BGR rather than an encoded
+        image, so it carries no dimensions of its own - they come from the camera
+        config, and the bytes are channel-swapped here.
+        """
         ok, data, stamp, _ = self._raw.GetRgbSegmented(sensor_id)
         _check(ok, "GetRgbSegmented")
-        return _decode_image(data), stamp
+
+        ok_config, config = self._raw.GetRgbCameraConfig(sensor_id)
+        _check(ok_config, "GetRgbCameraConfig (for the segmentation frame size)")
+
+        expected = config.width * config.height * 3
+        if len(data) < expected:
+            raise FlightForgeError(
+                f"segmentation frame is {len(data)} bytes, expected {expected} "
+                f"for {config.width}x{config.height}"
+            )
+
+        bgr = np.frombuffer(bytes(data), dtype=np.uint8, count=expected).reshape(config.height, config.width, 3)
+        return bgr[:, :, ::-1].copy(), stamp
 
     def fisheye(self, sensor_id=-1):
         ok, data, stamp, _ = self._raw.GetFisheyeCameraData(sensor_id)
@@ -286,7 +310,7 @@ class Simulator:
         return Drone(self._address, port)
 
     def remove_drone(self, drone_or_port):
-        port = drone_or_port if isinstance(drone_or_port, int) else drone_or_port.raw.getPort()
+        port = drone_or_port if isinstance(drone_or_port, int) else drone_or_port.port
         return self._raw.RemoveDrone(port)
 
     def switch_world(self, name_or_path):

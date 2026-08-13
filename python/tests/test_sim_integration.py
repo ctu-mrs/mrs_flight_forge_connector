@@ -13,11 +13,13 @@ import pytest
 
 pytestmark = pytest.mark.sim
 
+# An /Engine path resolves without search_paths and ships with every install, so the
+# test does not depend on what content the host project happens to have.
 RING_YAML = """
 objects:
-  - asset: Cube
+  - asset: /Engine/BasicShapes/Cube
     position: [5.0, 0.0, 1.0]
-  - asset: Cube
+  - asset: /Engine/BasicShapes/Cube
     position: [5.0, 2.0, 1.0]
     scale: 0.5
 """

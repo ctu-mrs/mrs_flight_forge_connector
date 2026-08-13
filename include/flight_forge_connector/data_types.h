@@ -301,6 +301,20 @@ struct CameraRollingShutter
   double readout_time_ = 0.03;  // seconds, top-to-bottom
 };
 
+// Wire encoding of served frames. JPEG by default for imagery; the label cameras
+// (segmentation, instance segmentation) ignore this and always send lossless.
+struct CameraCompression
+{
+  enum Format : int
+  {
+    PNG  = 0,
+    JPEG = 1,
+  };
+
+  int format_  = JPEG;
+  int quality_ = 90;  // 1-100, JPEG only
+};
+
 struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
@@ -329,6 +343,7 @@ struct RgbCameraConfig
   CameraDistortion     distortion_;
   CameraNoise          noise_;
   CameraRollingShutter rolling_shutter_;
+  CameraCompression    compression_;
 };
 
 struct EventCameraConfig

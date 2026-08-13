@@ -547,6 +547,9 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
 
     config.rolling_shutter_.enable_       = response.config.rolling_shutter_.enable_;
     config.rolling_shutter_.readout_time_ = response.config.rolling_shutter_.readout_time_;
+
+    config.compression_.format_  = response.config.compression_.format_;
+    config.compression_.quality_ = response.config.compression_.quality_;
   }
 
   return std::make_pair(success, config);
@@ -660,6 +663,9 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
 
   request.config.rolling_shutter_.enable_       = config.rolling_shutter_.enable_;
   request.config.rolling_shutter_.readout_time_ = config.rolling_shutter_.readout_time_;
+
+  request.config.compression_.format_  = config.compression_.format_;
+  request.config.compression_.quality_ = config.compression_.quality_;
 
   Serializable::Drone::SetRgbCameraConfig::Response response{};
 

@@ -4,6 +4,10 @@ target_link_libraries(debug_cli PRIVATE ${LIBRARY_NAME} fpng)
 add_executable(debug_game_mode_cli debug_game_mode_cli.cpp)
 target_link_libraries(debug_game_mode_cli PRIVATE ${LIBRARY_NAME})
 
+# one frame from every camera, written out as PNGs for eyeballing
+add_executable(capture_all capture_all.cpp)
+target_link_libraries(capture_all PRIVATE ${LIBRARY_NAME} fpng)
+
 # add_executable(bench_fps benchmarkFPS.cpp)
 # target_link_libraries(bench_fps PRIVATE ${LIBRARY_NAME})
 # add_executable(bench_camera cameraFPS.cpp)

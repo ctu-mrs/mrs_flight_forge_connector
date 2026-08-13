@@ -8,6 +8,8 @@ cameras and calibration, the scene editor round-trip, mutual visibility and
 instance segmentation.
 """
 
+import time
+
 import numpy as np
 import pytest
 
@@ -171,3 +173,66 @@ def test_gym_envs_build_through_make(sim):
             assert np.isfinite(reward), env_id
         finally:
             env.close()
+
+
+def test_scene_and_drone_frames_are_related_by_world_origin(sim):
+    """The two halves of the API do not share a frame, so pin the conversion down.
+
+    Objects are placed in metres relative to the "UAV" PlayerStart; drones are placed in
+    absolute world centimetres. An object at [0,0,0] is therefore not where a drone at
+    (0,0,0) sits, and code that mixes the two silently puts things in the wrong place.
+    This measures the relationship rather than trusting it: park the drone a known
+    distance short of a post and let the lidar say how far away it really is.
+    """
+    import flight_forge_drone as ffd
+
+    sim.clear_objects()
+    sim.spawn_objects(
+        "objects:\n"
+        "  - asset: /Engine/BasicShapes/Cylinder\n"
+        "    position: [10.0, 0.0, 2.0]\n"
+        "    scale: [0.5, 0.5, 4.0]\n"
+    )
+
+    stand_off_m = 6.0
+    target = sim.scene_to_world([10.0 - stand_off_m, 0.0, 2.0])
+
+    drone = sim.spawn_drone(tuple(target))
+    try:
+        drone.set_pose(tuple(target), (0.0, 0.0, 0.0))
+        assert np.allclose(drone.get_position(), target, atol=1.0)
+        assert np.allclose(sim.world_to_scene(target), [4.0, 0.0, 2.0], atol=1e-6)
+
+        sensor_id = drone.add_sensor(ffd.LIDAR_LIVOX)
+        ok, config = drone.raw.GetLidarConfig(sensor_id)
+        assert ok
+        config.Enable = True
+        config.Livox = True
+        config.LivoxSensor = "mid360"
+        config.beamLength = 7000.0
+        config.offset = ffd.Coordinates(0.0, 0.0, 60.0)  # clear of the airframe
+        assert drone.raw.SetLidarConfig(config, sensor_id)
+
+        time.sleep(1.0)
+        drone.lidar(sensor_id)  # drain the slice spanning the reconfigure
+        points, _, _ = drone.lidar(sensor_id)
+
+        hits = points[points[:, 0] > 0]
+        assert len(hits) > 0
+
+        unit = hits[:, 1:4] / np.linalg.norm(hits[:, 1:4], axis=1, keepdims=True)
+        xyz = hits[:, 0:1] * unit / 100.0
+
+        forward = xyz[
+            (np.abs(np.degrees(np.arctan2(xyz[:, 1], xyz[:, 0]))) < 4.0)
+            & (np.abs(xyz[:, 2]) < 1.0)
+        ]
+        assert len(forward) > 0, "no returns towards where the post should be"
+
+        # the post's near face sits one radius closer than its centre
+        nearest = np.linalg.norm(forward[:, :2], axis=1).min()
+        assert nearest == pytest.approx(stand_off_m - 0.25, abs=0.3)
+    finally:
+        sim.clear_objects()
+        sim.remove_drone(drone)
+        drone.close()

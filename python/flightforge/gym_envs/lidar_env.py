@@ -18,9 +18,18 @@ class FlightForgeLidarEnv(FlightForgeNavEnvBase):
 
         self._beam_count = beam_count
         self._beam_length = beam_length
-        self.observation_space = None  # finalized on first reset, when the lidar config is known
 
-    def _finalize_spaces(self):
+        # The space has to exist before the first reset: gymnasium.make() wraps the env in
+        # PassiveEnvChecker, which validates observation_space at construction. Deferring it
+        # to reset() makes the env unusable through make() - the only path most callers use.
+        # Pass beam_count and beam_length to skip talking to the simulator here.
+        if self._beam_count is None or self._beam_length is None:
+            self._ensure_drone()
+            self._read_lidar_geometry()
+
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self._beam_count + 3,), dtype=np.float32)
+
+    def _read_lidar_geometry(self):
         ok_config = self._drone.raw.GetLidarConfig()
         if not ok_config[0]:
             raise FlightForgeError("GetLidarConfig failed")
@@ -30,14 +39,6 @@ class FlightForgeLidarEnv(FlightForgeNavEnvBase):
             self._beam_count = int(config.BeamHorRays * config.BeamVertRays)
         if self._beam_length is None:
             self._beam_length = float(config.beamLength)
-
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self._beam_count + 3,), dtype=np.float32)
-
-    def reset(self, *, seed=None, options=None):
-        self._ensure_drone()
-        if self.observation_space is None:
-            self._finalize_spaces()
-        return super().reset(seed=seed, options=options)
 
     def _observe(self):
         points, _, _ = self._drone.lidar()

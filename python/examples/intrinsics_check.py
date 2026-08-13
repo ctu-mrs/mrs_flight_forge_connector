@@ -12,6 +12,7 @@ Requires a running simulator and opencv:
 """
 
 import math
+import time
 
 import numpy as np
 
@@ -27,7 +28,7 @@ def spawn_grid_yaml():
     lines = ["objects:"]
     for index, (x, y) in enumerate(GRID):
         lines += [
-            "  - asset: Cube",
+            "  - asset: /Engine/BasicShapes/Cube",
             f"    position: [{x}, {y}, {CUBE_Z}]",
             f"    scale: {CUBE_SCALE}",
             f"    stencil: {FIRST_STENCIL + index}",
@@ -60,28 +61,53 @@ def expected_pixel(K, point_ros, dist=None):
     return np.array([K[0, 0] * xn + K[0, 2], K[1, 1] * yn + K[1, 2]])
 
 
-def observed_centroids(seg_image):
+def observed_centroids(seg_image, expected_blobs):
     """Centroids of the cube blobs, independent of how the segmentation material
-    maps stencils to colors: everything that isn't the dominant background color
-    is foreground, split into connected components."""
+    maps stencils to colors.
+
+    Each distinct color in the mask is tried as the cube class and scored by how
+    close its connected-component count comes to the number of cubes expected.
+    Assuming a single background color does not survive a real scene, where sky,
+    ground and cubes are all separate classes and "not the commonest color"
+    swallows the sky as well.
+    """
     import cv2
 
     flat = seg_image.reshape(-1, 3)
     colors, counts = np.unique(flat, axis=0, return_counts=True)
-    background = colors[counts.argmax()]
 
-    foreground = (seg_image != background).any(axis=2).astype(np.uint8)
-    count, _, stats, centroids = cv2.connectedComponentsWithStats(foreground)
+    best = []
+    best_score = None
 
-    return [np.array(centroids[label]) for label in range(1, count) if stats[label, cv2.CC_STAT_AREA] >= 4]
+    for color, count in zip(colors, counts):
+        if count < 16 or count > flat.shape[0] * 0.5:
+            continue  # too rare to be geometry, or the ground/sky plane itself
+
+        mask = (seg_image == color).all(axis=2).astype(np.uint8)
+        found, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
+        blobs = [np.array(centroids[label]) for label in range(1, found) if stats[label, cv2.CC_STAT_AREA] >= 4]
+
+        score = abs(len(blobs) - expected_blobs)
+        if blobs and (best_score is None or score < best_score):
+            best, best_score = blobs, score
+
+    return best
 
 
 def run_check(drone, label, dist=None):
     K, (width, height) = drone.camera_intrinsics()
     print(f"\n[{label}] K =\n{K.round(2)}  ({width}x{height})")
 
+    # A projection change takes a few frames to reach the served image: the capture
+    # target is resized and the warp LUT rebuilt on the game thread, so frames already
+    # in flight still carry the old calibration. Without this the check silently
+    # compares yesterday's picture against today's prediction.
+    time.sleep(0.3)
+    for _ in range(3):
+        drone.segmentation()
+
     seg, _ = drone.segmentation()
-    observed = observed_centroids(seg)
+    observed = observed_centroids(seg, len(GRID))
     predictions = [expected_pixel(K, (x, y, CUBE_Z), dist) for x, y in GRID]
 
     # each blob claims its nearest prediction; unmatched predictions are off-screen or occluded

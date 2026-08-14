@@ -10,11 +10,15 @@
 namespace ueds_connector
 {
 
+/* Daytime //{ */
+
 struct Daytime
 {
   int hour;
   int minute;
 };
+
+//}
 
 /* sensor + device identity //{ */
 
@@ -219,12 +223,16 @@ struct LidarConfig
 
 //}
 
+/* CameraCaptureModeEnum //{ */
+
 enum CameraCaptureModeEnum : unsigned short
 {
   CAPTURE_ALL_FRAMES  = 0x0,
   CAPTURE_ON_MOVEMENT = 0x1,
   CAPTURE_ON_DEMAND   = 0x2,
 };
+
+//}
 
 /* camera configs //{ */
 

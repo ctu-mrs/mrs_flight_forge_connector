@@ -9,6 +9,11 @@
 using kissnet::socket_status;
 using ueds_connector::SocketClient;
 
+namespace {
+// Matches the server's own threshold for treating a payload as possibly segmented.
+constexpr std::size_t kSegmentedReplyThreshold = 1024;
+}  // namespace
+
 SocketClient::SocketClient() = default;
 
 /* SocketClient() //{ */
@@ -95,6 +100,12 @@ socket_status::values SocketClient::Connect() {
 
   try {
     const auto connect_result = socket_->connect();
+
+    if (connect_result.value == socket_status::valid) {
+      // request/response with the caller blocked; coalescing only adds latency here
+      socket_->set_tcp_no_delay(true);
+    }
+
     return connect_result.value;
   }
 
@@ -194,10 +205,14 @@ bool SocketClient::GetMessage(std::string& message) {
     message += chunk_str;
 
     if (message[message.size() - 1] == END_OF_MESSAGE && message[message.size() - 2] == END_OF_MESSAGE && message[message.size() - 3] == END_OF_MESSAGE) {
-      // Give in-flight TCP segments time to land before declaring the message complete.
-      // Without this, bytes_available() returns 0 between segments in a proxy chain (nginx+socat),
-      // causing false-positive EOM detection on binary payloads that contain '$$$' sequences.
-      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      // Let in-flight segments land before declaring the message complete: through a proxy
+      // chain bytes_available() reads 0 between them, and binary payloads do contain '$$$'.
+      // Small replies cannot span segments, and paying 2 ms on every pose read put a
+      // 2.1 ms floor under the whole API.
+      if (message.size() >= kSegmentedReplyThreshold) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+
       if (socket_->bytes_available() == 0) {
         break;
       }

@@ -96,7 +96,7 @@ bool WriteEncodedFrame(const std::string& Name, const std::vector<unsigned char>
   return WritePng(Name, Rgb, Width, Height);
 }
 
-/* //} */
+//}
 
 /* viewable mappings //{ */
 
@@ -179,7 +179,7 @@ std::vector<uint8_t> ColouriseIds(const std::vector<uint8_t>& IdRgb, const int W
   return Out;
 }
 
-/* //} */
+//}
 
 /* camera placement //{ */
 
@@ -228,7 +228,7 @@ bool MoveRgbLikeOffBody(ueds_connector::UedsConnector& Drone, const int SensorId
   return true;
 }
 
-/* //} */
+//}
 
 /* motion //{ */
 
@@ -256,7 +256,7 @@ void SmallSweep(ueds_connector::UedsConnector& Drone, const int Steps, const int
   }
 }
 
-/* //} */
+//}
 
 }  // namespace
 
@@ -309,6 +309,8 @@ int main(int argc, char** argv)
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
   // RGB is the drone's default camera; the rest have to be added.
+  /* rgb //{ */
+
   std::cout << "rgb" << std::endl;
   {
     if (!MoveRgbLikeOffBody(Drone, -1)) {
@@ -318,6 +320,10 @@ int main(int argc, char** argv)
     const auto [Ok, Image, Stamp, Size] = Drone.GetRgbCameraData();
     Record("rgb", Ok && WriteEncodedFrame("01_rgb", Image));
   }
+
+  //}
+
+  /* segmentation //{ */
 
   std::cout << "segmentation" << std::endl;
   {
@@ -349,6 +355,10 @@ int main(int argc, char** argv)
     Record("segmentation", Ok);
   }
 
+  //}
+
+  /* stereo //{ */
+
   std::cout << "stereo" << std::endl;
   {
     const auto [AddOk, Id] = Drone.AddSensor(STEREO);
@@ -372,6 +382,10 @@ int main(int argc, char** argv)
     Record("stereo", Ok);
   }
 
+  //}
+
+  /* fisheye //{ */
+
   std::cout << "fisheye" << std::endl;
   {
     const auto [AddOk, Id] = Drone.AddSensor(FISHEYE);
@@ -390,6 +404,10 @@ int main(int argc, char** argv)
 
     Record("fisheye", Ok);
   }
+
+  //}
+
+  /* event //{ */
 
   std::cout << "event" << std::endl;
   {
@@ -441,6 +459,10 @@ int main(int argc, char** argv)
     Record("event", Ok);
   }
 
+  //}
+
+  /* instance segmentation //{ */
+
   std::cout << "instance segmentation" << std::endl;
   {
     const auto [AddOk, Id] = Drone.AddSensor(INSTANCE_SEG);
@@ -490,6 +512,11 @@ int main(int argc, char** argv)
 
   // Camera realism, one effect at a time against the same viewpoint, so each is legible
   // on its own: 01_rgb is the clean baseline to compare all of these against.
+
+  //}
+
+  /* realistic camera //{ */
+
   std::cout << "realistic camera" << std::endl;
   {
     const auto [ConfigOk, Baseline] = Drone.GetRgbCameraConfig();
@@ -584,6 +611,10 @@ int main(int argc, char** argv)
     Record("realistic_camera", Ok);
   }
 
+  //}
+
+  /* depth //{ */
+
   std::cout << "depth" << std::endl;
   {
     const auto [AddOk, Id] = Drone.AddSensor(DEPTH);
@@ -623,6 +654,8 @@ int main(int argc, char** argv)
 
     Record("depth", Ok);
   }
+
+  //}
 
   std::cout << "\n--- summary ---" << std::endl;
   int Failures = 0;

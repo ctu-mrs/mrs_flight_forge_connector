@@ -23,6 +23,8 @@ public:
   GameModeController(const std::string& address, uint16_t port) : SocketClient(address, port) {
   }
 
+  /* drones //{ */
+
   std::pair<bool, std::vector<int>> GetDrones();
 
   std::pair<bool, int> SpawnDrone();
@@ -30,6 +32,10 @@ public:
   std::pair<bool, int> SpawnDroneAtLocation(ueds_connector::Coordinates &Location, std::string &TypeUav);
 
   bool RemoveDrone(const int port);
+
+  //}
+
+  /* session + rendering //{ */
 
   std::pair<bool, CameraCaptureModeEnum> GetCameraCaptureMode();
 
@@ -42,6 +48,10 @@ public:
   std::pair<bool, double> GetTime();
   
   bool SetGraphicsSettings(const int& graphicsSettings);
+
+  //}
+
+  /* world //{ */
 
   bool SwitchWorldLevel(const std::string &worldLevelName);
 
@@ -56,6 +66,10 @@ public:
   bool SetDatetime(const int& hour, const int& minute);
 
   bool SetMutualDroneVisibility(const bool& enabled);
+
+  //}
+
+  /* scene editor //{ */
 
   /**
    * Places objects described by a spawn configuration document. Assets already cooked into
@@ -95,6 +109,7 @@ public:
    * substring of the name. OutTruncated is set when the server-side cap was hit.
    */
   std::pair<bool, std::vector<std::string>> ListAssets(const std::string& path_prefix, const std::string& name_filter, bool& OutTruncated);
+  //}
 };
 
 }  // namespace ueds_connector

@@ -127,6 +127,10 @@ bool GameModeController::SetForestHillyLevel(const int HillyLevel) {
   return success;
 }
 
+//}
+
+/* SetWeather() //{ */
+
 bool GameModeController::SetWeather(const int& type_id){
 
   Serializable::GameMode::SetWeather::Request request{};
@@ -138,6 +142,10 @@ bool GameModeController::SetWeather(const int& type_id){
 
   return success; 
 }
+
+//}
+
+/* SetDatetime() //{ */
 
 bool GameModeController::SetDatetime(const int& hour, const int& minute){
 
@@ -152,6 +160,10 @@ bool GameModeController::SetDatetime(const int& hour, const int& minute){
   return success; 
 }
 
+//}
+
+/* SetMutualDroneVisibility() //{ */
+
 bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &enabled)
 {
   Serializable::GameMode::SetMutualVisibility::Request request{};
@@ -161,8 +173,9 @@ bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &en
   const auto                                    status  = Request(request, response);
   const auto                                    success = status && response.status;
 
-  return success; 
+  return success;
 }
+
 //}
 
 /* getCameraCaptureMode() //{ */
@@ -201,7 +214,8 @@ bool GameModeController::SetCameraCaptureMode(const CameraCaptureModeEnum& camer
 
 //}
 
-/* setGraphicsSettings() {*/
+/* SetGraphicsSettings() //{ */
+
 bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 
   Serializable::GameMode::SetGraphicsSettings::Request request{};
@@ -213,9 +227,11 @@ bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 
   return success;
 }
+
 //}
 
-/* SwitchWorldLevel() {*/
+/* SwitchWorldLevel() //{ */
+
 bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
 
   Serializable::GameMode::SwitchWorldLevel::Request request{};
@@ -227,6 +243,7 @@ bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
 
   return success;
 }
+
 //}
 
 /* getFps() //{ */

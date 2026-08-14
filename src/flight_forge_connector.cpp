@@ -803,6 +803,8 @@ std::pair<bool, EventCameraConfig> UedsConnector::GetEventCameraConfig(int senso
   return std::make_pair(success, config);
 }
 
+/* SetEventCameraConfig() //{ */
+
 bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetEventCameraConfig::Request request{};
@@ -827,6 +829,8 @@ bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int se
 
   return status && response.status;
 }
+
+//}
 
 //}
 
@@ -873,6 +877,8 @@ std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int s
   return std::make_pair(success, config);
 }
 
+/* SetFisheyeCameraConfig() //{ */
+
 bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetFisheyeCameraConfig::Request request{};
@@ -898,6 +904,8 @@ bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, in
 
 //}
 
+//}
+
 /* sensor management //{ */
 
 std::pair<bool, int> UedsConnector::AddSensor(int sensorType) {
@@ -912,6 +920,8 @@ std::pair<bool, int> UedsConnector::AddSensor(int sensorType) {
   return std::make_pair(success, success ? response.sensor_id_ : -1);
 }
 
+/* RemoveSensor() //{ */
+
 bool UedsConnector::RemoveSensor(int sensorId) {
 
   Serializable::Drone::RemoveSensor::Request request{};
@@ -922,6 +932,10 @@ bool UedsConnector::RemoveSensor(int sensorId) {
 
   return status && response.status;
 }
+
+//}
+
+/* ListSensors() //{ */
 
 std::pair<bool, std::vector<SensorInfo>> UedsConnector::ListSensors() {
 
@@ -941,6 +955,8 @@ std::pair<bool, std::vector<SensorInfo>> UedsConnector::ListSensors() {
 
   return std::make_pair(success, sensors);
 }
+
+//}
 
 //}
 
@@ -974,6 +990,8 @@ std::pair<bool, std::vector<SensorInfo>> UedsConnector::AddDevice(const std::str
   return std::make_pair(success, sensors);
 }
 
+/* ListDevices() //{ */
+
 std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
 
   Serializable::Drone::ListDevices::Request request{};
@@ -992,6 +1010,8 @@ std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
 
   return std::make_pair(success, devices);
 }
+
+//}
 
 //}
 

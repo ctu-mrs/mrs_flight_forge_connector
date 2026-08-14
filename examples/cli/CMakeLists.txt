@@ -21,3 +21,7 @@ target_link_libraries(capture_all PRIVATE ${LIBRARY_NAME} fpng)
 
 # add_executable(cameraMultiBench cameraMultiBench.cpp)
 # target_link_libraries(cameraMultiBench PRIVATE ${LIBRARY_NAME})
+
+# per-sensor timing through the C++ API, which is the path real consumers take
+add_executable(profile_sensors profile_sensors.cpp)
+target_link_libraries(profile_sensors PRIVATE ${LIBRARY_NAME})

@@ -19,7 +19,10 @@
 
 #define LOCALHOST "127.0.0.1"
 #define DEFAULT_PORT 8080
-#define BUFFER_SIZE 1024
+// One lidar sweep is a few hundred kilobytes. At 1 KB a chunk that was 256 recv() calls,
+// each with its own select(), two heap allocations and two copies, to move data that
+// loopback delivers in one burst.
+#define BUFFER_SIZE 65536
 
 #define END_OF_MESSAGE '$'
 
@@ -39,6 +42,8 @@ public:
   std::tuple<uint32_t, kissnet::socket_status> ReceiveMessage();
 
   bool Ping();
+
+  /* SendMessage() //{ */
 
   template <typename TRequest>
   std::tuple<uint32_t, kissnet::socket_status> SendMessage(TRequest& message) {
@@ -73,6 +78,10 @@ public:
     return std::make_tuple(sent, kissnet::socket_status::valid);
   }
 
+  //}
+
+  /* Request() //{ */
+
   template <typename TRequest, typename TResponse>
   bool Request(TRequest& message, TResponse& response) {
     const auto [send_size, send_status] = SendMessage<TRequest>(message);
@@ -99,6 +108,8 @@ public:
     }
     return false;
   }
+
+  //}
 
   uint16_t getPort() const {
     return port_;

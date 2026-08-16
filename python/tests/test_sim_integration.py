@@ -8,10 +8,13 @@ cameras and calibration, the scene editor round-trip, mutual visibility and
 instance segmentation.
 """
 
+import os
 import time
 
 import numpy as np
 import pytest
+
+from flightforge.client import Simulator
 
 pytestmark = pytest.mark.sim
 
@@ -236,6 +239,35 @@ def test_scene_and_drone_frames_are_related_by_world_origin(sim):
         sim.clear_objects()
         sim.remove_drone(drone)
         drone.close()
+
+
+@pytest.mark.skipif(os.environ.get("FF_ALLOW_WORLD_SWITCH") is None,
+                    reason="switches the loaded map; set FF_ALLOW_WORLD_SWITCH=1 to run")
+def test_world_switch_keeps_the_server_answering(sim):
+    """A map carrying its own GameModeOverride used to leave the server unbound.
+
+    The override was applied when travelling to the Entry map and then dropped when
+    the destination was opened, so the simulator came up on the new map and answered
+    nothing: every map-changing workflow died there.
+    """
+    target = "/Game/FirstPerson/Lvl_FirstPerson"
+    sim.switch_world(target)
+
+    deadline = time.time() + 120.0
+    while time.time() < deadline:
+        try:
+            if Simulator().fps() > 0:
+                break
+        except Exception:
+            pass
+        time.sleep(2.0)
+    else:
+        pytest.fail(f"the server never answered again after switching to {target}")
+
+    after = Simulator()
+    assert after.fps() > 0
+    drone = after.spawn_drone(tuple(after.world_origin() + np.array([0.0, 0.0, 300.0])))
+    after.remove_drone(drone)
 
 
 def test_instance_segmentation_survives_scene_edits(sim):

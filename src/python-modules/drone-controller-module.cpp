@@ -123,6 +123,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("FOVVertDown", &LidarConfig::FOVVertDown)
       .def_readwrite("Livox", &LidarConfig::Livox)
       .def_readwrite("LivoxSensor", &LidarConfig::LivoxSensor)
+      .def_readwrite("showSensorBody", &LidarConfig::showSensorBody)
       .def("__repr__", &LidarConfig::toString);
 
   //}

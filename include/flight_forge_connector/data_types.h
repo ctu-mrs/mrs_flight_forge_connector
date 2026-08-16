@@ -212,6 +212,11 @@ struct LidarConfig
   // "mid360"); matches the simulator's Content/Lidar/<name>.ffpat stem.
   std::string LivoxSensor = "mid360";
 
+  // Draws the sensor housing at its mount point and lets the beams see the airframe,
+  // the way the real hardware occludes itself. Off by default: a sensor left at the
+  // frame's origin sits inside the body and would find nothing but itself.
+  bool showSensorBody = false;
+
   std::string toString() const {
     return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +
            ", orientation: " + orientation.toString() + ")";

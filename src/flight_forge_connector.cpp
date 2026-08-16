@@ -421,9 +421,10 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig(int sensorId) {
     config.FOVHorLeft = response.config.FOVHorLeft;
     config.FOVHorRight = response.config.FOVHorRight;
     config.FOVVertUp = response.config.FOVVertUp;
-    config.FOVVertDown = response.config.FOVVertDown;
-    config.Livox       = response.config.Livox;
-    config.LivoxSensor = response.config.LivoxSensor;
+    config.FOVVertDown    = response.config.FOVVertDown;
+    config.Livox          = response.config.Livox;
+    config.LivoxSensor    = response.config.LivoxSensor;
+    config.showSensorBody = response.config.ShowSensorBody;
   }
 
   return std::make_pair(success, config);
@@ -462,7 +463,8 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config, int sensorId) {
   request.config.FOVVertUp   = config.FOVVertUp;
   request.config.FOVVertDown = config.FOVVertDown;
   request.config.Livox       = config.Livox;
-  request.config.LivoxSensor = config.LivoxSensor;
+  request.config.LivoxSensor    = config.LivoxSensor;
+  request.config.ShowSensorBody = config.showSensorBody;
 
   Serializable::Drone::SetLidarConfig::Response response{};
 

@@ -304,6 +304,55 @@ def test_instance_segmentation_survives_scene_edits(sim):
         sim.clear_objects()
 
 
+def test_sensor_body_occludes_the_airframe_but_not_itself(sim):
+    """With a body, a lidar sees the drone it is bolted to and never its own housing.
+
+    Self-occlusion is real and a rig has to be designed around it, but a beam cannot be
+    blocked by the aperture it leaves from. Off by default, because a sensor left at the
+    frame's origin sits inside the body and would find nothing else.
+    """
+    import flight_forge_drone as ffd
+
+    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 4.0])))
+    try:
+        sensor_id = drone.add_sensor(ffd.LIDAR)
+
+        def sweep(show_body):
+            ok, config = drone.raw.GetLidarConfig(sensor_id)
+            config.Enable = True
+            config.Livox = False
+            config.beamLength = 5000.0
+            config.offset = ffd.Coordinates(0.0, 0.0, 50.0)
+            # the stock profile stops 7 degrees below horizontal and never looks down
+            config.FOVVertDown = 85.0
+            config.FOVVertUp = 15.0
+            config.showSensorBody = show_body
+            assert drone.raw.SetLidarConfig(config, sensor_id)
+            time.sleep(0.9)
+            drone.lidar(sensor_id)
+            time.sleep(0.3)
+
+            points, _, _ = drone.lidar(sensor_id)
+            p = np.asarray(points)
+            dist = p[:, 0] / 100.0
+            hit = dist > 0
+            unit = p[:, 1:4] / np.maximum(np.linalg.norm(p[:, 1:4], axis=1, keepdims=True), 1e-9)
+            el = np.degrees(np.arcsin(np.clip(unit[:, 2], -1, 1)))
+
+            below = hit & (el < -55) & (dist > 0.2) & (dist < 0.8)
+            housing = hit & (dist < 0.15)
+            return int(below.sum()), int(housing.sum())
+
+        off_frame, off_housing = sweep(False)
+        on_frame, on_housing = sweep(True)
+
+        assert off_frame == 0, "the airframe must stay invisible without a sensor body"
+        assert on_frame > 0, "with a body the lidar must see the airframe it is mounted on"
+        assert off_housing == 0 and on_housing == 0, "a lidar must never return its own housing"
+    finally:
+        sim.remove_drone(drone)
+
+
 def test_world_mesh_is_ground_truth(sim):
     """The mesh export must contain a spawned object at its exact size and place.
 

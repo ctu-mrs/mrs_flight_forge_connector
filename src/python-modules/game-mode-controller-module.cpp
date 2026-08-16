@@ -69,6 +69,29 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
       .def("ListSpawnedObjects", &GameModeController::ListSpawnedObjects, py::call_guard<py::gil_scoped_release>())
       .def("ExportScene", &GameModeController::ExportScene, py::call_guard<py::gil_scoped_release>())
       .def(
+          "GetSimTime",
+          [](GameModeController& controller) {
+            double sim = 0.0, dilation = 1.0;
+            bool   ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.GetSimTime(sim, dilation);
+            }
+            return py::make_tuple(ok, sim, dilation);
+          })
+      .def(
+          "SetTimeDilation",
+          [](GameModeController& controller, double dilation) {
+            double applied = 1.0;
+            bool   ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.SetTimeDilation(dilation, applied);
+            }
+            return py::make_tuple(ok, applied);
+          },
+          py::arg("dilation"))
+      .def(
           "GetWorldMesh",
           [](GameModeController& controller, const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles) {
             std::vector<float>    vertices;

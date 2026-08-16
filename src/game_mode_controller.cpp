@@ -288,6 +288,46 @@ std::pair<bool, double> GameModeController::GetTime() {
 
 //}
 
+/* getSimTime() //{ */
+
+bool GameModeController::GetSimTime(double& out_sim_seconds, double& out_dilation) {
+
+  Serializable::GameMode::GetTime::Request request{};
+
+  Serializable::GameMode::GetTime::Response response{};
+  const auto                                status  = Request(request, response);
+  const auto                                success = status && response.status;
+
+  if (success) {
+    out_sim_seconds = response.sim_time;
+    out_dilation    = response.time_dilation;
+  }
+
+  return success;
+}
+
+//}
+
+/* setTimeDilation() //{ */
+
+bool GameModeController::SetTimeDilation(double dilation, double& out_applied) {
+
+  Serializable::GameMode::SetTimeDilation::Request request{};
+  request.dilation = dilation;
+
+  Serializable::GameMode::SetTimeDilation::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  if (success) {
+    out_applied = response.applied;
+  }
+
+  return success;
+}
+
+//}
+
 /* spawnObjectsFromYaml() //{ */
 
 std::pair<bool, std::vector<int>> GameModeController::SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError) {

@@ -238,6 +238,40 @@ def test_scene_and_drone_frames_are_related_by_world_origin(sim):
         drone.close()
 
 
+def test_instance_segmentation_survives_scene_edits(sim):
+    """Destroying actors while an instance-seg camera runs must not kill the simulator.
+
+    The pass used to collect raw scene proxies on the game thread and dereference them
+    later on the render thread; anything destroyed in between left it walking freed
+    memory. That is exactly what runtime scene editing does, and it segfaulted the sim.
+    """
+    import flight_forge_drone as ffd
+
+    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
+    try:
+        sensor_id = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
+        time.sleep(0.5)
+
+        for i in range(8):
+            sim.spawn_objects(
+                "objects:\n"
+                "  - asset: /Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube\n"
+                f"    position: [{6 + i}, 0.0, 1.0]\n"
+                "    scale: [1.5, 1.5, 1.5]\n"
+            )
+            drone.instance_segmentation(sensor_id)
+            sim.clear_objects()
+            drone.instance_segmentation(sensor_id)
+
+        # the simulator answering at all is the assertion; a dangling proxy took it down
+        assert sim.fps() > 0
+        ids, stamp = drone.instance_segmentation(sensor_id)
+        assert ids.shape[0] > 0 and ids.shape[1] > 0
+    finally:
+        sim.remove_drone(drone)
+        sim.clear_objects()
+
+
 def test_world_mesh_is_ground_truth(sim):
     """The mesh export must contain a spawned object at its exact size and place.
 

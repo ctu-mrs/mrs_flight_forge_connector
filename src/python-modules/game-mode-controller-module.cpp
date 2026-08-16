@@ -1,5 +1,8 @@
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#include <cstring>
 
 #include <flight_forge_connector/game_mode_controller.h>
 
@@ -65,6 +68,43 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
            py::arg("orientation"), py::arg("scale") = std::array<double, 3>{1.0, 1.0, 1.0})
       .def("ListSpawnedObjects", &GameModeController::ListSpawnedObjects, py::call_guard<py::gil_scoped_release>())
       .def("ExportScene", &GameModeController::ExportScene, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "GetWorldMesh",
+          [](GameModeController& controller, const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles) {
+            std::vector<float>    vertices;
+            std::vector<uint32_t> indices;
+            bool                  truncated = false;
+            int32_t               sources   = 0;
+            bool                  ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.GetWorldMesh(center, extent, max_triangles, vertices, indices, truncated, sources);
+            }
+            // buffer-protocol arrays: a 2M-triangle mesh must not become a python list
+            py::array_t<float>    v(static_cast<py::ssize_t>(vertices.size()));
+            py::array_t<uint32_t> i(static_cast<py::ssize_t>(indices.size()));
+            std::memcpy(v.mutable_data(), vertices.data(), vertices.size() * sizeof(float));
+            std::memcpy(i.mutable_data(), indices.data(), indices.size() * sizeof(uint32_t));
+            return py::make_tuple(ok, v, i, truncated, sources);
+          },
+          py::arg("center") = std::array<double, 3>{0.0, 0.0, 0.0}, py::arg("extent") = std::array<double, 3>{0.0, 0.0, 0.0},
+          py::arg("max_triangles") = 0)
+      .def(
+          "GetDistanceBatch",
+          [](GameModeController& controller, py::array_t<float, py::array::c_style | py::array::forcecast> points, double max_radius, double tolerance,
+             bool terrain_only) {
+            std::vector<float> query(points.data(), points.data() + points.size());
+            std::vector<float> distances;
+            bool               ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.GetDistanceBatch(query, max_radius, tolerance, terrain_only, distances);
+            }
+            py::array_t<float> d(static_cast<py::ssize_t>(distances.size()));
+            std::memcpy(d.mutable_data(), distances.data(), distances.size() * sizeof(float));
+            return py::make_tuple(ok, d);
+          },
+          py::arg("points"), py::arg("max_radius") = 5.0, py::arg("tolerance") = 0.001, py::arg("terrain_only") = false)
       .def(
           "ListAssets",
           [](GameModeController& controller, const std::string& path_prefix, const std::string& name_filter) {

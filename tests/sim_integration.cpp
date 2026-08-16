@@ -1,4 +1,8 @@
+#include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <iostream>
+#include <thread>
 #include <memory>
 #include <string>
 #include <vector>
@@ -319,6 +323,8 @@ const std::string kRoomYaml = "objects:\n"
                               "    position: [0.0, 0.0, -2.0]\n"
                               "    scale: [16.0, 16.0, 0.5]\n";
 
+constexpr double PluginDefaultBeamCm = 1000.0;
+
 ueds_connector::LidarConfig LivoxConfig(const ueds_connector::LidarConfig& Base)
 {
   ueds_connector::LidarConfig Config = Base;
@@ -413,22 +419,39 @@ FF_TEST(SegmentationReturnsAMaskNotAPhotograph)
   const auto [ConfigOk, Config] = Drone->GetRgbCameraConfig(SensorId);
   FF_REQUIRE(ConfigOk);
 
-  const auto [DataOk, Raw, Stamp, Size] = Drone->GetRgbSegmented(SensorId);
-  FF_REQUIRE(DataOk);
-  FF_REQUIRE(Raw.size() >= static_cast<size_t>(Config.width_) * Config.height_ * 3);
+  // A freshly created capture serves photographs for a few frames: the custom-stencil
+  // input is empty until the renderer has been through it once, and the material passes
+  // scene colour through for unlabelled pixels. Steady state, not the boot transient,
+  // is what this test is about.
+  size_t     ColourCount = 0;
+  const auto Deadline    = std::chrono::steady_clock::now() + std::chrono::seconds(3);
 
-  std::vector<uint32_t> Colours;
-  Colours.reserve(4096);
-  for (size_t i = 0; i + 2 < Raw.size(); i += 3) {
-    const uint32_t Packed = (static_cast<uint32_t>(Raw[i]) << 16) | (static_cast<uint32_t>(Raw[i + 1]) << 8) | Raw[i + 2];
-    Colours.push_back(Packed);
+  while (std::chrono::steady_clock::now() < Deadline) {
+
+    const auto [DataOk, Raw, Stamp, Size] = Drone->GetRgbSegmented(SensorId);
+    FF_REQUIRE(DataOk);
+    FF_REQUIRE(Raw.size() >= static_cast<size_t>(Config.width_) * Config.height_ * 3);
+
+    std::vector<uint32_t> Colours;
+    Colours.reserve(4096);
+    for (size_t i = 0; i + 2 < Raw.size(); i += 3) {
+      const uint32_t Packed = (static_cast<uint32_t>(Raw[i]) << 16) | (static_cast<uint32_t>(Raw[i + 1]) << 8) | Raw[i + 2];
+      Colours.push_back(Packed);
+    }
+
+    std::sort(Colours.begin(), Colours.end());
+    Colours.erase(std::unique(Colours.begin(), Colours.end()), Colours.end());
+    ColourCount = Colours.size();
+
+    if (ColourCount > 1 && ColourCount < 512) {
+      break;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
 
-  std::sort(Colours.begin(), Colours.end());
-  Colours.erase(std::unique(Colours.begin(), Colours.end()), Colours.end());
-
-  FF_CHECK(Colours.size() > 1);     // a single colour means nothing is being labelled
-  FF_CHECK(Colours.size() < 512);   // thousands means this is scene colour, not a mask
+  FF_CHECK(ColourCount > 1);     // a single colour means nothing is being labelled
+  FF_CHECK(ColourCount < 512);   // thousands means this is scene colour, not a mask
 
   Drone->RemoveSensor(SensorId);
 }
@@ -442,6 +465,88 @@ FF_TEST(ClearingAnEmptySceneSucceeds)
   const auto [Ok, Removed] = GameMode->RemoveAllSpawnedObjects();
   FF_CHECK(Ok);
   FF_CHECK(Removed == 0);
+}
+
+// A slice covers the time since the last request. Without a bound, a client that pauses
+// gets back everything that accumulated - which both smears the scan and takes longer to
+// serve than the span it represents, so the next poll is later still.
+FF_TEST(LivoxBacklogStaysBounded)
+{
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  FF_REQUIRE(AddOk);
+
+  const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
+  FF_REQUIRE(ConfigOk);
+
+  ueds_connector::LidarConfig Config = LivoxConfig(Base);
+  Config.Frequency                   = 10.0;
+  FF_REQUIRE(Drone->SetLidarConfig(Config, SensorId));
+
+  Drone->GetLidarData(SensorId);
+
+  // stay away long enough that an unbounded slice would be enormous
+  std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+
+  const auto [DataOk, Points, Start, Stamp] = Drone->GetLidarData(SensorId);
+  FF_REQUIRE(DataOk);
+
+  // 200 kHz over the 2-frame bound is 40k points; a whole second would be 200k
+  FF_CHECK(Points.size() <= 60000);
+
+  Drone->RemoveSensor(SensorId);
+}
+
+// The pattern file carries the sensor's real reach, and nothing read it: an Avia came up
+// with the generic 10 m beam, which looks exactly like a working sensor that sees nothing
+// far away. Selecting a pattern must lift the beam to the sensor's own range.
+FF_TEST(LivoxPatternSetsTheBeamLength)
+{
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  FF_REQUIRE(AddOk);
+
+  const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
+  FF_REQUIRE(ConfigOk);
+
+  struct Expectation
+  {
+    const char* Sensor;
+    double      MinBeamCm;
+  };
+
+  for (const Expectation& Case : {Expectation{"avia", 40000.0}, Expectation{"mid360", 6000.0}}) {
+
+    ueds_connector::LidarConfig Config = Base;
+    Config.Enable                      = true;
+    Config.Livox                       = true;
+    Config.LivoxSensor                 = Case.Sensor;
+    Config.beamLength                  = PluginDefaultBeamCm;
+    FF_REQUIRE(Drone->SetLidarConfig(Config, SensorId));
+
+    const auto [ReadOk, Applied] = Drone->GetLidarConfig(SensorId);
+    FF_REQUIRE(ReadOk);
+    FF_CHECK(Applied.beamLength >= Case.MinBeamCm);
+  }
+
+  Drone->RemoveSensor(SensorId);
+}
+
+// Coarse guards, not benchmarks. A 2 ms sleep once sat on every reply, putting a 2.1 ms
+// floor under the pose read a control loop makes most; these thresholds are loose enough
+// to survive a busy machine but would catch that class of regression.
+FF_TEST(RequestLatencyStaysLow)
+{
+  std::vector<double> Samples;
+  for (int i = 0; i < 20; ++i) {
+    const auto Start = std::chrono::steady_clock::now();
+    Drone->GetLocation();
+    Samples.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count());
+  }
+
+  std::sort(Samples.begin(), Samples.end());
+  const double Median = Samples[Samples.size() / 2];
+
+  std::cout << "    pose read median " << Median << " ms" << std::endl;
+  FF_CHECK(Median < 1.0);
 }
 
 /* //} */

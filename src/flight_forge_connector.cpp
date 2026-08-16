@@ -1,6 +1,3 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #include <flight_forge_connector/flight_forge_connector.h>
 
 #include <sstream>

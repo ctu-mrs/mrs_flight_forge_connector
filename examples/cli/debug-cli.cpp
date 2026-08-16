@@ -1,6 +1,3 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #include <chrono>
 #include <csignal>
 #include <fstream>

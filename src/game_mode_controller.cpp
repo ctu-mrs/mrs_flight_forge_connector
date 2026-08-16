@@ -1,6 +1,3 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #include <flight_forge_connector/game_mode_controller.h>
 
 #include <sstream>
@@ -380,6 +377,60 @@ std::pair<bool, std::string> GameModeController::ExportScene() {
   const auto                                    success = status && response.status;
 
   return std::make_pair(success, success ? response.yaml : std::string());
+}
+
+//}
+
+/* getWorldMesh() //{ */
+
+bool GameModeController::GetWorldMesh(const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles,
+                                      std::vector<float>& out_vertices, std::vector<uint32_t>& out_indices, bool& out_truncated, int32_t& out_sources) {
+
+  Serializable::GameMode::GetWorldMesh::Request request{};
+  request.center_x_      = center[0];
+  request.center_y_      = center[1];
+  request.center_z_      = center[2];
+  request.extent_x_      = extent[0];
+  request.extent_y_      = extent[1];
+  request.extent_z_      = extent[2];
+  request.max_triangles_ = max_triangles;
+
+  Serializable::GameMode::GetWorldMesh::Response response{};
+  const auto                                     status  = Request(request, response);
+  const auto                                     success = status && response.status;
+
+  if (success) {
+    out_vertices  = std::move(response.vertices_);
+    out_indices   = std::move(response.indices_);
+    out_truncated = response.truncated_;
+    out_sources   = response.source_count_;
+  }
+
+  return success;
+}
+
+//}
+
+/* getDistanceBatch() //{ */
+
+bool GameModeController::GetDistanceBatch(const std::vector<float>& query_points, double max_radius, double tolerance, bool terrain_only,
+                                          std::vector<float>& out_distances) {
+
+  Serializable::GameMode::GetDistanceBatch::Request request{};
+  request.query_points_ = query_points;
+  request.max_radius_   = max_radius;
+  request.tolerance_    = tolerance;
+  request.terrain_only_ = terrain_only;
+
+  Serializable::GameMode::GetDistanceBatch::Response response{};
+  const auto                                         status  = Request(request, response);
+  const auto                                         success = status && response.status;
+
+  if (success) {
+    out_distances = std::move(response.distances_);
+  }
+
+  return success;
 }
 
 //}

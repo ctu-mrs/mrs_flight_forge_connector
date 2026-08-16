@@ -404,6 +404,31 @@ class Simulator:
             for o in infos
         }
 
+    def world_mesh(self, center=(0.0, 0.0, 0.0), extent=(0.0, 0.0, 0.0), max_triangles=0):
+        """Ground-truth triangle mesh of the world's static geometry.
+
+        Returns (vertices (N,3) float32, faces (M,3) uint32, truncated, sources), in
+        the scene frame: right-handed metres relative to the world origin. `extent`
+        half-sizes an axis-aligned box filter around `center`; any zero disables it.
+        Drones are excluded; landscape/BSP geometry is not exported."""
+        ok, vertices, faces, truncated, sources = self._raw.GetWorldMesh(
+            [float(v) for v in center], [float(v) for v in extent], int(max_triangles)
+        )
+        _check(ok, "GetWorldMesh")
+        return vertices.reshape(-1, 3), faces.reshape(-1, 3), truncated, sources
+
+    def distance_batch(self, points, max_radius=5.0, tolerance=0.001, terrain_only=False):
+        """Exact Euclidean distance [m] from each point to the nearest collision surface.
+
+        Undiscretized ESDF ground truth: pass the voxel centres of an estimated ESDF and
+        compare. `points` is (N,3) in the scene frame. Distances equal `max_radius` when
+        truncated and 0.0 inside geometry. Blocks the sim's game thread while computing —
+        run it between flights, not during them."""
+        pts = np.ascontiguousarray(points, dtype=np.float32).reshape(-1)
+        ok, distances = self._raw.GetDistanceBatch(pts, float(max_radius), float(tolerance), bool(terrain_only))
+        _check(ok, "GetDistanceBatch")
+        return distances
+
     def export_scene(self):
         """The current spawned objects as a spawn-config YAML document; feeding it
         back to spawn_objects recreates the scene, stencils included."""

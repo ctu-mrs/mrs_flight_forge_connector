@@ -1,6 +1,3 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #pragma once
 
 #include <string>
@@ -327,23 +324,24 @@ struct RgbCameraConfig
 {
   RgbCameraConfig() = default;
 
-  bool show_debug_camera_;
+  // defaults mirror the plugin's FRgbCameraConfig, so a config sent untouched is a no-op
+  bool show_debug_camera_ = false;
 
   Coordinates offset_;
   Rotation    orientation_;
 
-  double fov_;
+  double fov_ = 90.0;
 
-  int width_;
-  int height_;
+  int width_  = 640;
+  int height_ = 480;
 
-  bool enable_temporal_aa_;
-  bool enable_raytracing_;
-  bool enable_hdr_;
+  bool enable_temporal_aa_ = false;
+  bool enable_raytracing_  = true;
+  bool enable_hdr_         = true;
 
-  bool   enable_motion_blur_;
-  double motion_blur_amount_;
-  double motion_blur_distortion_;
+  bool   enable_motion_blur_     = true;
+  double motion_blur_amount_     = 1.0;
+  double motion_blur_distortion_ = 50.0;
 
   CameraExposure       exposure_;
   CameraLensEffects    lens_;

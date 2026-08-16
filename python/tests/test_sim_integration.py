@@ -304,6 +304,32 @@ def test_instance_segmentation_survives_scene_edits(sim):
         sim.clear_objects()
 
 
+def test_time_dilation_changes_how_fast_the_world_runs(sim):
+    """Simulated time must advance at the requested fraction of wall time.
+
+    A consumer that cannot keep up in real time runs the world slow instead of dropping
+    data; below 1 the world advances slower than the wall clock, which also buys more
+    frames per simulated second for a sensor to be sampled at.
+    """
+    try:
+        for factor in (0.5, 2.0, 1.0):
+            applied = sim.set_time_dilation(factor)
+            assert abs(applied - factor) < 1e-3, f"asked {factor}, engine applied {applied}"
+
+            time.sleep(0.3)
+            t0_sim, dilation = sim.sim_time()
+            assert abs(dilation - factor) < 1e-3
+
+            t0_wall = time.time()
+            time.sleep(1.0)
+            t1_sim, _ = sim.sim_time()
+
+            rate = (t1_sim - t0_sim) / (time.time() - t0_wall)
+            assert abs(rate - factor) < 0.2 * factor, f"at dilation {factor} the world ran at {rate:.3f}x"
+    finally:
+        sim.set_time_dilation(1.0)
+
+
 def test_sensor_body_occludes_the_airframe_but_not_itself(sim):
     """With a body, a lidar sees the drone it is bolted to and never its own housing.
 

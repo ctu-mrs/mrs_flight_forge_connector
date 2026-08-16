@@ -353,6 +353,22 @@ class Simulator:
     def set_daytime(self, hour, minute):
         return self._raw.SetDatetime(hour, minute)
 
+    def sim_time(self):
+        """(simulated seconds since the level began, time dilation)."""
+        ok, seconds, dilation = self._raw.GetSimTime()
+        _check(ok, "GetSimTime")
+        return seconds, dilation
+
+    def set_time_dilation(self, dilation):
+        """Simulated seconds per wall second; returns what the engine actually applied.
+
+        Below 1 the world runs slow, which is how a consumer that cannot keep up in real
+        time still sees every frame: at 0.5 the sim advances half as fast, so twice as
+        many frames land per simulated second. The engine clamps the value."""
+        ok, applied = self._raw.SetTimeDilation(float(dilation))
+        _check(ok, "SetTimeDilation")
+        return applied
+
     def fps(self):
         ok, fps = self._raw.GetFps()
         _check(ok, "GetFps")

@@ -8,7 +8,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 15
+#define API_VERSION_MINOR 16
 
 namespace ueds_connector
 {
@@ -42,7 +42,21 @@ public:
 
   std::pair<bool, std::pair<int,int>> GetApiVersion();
 
+  /* Wall clock, for a client synchronising its own clock against the simulator. */
   std::pair<bool, double> GetTime();
+
+  /**
+   * Simulated seconds since the level began, and the factor relating them to wall time.
+   * At a dilation of 0.5 the world advances half as fast as the wall clock.
+   */
+  bool GetSimTime(double& out_sim_seconds, double& out_dilation);
+
+  /**
+   * Sets simulated seconds per wall second. Below 1 the world runs slow, which buys a
+   * client more frames per simulated second; above 1 it runs fast. The engine clamps the
+   * value, so out_applied reports what actually took effect.
+   */
+  bool SetTimeDilation(double dilation, double& out_applied);
   
   bool SetGraphicsSettings(const int& graphicsSettings);
 

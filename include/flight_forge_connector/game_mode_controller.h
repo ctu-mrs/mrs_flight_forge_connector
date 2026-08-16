@@ -1,6 +1,3 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #pragma once
 
 #include <string>
@@ -11,7 +8,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 14
+#define API_VERSION_MINOR 15
 
 namespace ueds_connector
 {
@@ -102,6 +99,13 @@ public:
    * (stencils included), so feeding it to SpawnObjectsFromYaml recreates the scene.
    */
   std::pair<bool, std::string> ExportScene();
+
+  /* Triangle soup of the world's static geometry in the scene frame (metres, right-handed). */
+  bool GetWorldMesh(const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles, std::vector<float>& out_vertices,
+                    std::vector<uint32_t>& out_indices, bool& out_truncated, int32_t& out_sources);
+
+  /* Exact distances [m] to the nearest collision surface for packed xyz scene-frame points. Blocks the sim's game thread. */
+  bool GetDistanceBatch(const std::vector<float>& query_points, double max_radius, double tolerance, bool terrain_only, std::vector<float>& out_distances);
 
   /**
    * Enumerates what the spawn tool could place: cooked assets under path_prefix (empty

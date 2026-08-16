@@ -236,3 +236,99 @@ def test_scene_and_drone_frames_are_related_by_world_origin(sim):
         sim.clear_objects()
         sim.remove_drone(drone)
         drone.close()
+
+
+def test_world_mesh_is_ground_truth(sim):
+    """The mesh export must contain a spawned object at its exact size and place.
+
+    A cube of known scale is the cheapest possible ground truth: if its 24 vertices
+    span anything but scale x scale x scale metres at the requested position, the
+    export's transforms or frames are wrong.
+    """
+    import numpy as np
+
+    sim.clear_objects()
+    sim.spawn_objects(
+        "objects:\n"
+        "  - asset: /Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube\n"
+        "    position: [15.0, 7.0, 4.0]\n"
+        "    scale: [2.0, 2.0, 2.0]\n"
+    )
+    time.sleep(0.3)
+
+    vertices, faces, truncated, sources = sim.world_mesh(center=(15.0, 7.0, 4.0), extent=(6.0, 6.0, 6.0))
+    assert sources >= 1
+    assert len(faces) > 0
+
+    near = np.all(np.abs(vertices - np.array([15.0, 7.0, 4.0])) < 3.2, axis=1)
+    assert near.sum() >= 8, "the spawned cube is missing from the mesh"
+
+    span = vertices[near].max(axis=0) - vertices[near].min(axis=0)
+    assert np.allclose(span, 2.0, atol=0.05), f"cube span {span} is not 2 m"
+
+    sim.clear_objects()
+
+
+def test_gltf_model_is_visible_to_the_lidar(sim):
+    """A runtime-loaded glTF model must have collision, not just a mesh.
+
+    glTFRuntime builds a static mesh with no collision unless asked, so a model spawned
+    at runtime rendered perfectly while every ray-traced sensor passed straight through
+    it - an obstacle a camera can see and a lidar cannot.
+    """
+    import os
+
+    import flight_forge_drone as ffd
+
+    models = os.environ.get(
+        "FF_MODEL_DIR",
+        "/home/david/Documents/Unreal Projects/TestPlugin/Plugins/FlightForgePlugin/Content/ExternalModels",
+    )
+    if not os.path.isdir(models):
+        pytest.skip(f"no glTF models to spawn (set FF_MODEL_DIR; tried {models})")
+
+    sim.clear_objects()
+    ok, ids, error = sim.raw.SpawnObjectsFromYaml(
+        f"model_paths:\n  - {models}\nobjects:\n"
+        "  - asset: drone20\n"
+        "    position: [6.0, 0.0, 2.0]\n"
+        "    scale: 20.0\n"
+    )
+    if not ok or not len(ids):
+        pytest.skip(f"could not spawn a glTF model: {error}")
+
+    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 2.0])))
+    try:
+        drone.set_pose(tuple(sim.scene_to_world([0.0, 0.0, 2.0])), (0.0, 0.0, 0.0))
+
+        sensor_id = drone.add_sensor(ffd.LIDAR_LIVOX)
+        ok, config = drone.raw.GetLidarConfig(sensor_id)
+        assert ok
+        config.Enable = True
+        config.Livox = True
+        config.LivoxSensor = "mid360"
+        config.beamLength = 7000.0
+        config.offset = ffd.Coordinates(0.0, 0.0, 60.0)
+        assert drone.raw.SetLidarConfig(config, sensor_id)
+
+        time.sleep(1.2)
+        drone.lidar(sensor_id)
+        points, _, _ = drone.lidar(sensor_id)
+
+        hits = points[points[:, 0] > 0]
+        assert len(hits) > 0
+
+        unit = hits[:, 1:4] / np.linalg.norm(hits[:, 1:4], axis=1, keepdims=True)
+        xyz = hits[:, 0:1] * unit / 100.0
+
+        # the model spans roughly 3-9 m ahead at this scale; anything landing there is it
+        forward = xyz[
+            (np.abs(np.degrees(np.arctan2(xyz[:, 1], xyz[:, 0]))) < 20.0)
+            & (np.linalg.norm(xyz[:, :2], axis=1) < 10.0)
+            & (np.abs(xyz[:, 2]) < 4.0)
+        ]
+        assert len(forward) > 20, "the glTF model returned no lidar hits - collision is missing"
+    finally:
+        sim.clear_objects()
+        sim.remove_drone(drone)
+        drone.close()

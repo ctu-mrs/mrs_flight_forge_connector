@@ -38,6 +38,21 @@ public:
 
   std::tuple<uint32_t, kissnet::socket_status> ReceiveMessage();
 
+
+  // how long a reply may take; a lockstep step legitimately runs for many seconds
+
+  void SetReceiveTimeoutMs(int ms) {
+
+    receive_timeout_ms_ = ms;
+
+  }
+
+  int GetReceiveTimeoutMs() const {
+
+    return receive_timeout_ms_;
+
+  }
+
   bool Ping();
 
   /* SendMessage() //{ */
@@ -130,6 +145,8 @@ protected:
   [[nodiscard]] bool                                         InQueueEmpty_() const;
   [[nodiscard]] bool                                         IsSocketValid_() const;
   [[nodiscard]] bool                                         IsReadyToSend_() const;
+  int receive_timeout_ms_ = 1000;
+
   [[nodiscard]] std::tuple<uint32_t, kissnet::socket_status> SendMessage_(const std::byte* buffer, uint32_t size) const;
 
   bool GetMessage(std::string& message);

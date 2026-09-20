@@ -212,6 +212,30 @@ FF_TEST(ClippedExportCompactsVertices)
 
 /* //} */
 
+/* event packing //{ */
+
+FF_TEST(CameraEventsUnpack)
+{
+  ueds_connector::CameraEvents Events;
+  Events.xyp        = {5u | (7u << 16) | 0x80000000u, 345u | (259u << 16)};
+  Events.t_us       = {0u, 999u};
+  Events.base_stamp = 12.5;
+
+  FF_REQUIRE(Events.size() == 2);
+
+  const auto First = Events.at(0);
+  FF_CHECK(First.x == 5 && First.y == 7 && First.polarity == 1);
+  FF_CHECK_NEAR(First.stamp, 12.5, 1e-12);
+
+  const auto Second = Events.at(1);
+  FF_CHECK(Second.x == 345 && Second.y == 259 && Second.polarity == -1);
+  FF_CHECK_NEAR(Second.stamp, 12.500999, 1e-9);
+
+  FF_CHECK(Events.unpack().size() == 2);
+}
+
+/* //} */
+
 int main()
 {
   return fftest::RunAll();

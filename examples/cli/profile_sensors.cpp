@@ -235,8 +235,8 @@ int main()
             break;
           }
           case 5: {
-            const auto [Ok, Events, Stamp] = Drone.GetEventCameraData(SensorId);
-            Bytes                          = Events.size() * sizeof(ueds_connector::CameraEvent);
+            const auto [Ok, Events] = Drone.GetEventCameraData(SensorId);
+            Bytes                   = Events.size() * 2 * sizeof(uint32_t);
             break;
           }
           default: {

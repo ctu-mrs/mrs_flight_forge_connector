@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <map>
 #include <vector>
@@ -340,7 +342,7 @@ struct RgbCameraConfig
   int width_  = 640;
   int height_ = 480;
 
-  bool enable_temporal_aa_ = false;
+  bool enable_temporal_aa_ = true;
   bool enable_raytracing_  = true;
   bool enable_hdr_         = true;
 
@@ -377,7 +379,18 @@ struct EventCameraConfig
 
   // stamp events with simulation time instead of wall clock; pair with a
   // fixed engine timestep for an exact-rate stream regardless of GPU load
-  bool use_sim_time_ = false;
+  bool use_sim_time_ = true;
+
+  double threshold_sigma_     = 0.03;  // per-pixel threshold mismatch, log units
+  double refractory_period_   = 1e-4;  // seconds a pixel is blind after its event
+  double cutoff_hz_           = 300.0; // photoreceptor bandwidth at full scale
+  double leak_rate_hz_        = 0.1;
+  double shot_noise_rate_hz_  = 0.1;   // up to 4x in the dark
+  double hot_pixel_fraction_  = 1e-4;  // pixels with 100x the noise rate
+  double max_event_rate_hz_   = 0.0;   // readout ceiling, 0 = unlimited
+  int    max_events_per_frame_ = 1 << 20;
+  bool   use_gpu_             = true;
+  unsigned seed_              = 12345;
 };
 
 struct CameraEvent
@@ -386,6 +399,45 @@ struct CameraEvent
   unsigned short y;
   signed char    polarity;  // +1 brighter, -1 darker
   double         stamp;
+};
+
+// a drained batch as it travels: xyp = x | y << 16 | brighter << 31, t_us after base_stamp, time-sorted
+struct CameraEvents
+{
+  std::vector<uint32_t> xyp;
+  std::vector<uint32_t> t_us;
+
+  double base_stamp = 0.0;
+  double stamp      = 0.0;  // the batch is complete up to here
+
+  uint32_t dropped = 0;  // lost to the readout cap or a full buffer since the last drain
+
+  int width  = 0;
+  int height = 0;
+
+  size_t size() const {
+    return xyp.size();
+  }
+
+  CameraEvent at(size_t i) const {
+    return CameraEvent{static_cast<unsigned short>(xyp[i] & 0xFFFFu), static_cast<unsigned short>((xyp[i] >> 16) & 0x7FFFu),
+                       static_cast<signed char>((xyp[i] & 0x80000000u) ? 1 : -1), base_stamp + t_us[i] * 1e-6};
+  }
+
+  std::vector<CameraEvent> unpack() const {
+    std::vector<CameraEvent> events(xyp.size());
+    for (size_t i = 0; i < xyp.size(); ++i) {
+      events[i] = at(i);
+    }
+    return events;
+  }
+};
+
+struct PoseSample
+{
+  double      t = 0.0;
+  Coordinates position;
+  Rotation    orientation;
 };
 
 enum FisheyeLensModelEnum : int
@@ -411,6 +463,9 @@ struct FisheyeCameraConfig
   int height_ = 640;
 
   int lens_model_ = FISHEYE_EQUIDISTANT;
+
+  // image circle fitted to the frame corner (fov_ is then the diagonal) instead of the short side
+  bool full_frame_ = false;
 };
 
 //}

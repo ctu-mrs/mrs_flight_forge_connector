@@ -1,53 +1,55 @@
 """Reprojection check for the camera intrinsics and distortion (Phases 2 + 3).
 
-Spawns a grid of small cubes at known world positions, captures the
-segmentation image, and compares each cube's observed pixel centroid against
-where the pinhole model K·[R|t] says it should land. Run it twice — once on
-the default FOV-driven projection, once after set_camera_intrinsics with an
-off-center principal point — the error should stay sub-pixel-ish in both.
+Spawns a grid of small cubes at known scene positions, reads the instance
+segmentation, and compares each cube's pixel centroid against where the pinhole
+model says it should land. Runs three times: FOV-derived projection, custom
+off-centre intrinsics, and Brown-Conrady distortion. Each pass should stay at
+about a pixel; the centroid of a rendered cube is not exactly its centre's
+projection, so expect around 1 px rather than zero.
+
+Two frames meet here and the example converts explicitly: scene objects live in
+metres relative to the "UAV" PlayerStart (right-handed, x forward, y left, z up),
+the drone in absolute Unreal centimetres. Cubes are told apart by instance id,
+not colour: the ids that appear after spawning are the cubes, and the drone's
+own airframe, which the pawn-mounted camera partly sees, is never mistaken for
+one.
 
 Requires a running simulator and opencv:
     pip install -e python[vision]
-    python3 python/examples/intrinsics_check.py
+    python3 python/examples/intrinsics_check.py [game-mode-port]
 """
 
-import math
+import sys
 import time
 
 import numpy as np
 
-from flightforge import Simulator
+from flightforge import SensorType, Simulator
 
-GRID = [(x, y) for x in (4.0, 6.0, 8.0) for y in (-2.0, 0.0, 2.0)]
-CUBE_Z = 1.0
+CAMERA_SCENE = np.array([0.0, 0.0, 1.5])
+# heights vary with both axes so no cube hides behind a nearer one on the same ray
+GRID = [(x, y, CAMERA_SCENE[2] + 0.25 * y + 0.15 * (x - 6.0)) for x in (4.0, 6.0, 8.0) for y in (-2.0, 0.0, 2.0)]
 CUBE_SCALE = 0.25
-FIRST_STENCIL = 200
 
 
 def spawn_grid_yaml():
     lines = ["objects:"]
-    for index, (x, y) in enumerate(GRID):
+    for x, y, z in GRID:
         lines += [
             "  - asset: /Engine/BasicShapes/Cube",
-            f"    position: [{x}, {y}, {CUBE_Z}]",
+            f"    position: [{x}, {y}, {z}]",
             f"    scale: {CUBE_SCALE}",
-            f"    stencil: {FIRST_STENCIL + index}",
         ]
     return "\n".join(lines)
 
 
-def camera_pose_looking_at_grid(drone):
-    """Body frame: camera looks +X (forward). Drone at origin height CUBE_Z sees the grid head-on."""
-    drone.set_pose((0.0, 0.0, 100.0 * CUBE_Z), (0.0, 0.0, 0.0))
-
-
-def expected_pixel(K, point_ros, dist=None):
-    """ROS world point (m, relative to world origin) -> pixel, for a camera at
-    (0, 0, CUBE_Z) looking along +X with zero rotation. Camera frame: z forward
-    = world x, x right = world -y, y down = world -z. With dist = [k1 k2 k3 p1 p2]
-    the forward Brown-Conrady model is applied before K."""
-    px, py, pz = point_ros
-    x, y, z = -py, -(pz - CUBE_Z), px
+def expected_pixel(K, point_scene, dist=None):
+    """Scene point (m) -> pixel for a camera at CAMERA_SCENE looking along +x with
+    zero rotation. Camera frame: z forward = scene x, x right = scene -y,
+    y down = scene -z. With dist = [k1 k2 k3 p1 p2] the forward Brown-Conrady
+    model is applied before K."""
+    px, py, pz = np.asarray(point_scene) - CAMERA_SCENE
+    x, y, z = -py, -pz, px
     xn, yn = x / z, y / z
 
     if dist is not None:
@@ -61,98 +63,76 @@ def expected_pixel(K, point_ros, dist=None):
     return np.array([K[0, 0] * xn + K[0, 2], K[1, 1] * yn + K[1, 2]])
 
 
-def observed_centroids(seg_image, expected_blobs):
-    """Centroids of the cube blobs, independent of how the segmentation material
-    maps stencils to colors.
-
-    Each distinct color in the mask is tried as the cube class and scored by how
-    close its connected-component count comes to the number of cubes expected.
-    Assuming a single background color does not survive a real scene, where sky,
-    ground and cubes are all separate classes and "not the commonest color"
-    swallows the sky as well.
-    """
-    import cv2
-
-    flat = seg_image.reshape(-1, 3)
-    colors, counts = np.unique(flat, axis=0, return_counts=True)
-
-    best = []
-    best_score = None
-
-    for color, count in zip(colors, counts):
-        if count < 16 or count > flat.shape[0] * 0.5:
-            continue  # too rare to be geometry, or the ground/sky plane itself
-
-        mask = (seg_image == color).all(axis=2).astype(np.uint8)
-        found, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
-        blobs = [np.array(centroids[label]) for label in range(1, found) if stats[label, cv2.CC_STAT_AREA] >= 4]
-
-        score = abs(len(blobs) - expected_blobs)
-        if blobs and (best_score is None or score < best_score):
-            best, best_score = blobs, score
-
-    return best
-
-
-def run_check(drone, label, dist=None):
-    K, (width, height) = drone.camera_intrinsics()
-    print(f"\n[{label}] K =\n{K.round(2)}  ({width}x{height})")
-
-    # A projection change takes a few frames to reach the served image: the capture
-    # target is resized and the warp LUT rebuilt on the game thread, so frames already
-    # in flight still carry the old calibration. Without this the check silently
-    # compares yesterday's picture against today's prediction.
+def settle(drone, sensor_id):
+    """A projection change reaches the served image a few frames late: the target is
+    resized and the warp LUT rebuilt on the game thread while frames already in
+    flight carry the old calibration."""
     time.sleep(0.3)
     for _ in range(3):
-        drone.segmentation()
+        drone.instance_segmentation(sensor_id)
 
-    seg, _ = drone.segmentation()
-    observed = observed_centroids(seg, len(GRID))
-    predictions = [expected_pixel(K, (x, y, CUBE_Z), dist) for x, y in GRID]
 
-    # each blob claims its nearest prediction; unmatched predictions are off-screen or occluded
+def cube_centroids(drone, sensor_id, cube_ids):
+    ids, _ = drone.instance_segmentation(sensor_id)
+    centroids = {}
+    for cube in cube_ids:
+        ys, xs = np.nonzero(ids == cube)
+        if xs.size >= 4:
+            centroids[cube] = np.array([xs.mean(), ys.mean()])
+    return centroids
+
+
+def run_check(drone, sensor_id, cube_ids, label, dist=None):
+    K, (width, height) = drone.camera_intrinsics(sensor_id)
+    print(f"\n[{label}] K =\n{K.round(2)}  ({width}x{height})")
+
+    settle(drone, sensor_id)
+    observed = cube_centroids(drone, sensor_id, cube_ids)
+    predictions = [expected_pixel(K, point, dist) for point in GRID]
+
+    # every cube is a distinct instance, so each blob claims its nearest prediction unambiguously
     errors = []
-    for centroid in observed:
+    for cube, centroid in observed.items():
         distances = [np.linalg.norm(centroid - p) for p in predictions]
         index = int(np.argmin(distances))
         errors.append(distances[index])
-        print(f"  blob at {centroid.round(1)} -> cube {index} predicted {predictions[index].round(1)}, error {distances[index]:.2f} px")
+        print(f"  instance {cube} at {centroid.round(1)} -> cube {index} predicted {predictions[index].round(1)}, error {distances[index]:.2f} px")
 
     if errors:
-        print(f"[{label}] mean reprojection error: {np.mean(errors):.2f} px over {len(errors)} blobs "
-              f"({len(GRID) - len(errors)} cubes unmatched)")
+        print(f"[{label}] mean reprojection error: {np.mean(errors):.2f} px, max {np.max(errors):.2f} px over {len(errors)} cubes "
+              f"({len(GRID) - len(errors)} not visible)")
     else:
-        print(f"[{label}] no cube blobs found - check the camera pose or the seg material")
+        print(f"[{label}] no cube instances visible - check the camera pose")
+    return errors
 
 
 def main():
-    sim = Simulator()
-    drone = sim.spawn_drone((0.0, 0.0, 100.0 * CUBE_Z), "x500")
-    camera_pose_looking_at_grid(drone)
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8551
+    sim = Simulator(port=port)
+    sim.clear_objects()
+
+    camera_world = sim.scene_to_world(CAMERA_SCENE)
+    drone = sim.spawn_drone(camera_world, "x500")
+    drone.set_pose(camera_world, (0.0, 0.0, 0.0))
+
+    sensor_id = drone.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
+    settle(drone, sensor_id)
+    before = set(np.unique(drone.instance_segmentation(sensor_id)[0]))
 
     sim.spawn_objects(spawn_grid_yaml())
+    settle(drone, sensor_id)
+    cube_ids = sorted(set(np.unique(drone.instance_segmentation(sensor_id)[0])) - before - {0})
+    print(f"{len(cube_ids)} cube instances in view of {len(GRID)} spawned")
 
-    run_check(drone, "fov-derived intrinsics")
+    run_check(drone, sensor_id, cube_ids, "fov-derived intrinsics")
 
-    # off-center principal point: the same scene must land where the new K says
-    K, (width, height) = drone.camera_intrinsics()
-    drone.set_camera_intrinsics(fx=K[0, 0] * 1.1, fy=K[1, 1] * 1.1, cx=width * 0.45, cy=height * 0.55)
-    run_check(drone, "custom off-center intrinsics")
+    K, (width, height) = drone.camera_intrinsics(sensor_id)
+    drone.set_camera_intrinsics(fx=K[0, 0] * 1.1, fy=K[1, 1] * 1.1, cx=width * 0.45, cy=height * 0.55, sensor_id=sensor_id)
+    run_check(drone, sensor_id, cube_ids, "custom off-center intrinsics")
 
-    # Brown-Conrady barrel + slight tangential: blobs must land where the
-    # DISTORTED forward model says. Note: the seg camera is a separate sensor -
-    # apply the same calibration there for the check to see the warp.
     dist = [-0.28, 0.07, 0.0, 0.001, -0.0005]
-    drone.set_camera_distortion(*dist)
-
-    # the seg camera is its own sensor; give it the same calibration by explicit id
-    # (the rgb config messages accept seg-camera ids)
-    from flightforge import SensorType
-
-    seg_ids = [sensor_id for sensor_id, sensor_type in drone.sensors() if sensor_type == int(SensorType.RGB_SEG_CAMERA)]
-    for seg_id in seg_ids:
-        drone.set_camera_distortion(*dist, sensor_id=seg_id)
-    run_check(drone, "brown-conrady distorted", dist=dist)
+    drone.set_camera_distortion(*dist, sensor_id=sensor_id)
+    run_check(drone, sensor_id, cube_ids, "brown-conrady distorted", dist=dist)
 
     sim.clear_objects()
     sim.remove_drone(drone)

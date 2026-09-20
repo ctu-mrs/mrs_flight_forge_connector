@@ -1,5 +1,6 @@
 #include <flight_forge_connector/game_mode_controller.h>
 
+#include <algorithm>
 #include <sstream>
 
 using kissnet::socket_status;
@@ -301,6 +302,69 @@ bool GameModeController::GetSimTime(double& out_sim_seconds, double& out_dilatio
   if (success) {
     out_sim_seconds = response.sim_time;
     out_dilation    = response.time_dilation;
+  }
+
+  return success;
+}
+
+//}
+
+/* setFixedTimestep() //{ */
+
+bool GameModeController::SetFixedTimestep(double dt, double adaptive_min_dt, double& out_applied) {
+
+  Serializable::GameMode::SetFixedTimestep::Request request{};
+  request.dt              = dt;
+  request.adaptive_min_dt = adaptive_min_dt;
+
+  Serializable::GameMode::SetFixedTimestep::Response response{};
+  const auto                                         status  = Request(request, response);
+  const auto                                         success = status && response.status;
+
+  if (success) {
+    out_applied = response.applied;
+  }
+
+  return success;
+}
+
+//}
+
+/* setLockstep() //{ */
+
+bool GameModeController::SetLockstep(bool enabled) {
+
+  Serializable::GameMode::SetLockstep::Request request{};
+  request.enabled = enabled;
+
+  Serializable::GameMode::SetLockstep::Response response{};
+  const auto                                    status = Request(request, response);
+
+  return status && response.status;
+}
+
+//}
+
+/* step() //{ */
+
+bool GameModeController::Step(int ticks, double& out_sim_time, uint64_t& out_tick_count) {
+
+  Serializable::GameMode::Step::Request request{};
+  request.ticks = ticks;
+
+  // the reply comes only after every tick ran and rendered; the server itself gives up after a minute
+  const int saved_timeout = GetReceiveTimeoutMs();
+  SetReceiveTimeoutMs(std::max(saved_timeout, 90000));
+
+  Serializable::GameMode::Step::Response response{};
+  const auto                             status  = Request(request, response);
+  const auto                             success = status && response.status;
+
+  SetReceiveTimeoutMs(saved_timeout);
+
+  if (success) {
+    out_sim_time   = response.sim_time;
+    out_tick_count = response.tick_count;
   }
 
   return success;

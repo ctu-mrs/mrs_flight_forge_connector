@@ -92,6 +92,32 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           },
           py::arg("dilation"))
       .def(
+          "SetFixedTimestep",
+          [](GameModeController& controller, double dt, double adaptive_min_dt) {
+            double applied = 0.0;
+            bool   ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.SetFixedTimestep(dt, adaptive_min_dt, applied);
+            }
+            return py::make_tuple(ok, applied);
+          },
+          py::arg("dt"), py::arg("adaptive_min_dt") = 0.0)
+      .def("SetLockstep", &GameModeController::SetLockstep, py::call_guard<py::gil_scoped_release>(), py::arg("enabled") = true)
+      .def(
+          "Step",
+          [](GameModeController& controller, int ticks) {
+            double   sim_time   = 0.0;
+            uint64_t tick_count = 0;
+            bool     ok;
+            {
+              py::gil_scoped_release release;
+              ok = controller.Step(ticks, sim_time, tick_count);
+            }
+            return py::make_tuple(ok, sim_time, tick_count);
+          },
+          py::arg("ticks") = 1)
+      .def(
           "GetWorldMesh",
           [](GameModeController& controller, const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles) {
             std::vector<float>    vertices;

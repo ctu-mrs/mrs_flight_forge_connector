@@ -11,6 +11,8 @@ using ueds_connector::LidarSegData;
 using ueds_connector::RgbCameraConfig;
 using ueds_connector::Rotation;
 using ueds_connector::CameraEvent;
+using ueds_connector::CameraEvents;
+using ueds_connector::PoseSample;
 using ueds_connector::DeviceInfo;
 using ueds_connector::EventCameraConfig;
 using ueds_connector::FisheyeCameraConfig;
@@ -259,6 +261,41 @@ std::tuple<bool> UedsConnector::SetLocationAndRotationAsync(const Coordinates& c
   const auto                                                 success = status && response.status;
 
   return std::make_tuple(success);
+}
+
+//}
+
+/* SetPoseTrajectory() //{ */
+
+bool UedsConnector::SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count) {
+
+  Serializable::Drone::SetPropellerSpeeds::Request request{};
+  request.speeds = speeds;
+
+  Serializable::Drone::SetPropellerSpeeds::Response response{};
+  const auto                                        status  = Request(request, response);
+  const auto                                        success = status && response.status;
+
+  if (success) {
+    out_count = response.propeller_count;
+  }
+
+  return success;
+}
+
+bool UedsConnector::SetPoseTrajectory(const std::vector<PoseSample>& samples) {
+
+  Serializable::Drone::SetPoseTrajectory::Request request{};
+  request.samples.reserve(samples.size());
+
+  for (const auto& s : samples) {
+    request.samples.push_back({s.t, s.position.x, s.position.y, s.position.z, s.orientation.pitch, s.orientation.yaw, s.orientation.roll});
+  }
+
+  Serializable::Drone::SetPoseTrajectory::Response response{};
+  const auto                                       status = Request(request, response);
+
+  return status && response.status;
 }
 
 //}
@@ -748,7 +785,7 @@ bool UedsConnector::SetMoveLineVisible(bool visible) {
 
 /* GetEventCameraData() //{ */
 
-std::tuple<bool, std::vector<CameraEvent>, double> UedsConnector::GetEventCameraData(int sensorId) {
+std::pair<bool, CameraEvents> UedsConnector::GetEventCameraData(int sensorId) {
 
   Serializable::Drone::GetEventCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -757,19 +794,19 @@ std::tuple<bool, std::vector<CameraEvent>, double> UedsConnector::GetEventCamera
   const auto                                        status  = Request(request, response);
   const auto                                        success = status && response.status;
 
-  std::vector<CameraEvent> events;
+  CameraEvents events;
 
   if (success) {
-    events.resize(response.events_.size());
-    for (size_t i = 0; i < response.events_.size(); i++) {
-      events[i].x        = response.events_[i].x;
-      events[i].y        = response.events_[i].y;
-      events[i].polarity = response.events_[i].polarity;
-      events[i].stamp    = response.events_[i].stamp;
-    }
+    events.xyp        = std::move(response.xyp_);
+    events.t_us       = std::move(response.t_us_);
+    events.base_stamp = response.base_stamp_;
+    events.stamp      = response.stamp_;
+    events.dropped    = response.dropped_;
+    events.width      = response.width_;
+    events.height     = response.height_;
   }
 
-  return std::make_tuple(success, events, success ? response.stamp_ : 0.0);
+  return std::make_pair(success, std::move(events));
 }
 
 //}
@@ -797,6 +834,16 @@ std::pair<bool, EventCameraConfig> UedsConnector::GetEventCameraConfig(int senso
     config.contrast_threshold_pos_ = response.config.contrast_threshold_pos_;
     config.contrast_threshold_neg_ = response.config.contrast_threshold_neg_;
     config.use_sim_time_           = response.config.use_sim_time_;
+    config.threshold_sigma_        = response.config.threshold_sigma_;
+    config.refractory_period_      = response.config.refractory_period_;
+    config.cutoff_hz_              = response.config.cutoff_hz_;
+    config.leak_rate_hz_           = response.config.leak_rate_hz_;
+    config.shot_noise_rate_hz_     = response.config.shot_noise_rate_hz_;
+    config.hot_pixel_fraction_     = response.config.hot_pixel_fraction_;
+    config.max_event_rate_hz_      = response.config.max_event_rate_hz_;
+    config.max_events_per_frame_   = response.config.max_events_per_frame_;
+    config.use_gpu_                = response.config.use_gpu_;
+    config.seed_                   = response.config.seed_;
   }
 
   return std::make_pair(success, config);
@@ -822,6 +869,16 @@ bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int se
   request.config.contrast_threshold_pos_ = config.contrast_threshold_pos_;
   request.config.contrast_threshold_neg_ = config.contrast_threshold_neg_;
   request.config.use_sim_time_           = config.use_sim_time_;
+  request.config.threshold_sigma_        = config.threshold_sigma_;
+  request.config.refractory_period_      = config.refractory_period_;
+  request.config.cutoff_hz_              = config.cutoff_hz_;
+  request.config.leak_rate_hz_           = config.leak_rate_hz_;
+  request.config.shot_noise_rate_hz_     = config.shot_noise_rate_hz_;
+  request.config.hot_pixel_fraction_     = config.hot_pixel_fraction_;
+  request.config.max_event_rate_hz_      = config.max_event_rate_hz_;
+  request.config.max_events_per_frame_   = config.max_events_per_frame_;
+  request.config.use_gpu_                = config.use_gpu_;
+  request.config.seed_                   = config.seed_;
 
   Serializable::Drone::SetEventCameraConfig::Response response{};
   const auto                                          status = Request(request, response);
@@ -871,6 +928,7 @@ std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int s
     config.width_             = response.config.width_;
     config.height_            = response.config.height_;
     config.lens_model_        = response.config.lens_model_;
+    config.full_frame_        = response.config.full_frame_;
   }
 
   return std::make_pair(success, config);
@@ -894,6 +952,7 @@ bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, in
   request.config.width_             = config.width_;
   request.config.height_            = config.height_;
   request.config.lens_model_        = config.lens_model_;
+  request.config.full_frame_        = config.full_frame_;
 
   Serializable::Drone::SetFisheyeCameraConfig::Response response{};
   const auto                                            status = Request(request, response);

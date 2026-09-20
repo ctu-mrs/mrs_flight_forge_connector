@@ -367,6 +367,142 @@ FF_TEST(TestOtherSensorConfigs)
               Out.OffsetX == In.OffsetX && Out.FOVHorLeft == In.FOVHorLeft && Out.Livox == In.Livox && Out.LivoxSensor == In.LivoxSensor,
           "LidarConfig");
   }
+
+  {
+    FisheyeCameraConfig In{};
+    In.fov_        = 173.0;
+    In.width_      = 1600;
+    In.height_     = 1296;
+    In.lens_model_ = 0;
+    In.full_frame_ = true;
+
+    const FisheyeCameraConfig Out = RoundTrip(In);
+    Check(Out.fov_ == In.fov_ && Out.width_ == In.width_ && Out.height_ == In.height_ && Out.lens_model_ == In.lens_model_ && Out.full_frame_ == In.full_frame_,
+          "FisheyeCameraConfig");
+  }
+}
+
+//}
+
+/* event camera + trajectory //{ */
+
+FF_TEST(TestEventCameraMessages)
+{
+  using namespace Serializable::Drone;
+
+  {
+    EventCameraConfig In{};
+    In.width_                  = 346;
+    In.height_                 = 260;
+    In.contrast_threshold_pos_ = 0.25;
+    In.contrast_threshold_neg_ = 0.3;
+    In.use_sim_time_           = true;
+    In.threshold_sigma_        = 0.04;
+    In.refractory_period_      = 2e-5;
+    In.cutoff_hz_              = 1000.0;
+    In.leak_rate_hz_           = 0.2;
+    In.shot_noise_rate_hz_     = 0.5;
+    In.hot_pixel_fraction_     = 1e-3;
+    In.max_event_rate_hz_      = 12e6;
+    In.max_events_per_frame_   = 1 << 18;
+    In.use_gpu_                = false;
+    In.seed_                   = 777u;
+
+    const EventCameraConfig Out = RoundTrip(In);
+    Check(Out.width_ == In.width_ && Out.height_ == In.height_ && Out.contrast_threshold_pos_ == In.contrast_threshold_pos_ &&
+              Out.contrast_threshold_neg_ == In.contrast_threshold_neg_ && Out.use_sim_time_ == In.use_sim_time_,
+          "EventCameraConfig.base");
+    Check(Out.threshold_sigma_ == In.threshold_sigma_ && Out.refractory_period_ == In.refractory_period_ && Out.cutoff_hz_ == In.cutoff_hz_ &&
+              Out.leak_rate_hz_ == In.leak_rate_hz_ && Out.shot_noise_rate_hz_ == In.shot_noise_rate_hz_ && Out.hot_pixel_fraction_ == In.hot_pixel_fraction_,
+          "EventCameraConfig.pixel_model");
+    Check(Out.max_event_rate_hz_ == In.max_event_rate_hz_ && Out.max_events_per_frame_ == In.max_events_per_frame_ && Out.use_gpu_ == In.use_gpu_ &&
+              Out.seed_ == In.seed_,
+          "EventCameraConfig.readout");
+  }
+
+  {
+    GetEventCameraData::Request In{};
+    In.sensor_id_ = 4;
+
+    const GetEventCameraData::Request Out = RoundTrip(In);
+    Check(Out.sensor_id_ == 4, "GetEventCameraData::Request");
+  }
+
+  {
+    GetEventCameraData::Response In{};
+    In.xyp_        = {5u | (7u << 16) | 0x80000000u, 345u | (259u << 16)};
+    In.t_us_       = {0u, 999u};
+    In.base_stamp_ = 12.5;
+    In.stamp_      = 12.501;
+    In.dropped_    = 3;
+    In.width_      = 346;
+    In.height_     = 260;
+
+    const GetEventCameraData::Response Out = RoundTrip(In);
+    Check(Out.xyp_ == In.xyp_ && Out.t_us_ == In.t_us_ && Out.base_stamp_ == In.base_stamp_ && Out.stamp_ == In.stamp_ && Out.dropped_ == In.dropped_ &&
+              Out.width_ == In.width_ && Out.height_ == In.height_,
+          "GetEventCameraData::Response");
+  }
+
+  {
+    SetPoseTrajectory::Request In{};
+    In.samples = {PoseSample{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0}, PoseSample{0.5, -1.0, -2.0, -3.0, -4.0, -5.0, -6.0}};
+
+    const SetPoseTrajectory::Request Out = RoundTrip(In);
+    Check(Out.samples.size() == 2 && Out.samples[1].t == 0.5 && Out.samples[1].x == -1.0 && Out.samples[1].yaw == -5.0 && Out.samples[0].roll == 6.0,
+          "SetPoseTrajectory::Request");
+  }
+}
+
+//}
+
+/* clock control //{ */
+
+FF_TEST(TestClockMessages)
+{
+  using namespace Serializable::GameMode;
+
+  {
+    SetFixedTimestep::Request In{};
+    In.dt              = 0.001;
+    In.adaptive_min_dt = 0.0002;
+
+    const SetFixedTimestep::Request Out = RoundTrip(In);
+    Check(Out.dt == In.dt && Out.adaptive_min_dt == In.adaptive_min_dt, "SetFixedTimestep::Request");
+  }
+
+  {
+    SetFixedTimestep::Response In{};
+    In.applied = 0.001;
+
+    const SetFixedTimestep::Response Out = RoundTrip(In);
+    Check(Out.applied == In.applied, "SetFixedTimestep::Response");
+  }
+
+  {
+    SetLockstep::Request In{};
+    In.enabled = false;
+
+    const SetLockstep::Request Out = RoundTrip(In);
+    Check(Out.enabled == false, "SetLockstep::Request");
+  }
+
+  {
+    Step::Request In{};
+    In.ticks = 200;
+
+    const Step::Request Out = RoundTrip(In);
+    Check(Out.ticks == 200, "Step::Request");
+  }
+
+  {
+    Step::Response In{};
+    In.sim_time   = 42.25;
+    In.tick_count = 12345678901ull;
+
+    const Step::Response Out = RoundTrip(In);
+    Check(Out.sim_time == In.sim_time && Out.tick_count == In.tick_count, "Step::Response");
+  }
 }
 
 //}

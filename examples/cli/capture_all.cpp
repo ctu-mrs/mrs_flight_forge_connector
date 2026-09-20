@@ -52,7 +52,7 @@ enum SensorType
   DEPTH,
 };
 
-std::string             OutputDir = "shots";
+std::string             OutputDir = "./shots";
 std::map<std::string, std::string> Results;
 
 /* image writing //{ */
@@ -426,18 +426,18 @@ int main(int argc, char** argv)
       Drone.GetEventCameraData(Id);
       SmallSweep(Drone, 10, 60);
 
-      const auto [DataOk, Events, Stamp] = Drone.GetEventCameraData(Id);
-      std::cout << "  " << Events.size() << " events" << std::endl;
+      const auto [DataOk, Events] = Drone.GetEventCameraData(Id);
+      std::cout << "  " << Events.size() << " events, " << Events.dropped << " dropped" << std::endl;
 
-      const auto [ConfigOk, Config] = Drone.GetRgbCameraConfig(Id);
-      const int  Width              = ConfigOk ? Config.width_ : 640;
-      const int  Height             = ConfigOk ? Config.height_ : 480;
+      const int Width  = Events.width > 0 ? Events.width : 640;
+      const int Height = Events.height > 0 ? Events.height : 480;
 
       // polarity is +1/-1, and -1 is truthy: it has to be compared, not tested
       size_t Positive = 0, Negative = 0;
 
       std::vector<uint8_t> Rgb(static_cast<size_t>(Width) * Height * 3, 0);
-      for (const auto& Event : Events) {
+      for (size_t i = 0; i < Events.size(); ++i) {
+        const auto Event = Events.at(i);
         if (Event.x < Width && Event.y < Height) {
           const size_t Index = (static_cast<size_t>(Event.y) * Width + Event.x) * 3;
 

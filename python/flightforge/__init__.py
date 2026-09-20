@@ -36,7 +36,7 @@ SensorInfo = _drone_module.SensorInfo
 SensorType = _drone_module.SensorType
 StereoCameraConfig = _drone_module.StereoCameraConfig
 
-from .client import Drone, Simulator  # noqa: E402
+from .client import Drone, EventBatch, Simulator  # noqa: E402
 
 try:  # optional: mujoco
     from .mujoco_bridge import MujocoBridge  # noqa: E402
@@ -52,6 +52,7 @@ __all__ = [
     "DeviceInfo",
     "Drone",
     "DroneController",
+    "EventBatch",
     "EventCameraConfig",
     "FisheyeCameraConfig",
     "GameModeController",

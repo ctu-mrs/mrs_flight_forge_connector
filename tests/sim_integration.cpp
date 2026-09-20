@@ -264,7 +264,7 @@ FF_TEST(CameraInfoMatchesTheConfigs)
     }
   }
   FF_REQUIRE(Rgb != nullptr);
-  FF_CHECK(Rgb->model_ == "pinhole");
+  FF_CHECK(Rgb->projection_ == "pinhole" && Rgb->distortion_model_ == "plumb_bob");
   FF_CHECK(Rgb->width_ == Cfg.width_ && Rgb->height_ == Cfg.height_);
   FF_CHECK_NEAR(Rgb->fx_, Cfg.intrinsics_.fx_, 1.0e-6);
   FF_CHECK_NEAR(Rgb->cx_, Cfg.intrinsics_.cx_, 1.0e-6);
@@ -273,7 +273,10 @@ FF_TEST(CameraInfoMatchesTheConfigs)
   }
   FF_CHECK_NEAR(Rgb->offset_x_, Cfg.offset_.x, 1.0e-9);
   FF_CHECK_NEAR(Rgb->rotation_pitch_, Cfg.orientation_.pitch, 1.0e-9);
-  FF_CHECK(Rgb->d_.empty() == !Cfg.distortion_.enable_);
+  FF_CHECK(Rgb->d_.size() == 5);
+  if (!Cfg.intrinsics_.use_custom_) {
+    FF_CHECK_NEAR(Rgb->cx_, Cfg.width_ / 2.0 - 0.5, 1.0e-9);  // OpenCV pixel convention
+  }
 
   // a single id returns just that camera, an unknown id fails
   const auto [OneOk, One] = Drone->GetCameraInfo(0);
@@ -305,14 +308,39 @@ FF_TEST(CameraInfoMatchesTheConfigs)
   const auto [FishCfgOk, FishCfg] = Drone->GetFisheyeCameraConfig(FishId);
   const auto [FishInfoOk, Fish]   = Drone->GetCameraInfo(FishId);
   FF_REQUIRE(FishCfgOk && FishInfoOk && Fish.size() == 1);
-  FF_CHECK(Fish[0].model_ == "equidistant" || Fish[0].model_ == "equisolid" || Fish[0].model_ == "stereographic");
-  if (Fish[0].model_ == "equidistant") {
+  FF_CHECK(Fish[0].distortion_model_ == "equidistant" && Fish[0].d_.size() == 4);
+  if (Fish[0].projection_ == "fisheye_equidistant") {
     const double HalfFov = FishCfg.fov_ * M_PI / 360.0;
     const double Radius  = FishCfg.full_frame_ ? 0.5 * std::sqrt(double(FishCfg.width_ * FishCfg.width_ + FishCfg.height_ * FishCfg.height_))
                                                : 0.5 * std::min(FishCfg.width_, FishCfg.height_);
     FF_CHECK_NEAR(Fish[0].fx_ * HalfFov, Radius, 1.0e-3);
+    FF_CHECK(Fish[0].d_[0] == 0.0 && Fish[0].d_[3] == 0.0);
   }
-  FF_CHECK(Fish[0].d_.empty());
+  FF_CHECK_NEAR(Fish[0].fx_, FishCfg.intrinsics_.fx_, 1.0e-9);  // the config reports the same effective focal
+
+  // a Kannala-Brandt calibration goes in and comes back verbatim
+  auto Kb                  = FishCfg;
+  Kb.lens_model_           = ueds_connector::FISHEYE_KANNALA_BRANDT;
+  Kb.intrinsics_.use_custom_ = true;
+  Kb.intrinsics_.fx_       = 254.3;
+  Kb.intrinsics_.fy_       = 252.9;
+  Kb.intrinsics_.cx_       = 405.7;
+  Kb.intrinsics_.cy_       = 291.2;
+  Kb.kb_k1_                = -0.012;
+  Kb.kb_k2_                = 0.021;
+  Kb.kb_k3_                = -0.017;
+  Kb.kb_k4_                = 0.004;
+  FF_REQUIRE(Drone->SetFisheyeCameraConfig(Kb, FishId));
+  const auto [KbInfoOk, KbInfo] = Drone->GetCameraInfo(FishId);
+  FF_REQUIRE(KbInfoOk && KbInfo.size() == 1);
+  FF_CHECK(KbInfo[0].projection_ == "fisheye_kannala_brandt");
+  FF_CHECK_NEAR(KbInfo[0].fx_, 254.3, 1.0e-9);
+  FF_CHECK_NEAR(KbInfo[0].fy_, 252.9, 1.0e-9);
+  FF_CHECK_NEAR(KbInfo[0].cx_, 405.7, 1.0e-9);
+  FF_CHECK_NEAR(KbInfo[0].cy_, 291.2, 1.0e-9);
+  FF_CHECK(KbInfo[0].d_.size() == 4 && KbInfo[0].d_[0] == -0.012 && KbInfo[0].d_[3] == 0.004);
+  const auto [KbCfgOk, KbCfg] = Drone->GetFisheyeCameraConfig(FishId);
+  FF_CHECK(KbCfgOk && KbCfg.intrinsics_.use_custom_ && KbCfg.kb_k2_ == 0.021 && std::abs(KbCfg.intrinsics_.cx_ - 405.7) < 1.0e-9);
   FF_CHECK(Drone->RemoveSensor(FishId));
 }
 

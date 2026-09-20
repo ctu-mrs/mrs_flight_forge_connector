@@ -179,6 +179,26 @@ class Drone:
         _check(ok, "GetFisheyeCameraData")
         return _decode_image(data), stamp
 
+    def set_fisheye_calibration(self, fx, fy, cx, cy, k=(0.0, 0.0, 0.0, 0.0), fov_deg=None, sensor_id=-1):
+        """Renders the fisheye through a Kannala-Brandt calibration (OpenCV
+        fisheye / Kalibr ``equidistant``: fx, fy in pixels per radian, cx, cy in
+        OpenCV pixel convention, k1..k4 on the theta polynomial), so an OpenVINS
+        config for the real camera works unchanged in the simulator. ``fov_deg``
+        caps the rendered angle (default: keep the configured one)."""
+        ok, config = self._raw.GetFisheyeCameraConfig(sensor_id)
+        _check(ok, "GetFisheyeCameraConfig")
+        config.lens_model = 3  # FISHEYE_KANNALA_BRANDT
+        config.intrinsics.use_custom = True
+        config.intrinsics.fx = float(fx)
+        config.intrinsics.fy = float(fy)
+        config.intrinsics.cx = float(cx)
+        config.intrinsics.cy = float(cy)
+        config.kb_k1, config.kb_k2, config.kb_k3, config.kb_k4 = (float(v) for v in k)
+        if fov_deg is not None:
+            config.fov = float(fov_deg)
+        ok = self._raw.SetFisheyeCameraConfig(config, sensor_id)
+        _check(ok, "SetFisheyeCameraConfig")
+
     def camera_intrinsics(self, sensor_id=-1):
         """The RGB camera's effective pinhole intrinsics as a 3x3 K matrix plus
         (width, height). Valid whether the camera runs on a FOV or on custom
@@ -317,11 +337,14 @@ class Drone:
 
     def camera_info(self, sensor_id=-1):
         """Effective calibration of every camera on the drone (or of one sensor
-        id), one dict per eye: ``model`` (pinhole | equidistant | equisolid |
-        stereographic), ``K`` (3x3), ``D`` (plumb_bob k1 k2 p1 p2 k3, or empty),
-        ``size`` (w, h), ``fov_deg``, ``offset``, ``rotation`` (pitch, yaw, roll)
-        in the config convention, ``baseline`` for a stereo pair and
-        ``readout_time`` (0 = global shutter). Only cameras that exist are
+        id), one dict per eye: ``projection`` (pinhole | fisheye_equidistant |
+        fisheye_equisolid | fisheye_stereographic | fisheye_kannala_brandt),
+        ``distortion_model`` as sensor_msgs/CameraInfo names it (plumb_bob |
+        equidistant), ``K`` (3x3, OpenCV pixel convention), ``D`` (plumb_bob
+        k1 k2 p1 p2 k3, or Kannala-Brandt k1..k4 - never empty), ``size`` (w, h),
+        ``fov_deg``, ``offset``, ``rotation`` (pitch, yaw, roll) in the config
+        convention, ``baseline`` for a stereo pair and ``readout_time`` (0 =
+        global shutter). Only cameras that exist are
         listed: a fresh drone creates each default sensor on its first use, so
         configure or read a camera before asking for its calibration."""
         ok, infos = self._raw.GetCameraInfo(sensor_id)
@@ -331,7 +354,8 @@ class Drone:
                 "sensor_id": c.sensor_id,
                 "sensor_type": c.sensor_type,
                 "eye": c.eye,
-                "model": c.model,
+                "projection": c.projection,
+                "distortion_model": c.distortion_model,
                 "K": np.array([[c.fx, 0.0, c.cx], [0.0, c.fy, c.cy], [0.0, 0.0, 1.0]]),
                 "D": np.array(c.d),
                 "size": (c.width, c.height),

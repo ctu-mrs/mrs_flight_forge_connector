@@ -445,6 +445,7 @@ enum FisheyeLensModelEnum : int
   FISHEYE_EQUIDISTANT   = 0,  // r = f * theta
   FISHEYE_EQUISOLID     = 1,  // r = 2f * sin(theta/2)
   FISHEYE_STEREOGRAPHIC = 2,  // r = 2f * tan(theta/2)
+  FISHEYE_KANNALA_BRANDT = 3,  // r = f * theta * (1 + k1 theta^2 + k2 theta^4 + k3 theta^6 + k4 theta^8), OpenCV fisheye / Kalibr
 };
 
 struct FisheyeCameraConfig
@@ -466,6 +467,16 @@ struct FisheyeCameraConfig
 
   // image circle fitted to the frame corner (fov_ is then the diagonal) instead of the short side
   bool full_frame_ = false;
+
+  // with use_custom_, fx/fy (pixels per radian) and cx/cy replace the fov-fitted focal so a
+  // Kalibr/OpenVINS calibration renders as is; fov_ then only caps the rendered angle. OpenCV pixel convention.
+  CameraIntrinsics intrinsics_;
+
+  // Kannala-Brandt coefficients, FISHEYE_KANNALA_BRANDT only
+  double kb_k1_ = 0.0;
+  double kb_k2_ = 0.0;
+  double kb_k3_ = 0.0;
+  double kb_k4_ = 0.0;
 };
 
 //}

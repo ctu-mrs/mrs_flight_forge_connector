@@ -67,7 +67,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readonly("eye", &CameraInfo::eye_)
       .def_readonly("width", &CameraInfo::width_)
       .def_readonly("height", &CameraInfo::height_)
-      .def_readonly("model", &CameraInfo::model_)
+      .def_readonly("projection", &CameraInfo::projection_)
+      .def_readonly("distortion_model", &CameraInfo::distortion_model_)
       .def_readonly("fx", &CameraInfo::fx_)
       .def_readonly("fy", &CameraInfo::fy_)
       .def_readonly("cx", &CameraInfo::cx_)
@@ -328,7 +329,12 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("width", &FisheyeCameraConfig::width_)
       .def_readwrite("height", &FisheyeCameraConfig::height_)
       .def_readwrite("lens_model", &FisheyeCameraConfig::lens_model_)
-      .def_readwrite("full_frame", &FisheyeCameraConfig::full_frame_);
+      .def_readwrite("full_frame", &FisheyeCameraConfig::full_frame_)
+      .def_readwrite("intrinsics", &FisheyeCameraConfig::intrinsics_)
+      .def_readwrite("kb_k1", &FisheyeCameraConfig::kb_k1_)
+      .def_readwrite("kb_k2", &FisheyeCameraConfig::kb_k2_)
+      .def_readwrite("kb_k3", &FisheyeCameraConfig::kb_k3_)
+      .def_readwrite("kb_k4", &FisheyeCameraConfig::kb_k4_);
 
   //}
 

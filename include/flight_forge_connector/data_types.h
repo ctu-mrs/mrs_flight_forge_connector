@@ -162,6 +162,17 @@ struct LidarData
   }
 };
 
+// one lidar scan with the channels asked for; label/intensity vectors are empty unless requested, else parallel to points
+struct LidarScan
+{
+  Coordinates            start;
+  double                 stamp = 0.0;
+  std::vector<LidarData> points;
+  std::vector<int>       intensity;    // material class per point, -1 without a return
+  std::vector<int>       class_id;     // segmentation stencil, landscape 1, -1 without a return
+  std::vector<uint32_t>  instance_id;  // the instance camera's id space, 0 background
+};
+
 struct LidarSegData
 {
   LidarSegData() = default;

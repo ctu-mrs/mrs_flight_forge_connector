@@ -58,7 +58,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
   py::class_<InstanceSegMapEntry>(m, "InstanceSegMapEntry")
       .def(py::init<>())
       .def_readonly("id", &InstanceSegMapEntry::id)
-      .def_readonly("actor", &InstanceSegMapEntry::actor);
+      .def_readonly("actor", &InstanceSegMapEntry::actor)
+      .def_readonly("class_id", &InstanceSegMapEntry::class_id);
 
   py::class_<CameraInfo>(m, "CameraInfo")
       .def(py::init<>())
@@ -442,6 +443,36 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def("SetFisheyeCameraConfig", &UedsConnector::SetFisheyeCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
       .def("GetRangefinderData", &UedsConnector::GetRangefinderData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("GetLidarData", &UedsConnector::GetLidarData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def(
+          "GetLidarScan",
+          [](UedsConnector& drone, bool with_labels, bool with_intensity, int sensor_id) {
+            bool                      ok;
+            ueds_connector::LidarScan scan;
+            {
+              py::gil_scoped_release release;
+              std::tie(ok, scan) = drone.GetLidarScan(with_labels, with_intensity, sensor_id);
+            }
+            const py::ssize_t n      = static_cast<py::ssize_t>(scan.points.size());
+            py::array_t<double> points({n, static_cast<py::ssize_t>(4)});
+            auto                p = points.mutable_unchecked<2>();
+            for (py::ssize_t i = 0; i < n; ++i) {
+              p(i, 0) = scan.points[i].distance;
+              p(i, 1) = scan.points[i].directionX;
+              p(i, 2) = scan.points[i].directionY;
+              p(i, 3) = scan.points[i].directionZ;
+            }
+            auto vec_i32 = [](const std::vector<int>& v) { return py::array_t<int>(static_cast<py::ssize_t>(v.size()), v.data()); };
+            auto vec_u32 = [](const std::vector<uint32_t>& v) { return py::array_t<uint32_t>(static_cast<py::ssize_t>(v.size()), v.data()); };
+            py::dict out;
+            out["points"]      = points;
+            out["start"]       = py::make_tuple(scan.start.x, scan.start.y, scan.start.z);
+            out["stamp"]       = scan.stamp;
+            out["intensity"]   = vec_i32(scan.intensity);
+            out["class_id"]    = vec_i32(scan.class_id);
+            out["instance_id"] = vec_u32(scan.instance_id);
+            return py::make_tuple(ok, out);
+          },
+          py::arg("with_labels") = true, py::arg("with_intensity") = false, py::arg("sensor_id") = -1)
       .def("GetLidarSegData", &UedsConnector::GetLidarSegData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("GetLidarIntData", &UedsConnector::GetLidarIntData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("GetLidarConfig", &UedsConnector::GetLidarConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)

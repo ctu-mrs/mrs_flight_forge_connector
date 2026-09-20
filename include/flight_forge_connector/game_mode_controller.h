@@ -44,6 +44,9 @@ public:
 
   std::pair<bool, float> GetFps();
 
+  /* The segmentation class tree this world labels with (id, parent id, path) plus its hash. */
+  std::pair<bool, Serializable::GameMode::GetClassMap::Response> GetClassMap();
+
   std::pair<bool, std::pair<int,int>> GetApiVersion();
 
   /* Wall clock, for a client synchronising its own clock against the simulator. */

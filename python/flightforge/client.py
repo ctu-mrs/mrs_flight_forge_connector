@@ -24,14 +24,20 @@ def _check(ok, what):
         raise FlightForgeError(f"{what} failed (simulator unreachable or request rejected)")
 
 
-def _decode_image(buffer):
-    """PNG bytes -> HxWx3 uint8 RGB array."""
+def _decode_image(buffer, keep_alpha=False):
+    """PNG bytes -> HxWx3 uint8 RGB array (HxWx4 RGBA with keep_alpha)."""
     try:
         import cv2
 
-        image = cv2.imdecode(np.frombuffer(bytes(buffer), dtype=np.uint8), cv2.IMREAD_COLOR)
+        image = cv2.imdecode(np.frombuffer(bytes(buffer), dtype=np.uint8), cv2.IMREAD_UNCHANGED if keep_alpha else cv2.IMREAD_COLOR)
         if image is None:
             raise FlightForgeError("image decode failed")
+        if keep_alpha:
+            if image.ndim == 2:
+                image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGRA)
+            elif image.shape[2] == 3:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
         return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     except ImportError:
         import io
@@ -323,17 +329,30 @@ class Drone:
         """Per-actor instance ids as an (H, W) uint32 array (0 = background) plus
         the frame stamp. Rendered by a dedicated mesh pass: pixel-exact,
         occlusion-correct, no 255-instance stencil cap."""
+        ids, _, stamp = self.panoptic(sensor_id)
+        return ids, stamp
+
+    def panoptic(self, sensor_id=-1):
+        """Instance ids (H, W) uint32 and class ids (H, W) uint8 from one frame of
+        the instance camera (the class rides in the PNG's alpha channel), plus the
+        stamp. Class ids are leaves of sim.class_map(); 0 = unlabelled."""
         ok, data, stamp = self._raw.GetInstanceSegData(sensor_id)
         _check(ok, "GetInstanceSegData")
-        rgb = _decode_image(data).astype(np.uint32)
-        ids = rgb[:, :, 0] + (rgb[:, :, 1] << 8) + (rgb[:, :, 2] << 16)
-        return ids, stamp
+        rgba = _decode_image(data, keep_alpha=True)
+        ids = rgba[:, :, 0].astype(np.uint32) + (rgba[:, :, 1].astype(np.uint32) << 8) + (rgba[:, :, 2].astype(np.uint32) << 16)
+        return ids, rgba[:, :, 3].copy(), stamp
 
     def instance_map(self, sensor_id=-1):
         """{instance_id: actor_path} snapshotted with the last instance frame."""
         ok, entries = self._raw.GetInstanceSegMap(sensor_id)
         _check(ok, "GetInstanceSegMap")
         return {e.id: e.actor for e in entries}
+
+    def instance_classes(self, sensor_id=-1):
+        """{instance_id: class_id} snapshotted with the last instance frame."""
+        ok, entries = self._raw.GetInstanceSegMap(sensor_id)
+        _check(ok, "GetInstanceSegMap")
+        return {e.id: e.class_id for e in entries}
 
     def camera_info(self, sensor_id=-1):
         """Effective calibration of every camera on the drone (or of one sensor
@@ -384,6 +403,18 @@ class Drone:
         _check(ok, "GetLidarData")
         arr = np.array([[p.distance, p.directionX, p.directionY, p.directionZ] for p in points], dtype=np.float64)
         return arr.reshape(-1, 4), np.array([start.x, start.y, start.z]), stamp
+
+    def lidar_scan(self, labels=True, intensity=False, sensor_id=-1):
+        """One trace of the lidar with the channels asked for, as a dict:
+        ``points`` (N,4) distance, dx, dy, dz; ``start``; ``stamp``; and, when
+        requested, per-point ``class_id`` (segmentation stencil, -1 without a
+        return), ``instance_id`` (the instance camera's id space, 0 background)
+        and ``intensity`` (material class). Prefer this over lidar() +
+        lidar_segmented(), which trace separately."""
+        ok, scan = self._raw.GetLidarScan(labels, intensity, sensor_id)
+        _check(ok, "GetLidarScan")
+        scan["start"] = np.array(scan["start"])
+        return scan
 
     def lidar_segmented(self, sensor_id=-1):
         ok, points, start, stamp = self._raw.GetLidarSegData(sensor_id)
@@ -453,6 +484,29 @@ class Simulator:
         ok, meta = self._raw.GetMeta()
         _check(ok, "GetMeta")
         return json.loads(meta["catalogue_json"])
+
+    def class_map(self):
+        """The segmentation class tree as {id: {"path", "parent_id"}}; sensors
+        emit leaf ids, so collapse through parent_id for coarser labels (see
+        collapse_classes)."""
+        ok, classes, _ = self._raw.GetClassMap()
+        _check(ok, "GetClassMap")
+        return {c["id"]: {"path": c["path"], "parent_id": c["parent_id"]} for c in classes}
+
+    def collapse_classes(self, class_ids, depth):
+        """Maps an array of leaf class ids to their ancestor at `depth` (1 = top
+        level, 2 = second, ...); ids shallower than that stay as they are."""
+        tree = self.class_map()
+
+        def ancestor(class_id):
+            chain = []
+            while class_id in tree:
+                chain.append(class_id)
+                class_id = tree[class_id]["parent_id"]
+            return chain[-depth] if len(chain) >= depth else (chain[0] if chain else 0)
+
+        lut = {i: ancestor(i) for i in set(np.unique(class_ids))}
+        return np.vectorize(lambda i: lut.get(int(i), 0))(class_ids)
 
     def check_compatibility(self, op_names=()):
         """Ops this client was built against that the server lacks or encodes

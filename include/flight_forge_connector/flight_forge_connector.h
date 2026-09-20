@@ -156,6 +156,13 @@ public:
   std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> GetCameraInfo(int sensorId = -1);
 
   /**
+   * One trace of any lidar with the channels asked for. Replaces polling GetLidarData +
+   * GetLidarSegData + GetLidarIntData, which trace separately and, on a Livox, each
+   * consume their own slice of the pattern. Instance ids match the instance camera's.
+   */
+  std::pair<bool, LidarScan> GetLidarScan(bool withLabels = true, bool withIntensity = false, int sensorId = -1);
+
+  /**
    * Depth image in uint16 millimetres (0 invalid, 65535 clamp - the
    * Kinect/RealSense convention), row-major width x height, uncompressed.
    */

@@ -34,6 +34,19 @@ def test_api_version(sim):
     assert sim.api_version >= (0, 14)
 
 
+def test_camera_info(drone):
+    assert drone.camera_info() == []  # nothing exists until a camera is touched
+    K, size = drone.camera_intrinsics()
+    infos = drone.camera_info()
+    rgb = [c for c in infos if c["sensor_id"] == 0][0]
+    assert rgb["model"] == "pinhole"
+    assert rgb["size"] == size
+    assert np.allclose(rgb["K"], K)
+    assert rgb["D"].size == 0
+    assert rgb["readout_time"] == 0.0
+    assert drone.camera_info(0)[0]["sensor_id"] == 0
+
+
 def test_meta_describes_the_wire(sim):
     meta = sim.meta()
     assert tuple(meta["api"]) == sim.api_version

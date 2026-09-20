@@ -274,6 +274,20 @@ std::pair<bool, std::pair<int,int>> GameModeController::GetApiVersion() {
 
 //}
 
+/* getClassMap() //{ */
+
+std::pair<bool, Serializable::GameMode::GetClassMap::Response> GameModeController::GetClassMap() {
+
+  Serializable::GameMode::GetClassMap::Request request{};
+
+  Serializable::GameMode::GetClassMap::Response response{};
+  const auto                                    status = Request(request, response);
+
+  return std::make_pair(status && response.status, response);
+}
+
+//}
+
 /* getTime() //{ */
 
 std::pair<bool, double> GameModeController::GetTime() {

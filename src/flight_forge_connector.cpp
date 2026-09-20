@@ -1130,6 +1130,40 @@ std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConne
 
 //}
 
+/* getLidarScan() //{ */
+
+std::pair<bool, ueds_connector::LidarScan> UedsConnector::GetLidarScan(bool withLabels, bool withIntensity, int sensorId) {
+
+  Serializable::Drone::GetLidarScan::Request request{};
+  request.sensor_id_      = sensorId;
+  request.with_labels_    = withLabels;
+  request.with_intensity_ = withIntensity;
+
+  Serializable::Drone::GetLidarScan::Response response{};
+  const auto                                  status  = Request(request, response);
+  const auto                                  success = status && response.status;
+
+  ueds_connector::LidarScan scan;
+  if (success) {
+    scan.start = Coordinates{response.startX, response.startY, response.startZ};
+    scan.stamp = response.stamp_;
+    scan.points.resize(response.points_.size());
+    for (size_t i = 0; i < response.points_.size(); ++i) {
+      scan.points[i].distance   = response.points_[i].distance;
+      scan.points[i].directionX = response.points_[i].directionX;
+      scan.points[i].directionY = response.points_[i].directionY;
+      scan.points[i].directionZ = response.points_[i].directionZ;
+    }
+    scan.intensity   = std::move(response.intensity_);
+    scan.class_id    = std::move(response.class_id_);
+    scan.instance_id = std::move(response.instance_id_);
+  }
+
+  return std::make_pair(success, std::move(scan));
+}
+
+//}
+
 /* getCameraInfo() //{ */
 
 std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> UedsConnector::GetCameraInfo(int sensorId) {

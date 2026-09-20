@@ -507,6 +507,68 @@ FF_TEST(TestClockMessages)
 
 //}
 
+/* class map //{ */
+
+FF_TEST(TestClassMapMessage)
+{
+  using namespace Serializable::GameMode;
+
+  GetClassMap::Response In{};
+  GetClassMap::ClassEntry Node;
+  Node.id        = 12;
+  Node.parent_id = 11;
+  Node.path      = "vegetation/tree/conifer";
+  In.classes_.push_back(Node);
+  In.hash_ = 0xfeedfacecafebeefull;
+
+  const GetClassMap::Response Out = RoundTrip(In);
+  Check(Out.classes_.size() == 1 && Out.classes_[0].id == 12 && Out.classes_[0].parent_id == 11 && Out.classes_[0].path == Node.path &&
+            Out.hash_ == In.hash_,
+        "GetClassMap::Response");
+
+  Serializable::Drone::InstanceSegMapEntry Entry;
+  Entry.id       = 5;
+  Entry.actor    = "/Game/x.x:PersistentLevel.Cube";
+  Entry.class_id = 62;
+  const auto EntryOut = RoundTrip(Entry);
+  Check(EntryOut.id == 5 && EntryOut.class_id == 62 && EntryOut.actor == Entry.actor, "InstanceSegMapEntry");
+}
+
+//}
+
+/* lidar scan //{ */
+
+FF_TEST(TestLidarScanMessage)
+{
+  using namespace Serializable::Drone;
+
+  GetLidarScan::Request Req{};
+  Req.sensor_id_      = 2;
+  Req.with_labels_    = true;
+  Req.with_intensity_ = false;
+  const GetLidarScan::Request ReqOut = RoundTrip(Req);
+  Check(ReqOut.sensor_id_ == 2 && ReqOut.with_labels_ && !ReqOut.with_intensity_, "GetLidarScan::Request");
+
+  GetLidarScan::Response In{};
+  In.startX = 1.0;
+  In.stamp_ = 3.5;
+  GetLidarData::LidarData Hit{};
+  Hit.distance   = 12.5;
+  Hit.directionX = 1.0;
+  GetLidarData::LidarData Miss{};
+  Miss.distance   = -1.0;
+  Miss.directionY = 1.0;
+  In.points_ = {Hit, Miss};
+  In.class_id_    = {7, -1};
+  In.instance_id_ = {97u, 0u};
+
+  const GetLidarScan::Response Out = RoundTrip(In);
+  Check(Out.points_.size() == 2 && Out.points_[0].distance == 12.5 && Out.points_[1].directionY == 1.0, "GetLidarScan::Response points");
+  Check(Out.class_id_ == In.class_id_ && Out.instance_id_ == In.instance_id_ && Out.intensity_.empty() && Out.stamp_ == 3.5, "GetLidarScan::Response channels");
+}
+
+//}
+
 /* camera info //{ */
 
 FF_TEST(TestCameraInfoMessage)

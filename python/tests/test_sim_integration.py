@@ -307,6 +307,56 @@ def test_world_switch_keeps_the_server_answering(sim):
     after.remove_drone(drone)
 
 
+def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
+    """A point and a pixel on the same object carry the same instance id, and the
+    point's class id is the object's segmentation stencil."""
+    import flight_forge_drone as ffd
+
+    sim.clear_objects()
+    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 1.5])))
+    try:
+        drone.set_pose(sim.scene_to_world([0.0, 0.0, 1.5]), (0.0, 0.0, 0.0))
+        camera = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
+        (cube_id,) = sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [4.0, 0.0, 1.5]\n    scale: 2.0\n")
+        stencil = sim.objects()[cube_id]["stencil"]
+        time.sleep(1.5)
+        for _ in range(3):
+            drone.instance_segmentation(camera)
+
+        image, classes, _ = drone.panoptic(camera)
+        h, w = image.shape
+        pixel_id = int(image[h // 2, w // 2])
+        pixel_class = int(classes[h // 2, w // 2])
+        assert pixel_id != 0
+
+        # the class comes from the tagger: a rule when the project has one for the cube, else the stencil
+        tree = sim.class_map()
+        by_path = {v["path"]: k for k, v in tree.items()}
+        expected_class = by_path.get("prop/box", stencil)
+        assert pixel_class == expected_class
+        assert drone.instance_classes(camera)[pixel_id] == expected_class
+
+        scan = drone.lidar_scan(labels=True)
+        pts = scan["points"]
+        assert scan["class_id"].shape == (len(pts),) and scan["instance_id"].shape == (len(pts),)
+        assert scan["intensity"].size == 0  # not requested
+        d = pts[:, 1:4] / np.linalg.norm(pts[:, 1:4], axis=1, keepdims=True)
+        forward = (pts[:, 0] > 0) & (d[:, 0] > 0.995)  # returns within ~6 deg of the optical axis
+        assert forward.sum() > 0
+        assert set(scan["instance_id"][forward]) == {pixel_id}
+        assert set(scan["class_id"][forward]) == {expected_class}
+        assert np.all(scan["class_id"][pts[:, 0] < 0] == -1) and np.all(scan["instance_id"][pts[:, 0] < 0] == 0)
+
+        if "prop/box" in by_path:
+            # leaf ids collapse through the tree
+            assert tree[expected_class]["parent_id"] == by_path["prop"]
+            assert sim.collapse_classes(np.array([expected_class]), 1)[0] == by_path["prop"]
+    finally:
+        sim.clear_objects()
+        sim.remove_drone(drone)
+        drone.close()
+
+
 def test_instance_segmentation_survives_scene_edits(sim):
     """Destroying actors while an instance-seg camera runs must not kill the simulator.
 

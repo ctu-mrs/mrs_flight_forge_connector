@@ -259,10 +259,10 @@ FF_TEST(CatalogueCoversEveryMessageId)
   }
 
   // the last enumerator of each MessageType; bump when adding an op
-  for (int Id = Drone::MessageType::get_location; Id <= Drone::MessageType::get_camera_info; ++Id) {
+  for (int Id = Drone::MessageType::get_location; Id <= Drone::MessageType::get_lidar_scan; ++Id) {
     FF_CHECK(std::find(Seen.begin(), Seen.end(), (static_cast<uint32_t>(Registry::Scope::Drone) << 16) | Id) != Seen.end());
   }
-  for (int Id = GameMode::MessageType::get_drones; Id <= GameMode::MessageType::step; ++Id) {
+  for (int Id = GameMode::MessageType::get_drones; Id <= GameMode::MessageType::get_class_map; ++Id) {
     FF_CHECK(std::find(Seen.begin(), Seen.end(), (static_cast<uint32_t>(Registry::Scope::GameMode) << 16) | Id) != Seen.end());
   }
 }

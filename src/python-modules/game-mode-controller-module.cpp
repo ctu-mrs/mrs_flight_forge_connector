@@ -68,6 +68,25 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
       .def("GetCameraCaptureMode", &GameModeController::GetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
       .def("SetCameraCaptureMode", &GameModeController::SetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
       .def("GetFps", &GameModeController::GetFps, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "GetClassMap",
+          [](GameModeController& controller) {
+            bool                                           ok;
+            Serializable::GameMode::GetClassMap::Response map;
+            {
+              py::gil_scoped_release release;
+              std::tie(ok, map) = controller.GetClassMap();
+            }
+            py::list classes;
+            for (const auto& c : map.classes_) {
+              py::dict d;
+              d["id"]        = c.id;
+              d["parent_id"] = c.parent_id;
+              d["path"]      = c.path;
+              classes.append(d);
+            }
+            return py::make_tuple(ok, classes, map.hash_);
+          })
       .def("GetApiVersion", &GameModeController::GetApiVersion, py::call_guard<py::gil_scoped_release>())
       .def("GetTime", &GameModeController::GetTime, py::call_guard<py::gil_scoped_release>())
       .def("SetGraphicsSettings", &GameModeController::SetGraphicsSettings, py::call_guard<py::gil_scoped_release>())

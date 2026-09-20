@@ -9,8 +9,8 @@
 #include <flight_forge_connector/socket_client.h>
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
-#define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 18
+#define API_VERSION_MAJOR Serializable::api_version_major
+#define API_VERSION_MINOR Serializable::api_version_minor
 
 namespace ueds_connector
 {
@@ -18,8 +18,10 @@ namespace ueds_connector
 class GameModeController : public SocketClient {
 public:
   GameModeController() : SocketClient() {
+    scope_ = Serializable::Registry::Scope::GameMode;
   }
   GameModeController(const std::string& address, uint16_t port) : SocketClient(address, port) {
+    scope_ = Serializable::Registry::Scope::GameMode;
   }
 
   /* drones //{ */

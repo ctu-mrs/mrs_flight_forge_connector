@@ -18,9 +18,11 @@ class UedsConnector : public SocketClient {
 
 public:
   UedsConnector() : SocketClient() {
+    scope_ = Serializable::Registry::Scope::Drone;
   }
 
   UedsConnector(const std::string& address, uint16_t port) : SocketClient(address, port) {
+    scope_ = Serializable::Registry::Scope::Drone;
   }
 
   /* pose + state //{ */

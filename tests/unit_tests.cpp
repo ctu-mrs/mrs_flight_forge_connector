@@ -3,7 +3,12 @@
 #include <cstdint>
 #include <vector>
 
+#include <sstream>
+
+#include <cereal/archives/binary.hpp>
+
 #include <flight_forge_connector/data_types.h>
+#include <flight_forge_connector/serialization/serializable_schema.h>
 
 #include "test_framework.h"
 
@@ -232,6 +237,112 @@ FF_TEST(CameraEventsUnpack)
   FF_CHECK_NEAR(Second.stamp, 12.500999, 1e-9);
 
   FF_CHECK(Events.unpack().size() == 2);
+}
+
+/* //} */
+
+/* op catalogue //{ */
+
+FF_TEST(CatalogueCoversEveryMessageId)
+{
+  using namespace Serializable;
+
+  const auto Meta = Schema::BuildMetaResponse();
+  FF_CHECK(Meta.api_version_major_ == api_version_major && Meta.api_version_minor_ == api_version_minor);
+  FF_CHECK(Meta.catalogue_hash_ == Schema::BuildMetaResponse().catalogue_hash_);
+
+  std::vector<uint32_t> Seen;
+  for (const auto& Op : Meta.ops_) {
+    const uint32_t Key = (static_cast<uint32_t>(Op.scope_) << 16) | Op.id_;
+    FF_CHECK(std::find(Seen.begin(), Seen.end(), Key) == Seen.end());
+    Seen.push_back(Key);
+  }
+
+  // the last enumerator of each MessageType; bump when adding an op
+  for (int Id = Drone::MessageType::get_location; Id <= Drone::MessageType::set_propeller_speeds; ++Id) {
+    FF_CHECK(std::find(Seen.begin(), Seen.end(), (static_cast<uint32_t>(Registry::Scope::Drone) << 16) | Id) != Seen.end());
+  }
+  for (int Id = GameMode::MessageType::get_drones; Id <= GameMode::MessageType::step; ++Id) {
+    FF_CHECK(std::find(Seen.begin(), Seen.end(), (static_cast<uint32_t>(Registry::Scope::GameMode) << 16) | Id) != Seen.end());
+  }
+}
+
+FF_TEST(SchemaRecordsNamesAndTypes)
+{
+  using namespace Serializable;
+
+  FF_CHECK(Schema::Signature(Schema::Describe<Drone::GetRgbCameraData::Response>()) == "{u16 type,bool status,u32 seq,vec<u8> image_,f64 stamp_}");
+  FF_CHECK(Schema::Signature(Schema::Describe<Drone::GetRgbCameraData::Request>()) == "{u16 type,u32 seq,i32 sensor_id_}");
+
+  // the server patches seq into every reply at byte offset 3, so the header layout is part of the protocol
+  FF_CHECK(Schema::Signature(Schema::Describe<Common::NetworkResponse>()) == "{u16 type,bool status,u32 seq}");
+
+  const auto Fisheye = Schema::Signature(Schema::Describe<Drone::SetFisheyeCameraConfig::Request>());
+  FF_CHECK(Fisheye.find("bool full_frame_") != std::string::npos);
+
+  const auto Json = Schema::Json(Schema::Describe<Drone::ListSensors::Response>());
+  FF_CHECK(Json.find("{\"name\":\"sensor_ids_\",\"type\":\"vec\",\"elem\":{\"type\":\"i32\"}}") != std::string::npos);
+}
+
+FF_TEST(IncompatibilitiesNameTheOp)
+{
+  using namespace Serializable;
+
+  auto Remote = Schema::BuildMetaResponse().ops_;
+  FF_CHECK(Schema::Incompatibilities(Remote).empty());
+
+  Remote.erase(std::remove_if(Remote.begin(), Remote.end(), [](const Common::OpMeta& Op) { return Op.name_ == "step"; }), Remote.end());
+  for (auto& Op : Remote) {
+    if (Op.name_ == "get_rgb_camera_data") {
+      Op.hash_ ^= 1;
+    }
+  }
+
+  const auto All = Schema::Incompatibilities(Remote);
+  FF_REQUIRE(All.size() == 2);
+  FF_CHECK(All[0].rfind("get_rgb_camera_data: schema differs", 0) == 0);
+  FF_CHECK(All[1] == "step: missing on the server");
+
+  // a client that only uses get_fps is unaffected
+  FF_CHECK(Schema::Incompatibilities(Remote, {"get_fps"}).empty());
+  FF_CHECK(Schema::Incompatibilities(Remote, {"get_fps", "step"}).size() == 1);
+}
+
+FF_TEST(LoadResponseStepsPastAStaleReply)
+{
+  using namespace Serializable;
+
+  // a late RGB reply glued in front of the config reply the client is waiting for
+  std::stringstream Stream;
+  {
+    cereal::BinaryOutputArchive Out(Stream);
+    Drone::GetRgbCameraData::Response Stale(true);
+    Stale.seq    = 6;
+    Stale.image_ = std::vector<unsigned char>(1234, 7);
+    Out(Stale);
+  }
+  Stream << "$$$";
+  {
+    cereal::BinaryOutputArchive Out(Stream);
+    Drone::GetRgbCameraConfig::Response Fresh(true);
+    Fresh.seq           = 7;
+    Fresh.config.width_ = 1920;
+    Out(Fresh);
+  }
+  Stream << "$$$";
+
+  cereal::BinaryInputArchive In(Stream);
+  FF_REQUIRE(Registry::LoadResponse(In, Registry::Scope::Drone, Drone::MessageType::get_rgb_camera_data));
+  Stream.ignore(3);
+
+  Drone::GetRgbCameraConfig::Response Got;
+  In(Got);
+  FF_CHECK(Got.seq == 7 && Got.config.width_ == 1920);
+
+  // an id the scope does not know cannot be skipped
+  std::stringstream Empty;
+  cereal::BinaryInputArchive None(Empty);
+  FF_CHECK(!Registry::LoadResponse(None, Registry::Scope::Drone, 0x7fff));
 }
 
 /* //} */

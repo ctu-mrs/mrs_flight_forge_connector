@@ -41,6 +41,25 @@ FF_TEST(ApiVersion)
   FF_CHECK(Version.first == 0 && Version.second >= 14);
 }
 
+FF_TEST(MetaMatchesThisHeader)
+{
+  const auto [Ok, Meta] = GameMode->GetMeta();
+  FF_REQUIRE(Ok);
+
+  const auto Local = Serializable::Schema::BuildMetaResponse();
+  FF_CHECK(Meta.api_version_major_ == Local.api_version_major_ && Meta.api_version_minor_ == Local.api_version_minor_);
+  FF_CHECK(Meta.ops_.size() == Local.ops_.size());
+  FF_CHECK(Meta.catalogue_hash_ == Local.catalogue_hash_);
+  FF_CHECK(Meta.catalogue_json_ == Local.catalogue_json_);
+
+  const auto [Answered, Problems] = GameMode->CheckCompatibility();
+  FF_CHECK(Answered);
+  for (const auto& Problem : Problems) {
+    std::cerr << "  " << Problem << "\n";
+  }
+  FF_CHECK(Problems.empty());
+}
+
 FF_TEST(FpsReports)
 {
   const auto [Ok, Fps] = GameMode->GetFps();

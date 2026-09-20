@@ -120,8 +120,9 @@ ctest --test-dir build
   visibility, sensor/device lifecycle, instance segmentation. Reported
   SKIPPED (exit 77) when no simulator is reachable, so plain `ctest` is safe
   anywhere; run it with the sim up for the real validation pass.
-- `header_mirror` - the vendored serializable_shared.h must be byte-identical
-  to the plugin's (active when the plugin repo sits next to this checkout)
+- `header_mirror_*` - the vendored serializable_shared.h and
+  serializable_schema.h must be byte-identical to the plugin's (active when
+  the plugin repo sits next to this checkout)
 
 The python layer keeps a thin pytest suite for the bindings themselves
 (`pytest python/tests`; `-m sim` for the live subset). Engine-side math

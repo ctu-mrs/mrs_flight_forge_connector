@@ -4,6 +4,7 @@ Raises on failure instead of returning success flags, decodes images to numpy
 arrays, and converts point clouds to (N, k) float arrays.
 """
 
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -392,6 +393,21 @@ class Simulator:
     @property
     def raw(self):
         return self._raw
+
+    def meta(self):
+        """The server's op catalogue as a dict: ``api``, ``hash`` and one entry per
+        op with its id, name, per-op hash and the request/response field trees."""
+        ok, meta = self._raw.GetMeta()
+        _check(ok, "GetMeta")
+        return json.loads(meta["catalogue_json"])
+
+    def check_compatibility(self, op_names=()):
+        """Ops this client was built against that the server lacks or encodes
+        differently; empty means compatible. Restrict to the names you use to
+        ignore the rest of the API."""
+        ok, problems = self._raw.CheckCompatibility(list(op_names))
+        _check(ok, "GetMeta")
+        return problems
 
     def spawn_drone(self, position=(0.0, 0.0, 100.0), frame="x500"):
         """Spawns a UAV and returns a connected :class:`Drone`."""

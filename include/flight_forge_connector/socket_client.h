@@ -13,6 +13,7 @@
 #include <cereal/archives/binary.hpp>
 #include <kissnet/kissnet.hpp>
 #include <flight_forge_connector/serialization/serializable_extended.h>
+#include <flight_forge_connector/serialization/serializable_schema.h>
 
 #define LOCALHOST "127.0.0.1"
 #define DEFAULT_PORT 8080
@@ -55,6 +56,15 @@ public:
 
   bool Ping();
 
+  /* The server's op catalogue: per-op schema hashes plus the same as JSON. Both the game mode and every drone answer it. */
+  std::pair<bool, Serializable::Common::GetMeta::Response> GetMeta();
+
+  /**
+   * Ops this connector was compiled against that the server lacks or serializes differently.
+   * Pass the names a client actually uses to tolerate everything else; an empty list means compatible.
+   */
+  std::pair<bool, std::vector<std::string>> CheckCompatibility(const std::vector<std::string>& op_names = {});
+
   /* SendMessage() //{ */
 
   template <typename TRequest>
@@ -96,27 +106,51 @@ public:
 
   template <typename TRequest, typename TResponse>
   bool Request(TRequest& message, TResponse& response) {
+    DiscardStaleReplies_();
+
+    message.seq                         = ++seq_;
     const auto [send_size, send_status] = SendMessage<TRequest>(message);
 
     if (send_status != kissnet::socket_status::valid || send_size == 0) {
       return false;
     }
 
-    std::string response_str;
-    if (!GetMessage(response_str)) {
-      return false;
-    }
+    // a reply to an earlier request that timed out can still arrive, alone or glued in front of
+    // ours; step past every stale one (the registry knows each reply's shape) and keep waiting
+    for (int attempt = 0; attempt < 8; ++attempt) {
+      std::string response_str;
+      if (!GetMessage(response_str)) {
+        return false;
+      }
 
-    try {
-      std::stringstream          ss2(response_str);
-      cereal::BinaryInputArchive ia(ss2);
-      ia(response);
+      try {
+        std::stringstream ss2(response_str);
+        while (ss2.peek() != std::char_traits<char>::eof()) {
+          const auto start = ss2.tellg();
 
-      return true;
-    }
-    catch (cereal::Exception& exception) {
-      // TODO
-      std::cout << "SOCKET-CLIENT serialization crashed!!!" << exception.what() << std::endl;
+          Serializable::Common::NetworkResponse header{};
+          {
+            cereal::BinaryInputArchive ia(ss2);
+            ia(header);
+          }
+
+          ss2.seekg(start);
+          cereal::BinaryInputArchive body(ss2);
+          if (header.seq == message.seq && header.type == message.type) {
+            body(response);
+            return true;
+          }
+
+          if (!Serializable::Registry::LoadResponse(body, scope_, header.type)) {
+            break;
+          }
+          ss2.ignore(3);  // the END_OF_MESSAGE terminator behind the stale reply
+        }
+      }
+      catch (cereal::Exception& exception) {
+        std::cout << "SOCKET-CLIENT serialization crashed!!!" << exception.what() << std::endl;
+        return false;
+      }
     }
     return false;
   }
@@ -138,7 +172,15 @@ private:
 
   std::queue<std::unique_ptr<std::vector<std::byte>>> in_queue_;
 
+  uint32_t seq_ = 0;
+
+  // bytes already waiting before a request is sent can only be late replies
+  void DiscardStaleReplies_();
+
 protected:
+  // which server this client talks to; drone and game-mode ids overlap
+  Serializable::Registry::Scope scope_ = Serializable::Registry::Scope::Common;
+
   void                                                       PushToInQueue_(std::unique_ptr<std::vector<std::byte>> item);
   std::unique_ptr<std::vector<std::byte>>                    PopFromInQueue_();
   void                                                       ClearInQueue_();

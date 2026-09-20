@@ -15,10 +15,12 @@ target_link_libraries(sim_integration PRIVATE ${LIBRARY_NAME})
 add_test(NAME sim_integration COMMAND sim_integration)
 set_tests_properties(sim_integration PROPERTIES SKIP_RETURN_CODE 77)
 
-set(PLUGIN_HEADER ${PROJECT_SOURCE_DIR}/../FlightForgePlugin/Source/MessageSerialization/Public/serializable_shared.h)
-if (EXISTS ${PLUGIN_HEADER})
-    add_test(NAME header_mirror
-             COMMAND ${CMAKE_COMMAND} -E compare_files
-                     ${PLUGIN_HEADER}
-                     ${PROJECT_SOURCE_DIR}/include/flight_forge_connector/serialization/serializable_shared.h)
-endif()
+set(PLUGIN_HEADERS ${PROJECT_SOURCE_DIR}/../FlightForgePlugin/Source/MessageSerialization/Public)
+foreach (HEADER serializable_shared.h serializable_schema.h)
+    if (EXISTS ${PLUGIN_HEADERS}/${HEADER})
+        add_test(NAME header_mirror_${HEADER}
+                 COMMAND ${CMAKE_COMMAND} -E compare_files
+                         ${PLUGIN_HEADERS}/${HEADER}
+                         ${PROJECT_SOURCE_DIR}/include/flight_forge_connector/serialization/${HEADER})
+    endif()
+endforeach()

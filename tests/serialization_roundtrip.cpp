@@ -507,6 +507,41 @@ FF_TEST(TestClockMessages)
 
 //}
 
+/* meta //{ */
+
+FF_TEST(TestMetaMessage)
+{
+  using namespace Serializable::Common;
+
+  {
+    GetMeta::Request In{};
+    const GetMeta::Request Out = RoundTrip(In);
+    Check(Out.type == MessageType::get_meta, "GetMeta::Request");
+  }
+
+  {
+    GetMeta::Response In{};
+    In.api_version_major_ = 0;
+    In.api_version_minor_ = 19;
+    In.catalogue_hash_    = 0x123456789abcdef0ull;
+    In.catalogue_json_    = "{\"ops\":[]}";
+    OpMeta Op;
+    Op.scope_    = 1;
+    Op.id_       = 4;
+    Op.name_     = "get_rgb_camera_data";
+    Op.request_  = "{u16 type,u32 seq,i32 sensor_id_}";
+    Op.response_ = "{u16 type,bool status,u32 seq,vec<u8> image_,f64 stamp_}";
+    Op.hash_     = 42;
+    In.ops_.push_back(Op);
+
+    const GetMeta::Response Out = RoundTrip(In);
+    Check(Out.api_version_minor_ == 19 && Out.catalogue_hash_ == In.catalogue_hash_ && Out.catalogue_json_ == In.catalogue_json_, "GetMeta::Response");
+    Check(Out.ops_.size() == 1 && Out.ops_[0].name_ == Op.name_ && Out.ops_[0].response_ == Op.response_ && Out.ops_[0].hash_ == 42, "GetMeta::Response ops");
+  }
+}
+
+//}
+
 }  // namespace
 
 int main()

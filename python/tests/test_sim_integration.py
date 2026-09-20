@@ -34,6 +34,17 @@ def test_api_version(sim):
     assert sim.api_version >= (0, 14)
 
 
+def test_meta_describes_the_wire(sim):
+    meta = sim.meta()
+    assert tuple(meta["api"]) == sim.api_version
+    ops = {op["name"]: op for op in meta["ops"]}
+    assert "get_rgb_camera_data" in ops and "step" in ops
+    fields = [f["name"] for f in ops["get_rgb_camera_data"]["response"]["fields"]]
+    assert fields == ["type", "status", "seq", "image_", "stamp_"]
+    assert sim.check_compatibility() == []
+    assert sim.check_compatibility(["get_fps", "spawn_drone_at_location"]) == []
+
+
 def test_fps_reports(sim):
     assert sim.fps() > 0.0
 

@@ -183,6 +183,25 @@ std::tuple<uint32_t, socket_status> SocketClient::ReceiveMessage() {
 
 //}
 
+/* discardStaleReplies_() //{ */
+
+void SocketClient::DiscardStaleReplies_() {
+
+  if (!IsSocketValid_()) {
+    return;
+  }
+
+  while (socket_->bytes_available() > 0) {
+    kissnet::buffer<BUFFER_SIZE> buffer;
+    const auto [size, status] = socket_->recv(buffer);
+    if (size == 0 || status != socket_status::valid) {
+      break;
+    }
+  }
+}
+
+//}
+
 /* getMessage() //{ */
 
 bool SocketClient::GetMessage(std::string& message) {
@@ -232,6 +251,34 @@ bool SocketClient::Ping() {
   const auto                           status = Request(request, response);
 
   return status;
+}
+
+//}
+
+/* GetMeta() //{ */
+
+std::pair<bool, Serializable::Common::GetMeta::Response> SocketClient::GetMeta() {
+
+  Serializable::Common::GetMeta::Request request{};
+
+  Serializable::Common::GetMeta::Response response{};
+  const auto                              status = Request(request, response);
+
+  return std::make_pair(status && response.status, response);
+}
+
+//}
+
+/* CheckCompatibility() //{ */
+
+std::pair<bool, std::vector<std::string>> SocketClient::CheckCompatibility(const std::vector<std::string>& op_names) {
+
+  const auto [ok, meta] = GetMeta();
+  if (!ok) {
+    return std::make_pair(false, std::vector<std::string>{"get_meta: the server does not answer it (older than API 0.19)"});
+  }
+
+  return std::make_pair(true, Serializable::Schema::Incompatibilities(meta.ops_, op_names));
 }
 
 //}

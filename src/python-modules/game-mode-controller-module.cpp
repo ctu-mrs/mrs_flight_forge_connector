@@ -32,6 +32,34 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
       .def(py::init<const std::string&, uint16_t>())
       .def("ConnectSimple", &GameModeController::ConnectSimple, py::call_guard<py::gil_scoped_release>())
       .def("Ping", &GameModeController::Ping, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "GetMeta",
+          [](GameModeController& client) {
+            bool                                    ok;
+            Serializable::Common::GetMeta::Response meta;
+            {
+              py::gil_scoped_release release;
+              std::tie(ok, meta) = client.GetMeta();
+            }
+            py::list ops;
+            for (const auto& op : meta.ops_) {
+              py::dict d;
+              d["scope"]    = op.scope_;
+              d["id"]       = op.id_;
+              d["name"]     = op.name_;
+              d["request"]  = op.request_;
+              d["response"] = op.response_;
+              d["hash"]     = op.hash_;
+              ops.append(d);
+            }
+            py::dict out;
+            out["api_version"]    = py::make_tuple(meta.api_version_major_, meta.api_version_minor_);
+            out["catalogue_hash"] = meta.catalogue_hash_;
+            out["ops"]            = ops;
+            out["catalogue_json"] = meta.catalogue_json_;
+            return py::make_tuple(ok, out);
+          })
+      .def("CheckCompatibility", &GameModeController::CheckCompatibility, py::call_guard<py::gil_scoped_release>(), py::arg("op_names") = std::vector<std::string>{})
       .def("Disconnect", &GameModeController::Disconnect, py::call_guard<py::gil_scoped_release>())
       .def("GetDrones", &GameModeController::GetDrones, py::call_guard<py::gil_scoped_release>())
       .def("SpawnDrone", &GameModeController::SpawnDrone, py::call_guard<py::gil_scoped_release>())

@@ -248,6 +248,74 @@ FF_TEST(SensorLifecycle)
   FF_CHECK(Drone->RemoveSensor(SensorId));
 }
 
+FF_TEST(CameraInfoMatchesTheConfigs)
+{
+  // the default RGB camera: K equals what GetRgbCameraConfig reports as effective intrinsics
+  const auto [CfgOk, Cfg] = Drone->GetRgbCameraConfig();
+  FF_REQUIRE(CfgOk);
+
+  const auto [Ok, Cameras] = Drone->GetCameraInfo();
+  FF_REQUIRE(Ok && !Cameras.empty());
+
+  const Serializable::Drone::CameraInfo* Rgb = nullptr;
+  for (const auto& C : Cameras) {
+    if (C.sensor_type_ == static_cast<int>(ueds_connector::SENSOR_RGB_CAMERA) && C.sensor_id_ == 0) {
+      Rgb = &C;
+    }
+  }
+  FF_REQUIRE(Rgb != nullptr);
+  FF_CHECK(Rgb->model_ == "pinhole");
+  FF_CHECK(Rgb->width_ == Cfg.width_ && Rgb->height_ == Cfg.height_);
+  FF_CHECK_NEAR(Rgb->fx_, Cfg.intrinsics_.fx_, 1.0e-6);
+  FF_CHECK_NEAR(Rgb->cx_, Cfg.intrinsics_.cx_, 1.0e-6);
+  if (!Cfg.intrinsics_.use_custom_) {
+    FF_CHECK_NEAR(Rgb->fov_deg_, Cfg.fov_, 1.0e-6);
+  }
+  FF_CHECK_NEAR(Rgb->offset_x_, Cfg.offset_.x, 1.0e-9);
+  FF_CHECK_NEAR(Rgb->rotation_pitch_, Cfg.orientation_.pitch, 1.0e-9);
+  FF_CHECK(Rgb->d_.empty() == !Cfg.distortion_.enable_);
+
+  // a single id returns just that camera, an unknown id fails
+  const auto [OneOk, One] = Drone->GetCameraInfo(0);
+  FF_CHECK(OneOk && One.size() == 1 && One[0].sensor_id_ == 0);
+  FF_CHECK(!Drone->GetCameraInfo(9999).first);
+
+  // a stereo pair comes back as two eyes sharing K, with the baseline between the mounts
+  // (a fresh stereo sensor has both eyes on the same mount until configured)
+  const auto [StereoOk, StereoId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_STEREO_CAMERA));
+  FF_REQUIRE(StereoOk && StereoId >= 0);
+  auto [StereoCfgOk, StereoCfg] = Drone->GetStereoCameraConfig(StereoId);
+  FF_REQUIRE(StereoCfgOk);
+  StereoCfg.offset_y_right_ = StereoCfg.offset_y_left_ + 12.0;
+  FF_REQUIRE(Drone->SetStereoCameraConfig(StereoCfg, StereoId));
+  const auto [PairOk, Pair] = Drone->GetCameraInfo(StereoId);
+  FF_CHECK(PairOk && Pair.size() == 2);
+  if (Pair.size() == 2) {
+    FF_CHECK(Pair[0].eye_ == 0 && Pair[1].eye_ == 1);
+    FF_CHECK(Pair[0].fx_ == Pair[1].fx_ && Pair[0].baseline_ == Pair[1].baseline_);
+    const double dx = Pair[0].offset_x_ - Pair[1].offset_x_, dy = Pair[0].offset_y_ - Pair[1].offset_y_, dz = Pair[0].offset_z_ - Pair[1].offset_z_;
+    FF_CHECK_NEAR(Pair[0].baseline_, std::sqrt(dx * dx + dy * dy + dz * dz), 1.0e-6);
+    FF_CHECK_NEAR(Pair[0].baseline_, 12.0, 1.0e-6);
+  }
+  FF_CHECK(Drone->RemoveSensor(StereoId));
+
+  // a fisheye reports its lens model and a focal that puts theta = fov/2 on the image circle
+  const auto [FishOk, FishId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_FISHEYE_CAMERA));
+  FF_REQUIRE(FishOk && FishId >= 0);
+  const auto [FishCfgOk, FishCfg] = Drone->GetFisheyeCameraConfig(FishId);
+  const auto [FishInfoOk, Fish]   = Drone->GetCameraInfo(FishId);
+  FF_REQUIRE(FishCfgOk && FishInfoOk && Fish.size() == 1);
+  FF_CHECK(Fish[0].model_ == "equidistant" || Fish[0].model_ == "equisolid" || Fish[0].model_ == "stereographic");
+  if (Fish[0].model_ == "equidistant") {
+    const double HalfFov = FishCfg.fov_ * M_PI / 360.0;
+    const double Radius  = FishCfg.full_frame_ ? 0.5 * std::sqrt(double(FishCfg.width_ * FishCfg.width_ + FishCfg.height_ * FishCfg.height_))
+                                               : 0.5 * std::min(FishCfg.width_, FishCfg.height_);
+    FF_CHECK_NEAR(Fish[0].fx_ * HalfFov, Radius, 1.0e-3);
+  }
+  FF_CHECK(Fish[0].d_.empty());
+  FF_CHECK(Drone->RemoveSensor(FishId));
+}
+
 FF_TEST(DevicesListed)
 {
   const auto [Ok, Devices] = Drone->ListDevices();

@@ -147,6 +147,15 @@ public:
   std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> GetInstanceSegMap(int sensorId = -1);
 
   /**
+   * The effective calibration of every camera on the drone (or of one sensor id): model,
+   * K, D, resolution, mount offset/rotation, a stereo pair's baseline, rolling-shutter
+   * readout. One entry per eye. Everything a ROS CameraInfo + TF needs, in one call.
+   * Only cameras that exist are listed: a fresh drone creates each default sensor on
+   * first use, so configure or read a camera before asking for its calibration.
+   */
+  std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> GetCameraInfo(int sensorId = -1);
+
+  /**
    * Depth image in uint16 millimetres (0 invalid, 65535 clamp - the
    * Kinect/RealSense convention), row-major width x height, uncompressed.
    */

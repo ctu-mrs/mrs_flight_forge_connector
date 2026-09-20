@@ -1110,6 +1110,22 @@ std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConne
 
 //}
 
+/* getCameraInfo() //{ */
+
+std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> UedsConnector::GetCameraInfo(int sensorId) {
+
+  Serializable::Drone::GetCameraInfo::Request request{};
+  request.sensor_id_ = sensorId;
+
+  Serializable::Drone::GetCameraInfo::Response response{};
+  const auto                                   status  = Request(request, response);
+  const auto                                   success = status && response.status;
+
+  return std::make_pair(success, success ? response.cameras_ : std::vector<Serializable::Drone::CameraInfo>());
+}
+
+//}
+
 /* getDepthCameraData() //{ */
 
 bool UedsConnector::GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId) {

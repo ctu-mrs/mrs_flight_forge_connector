@@ -315,6 +315,35 @@ class Drone:
         _check(ok, "GetInstanceSegMap")
         return {e.id: e.actor for e in entries}
 
+    def camera_info(self, sensor_id=-1):
+        """Effective calibration of every camera on the drone (or of one sensor
+        id), one dict per eye: ``model`` (pinhole | equidistant | equisolid |
+        stereographic), ``K`` (3x3), ``D`` (plumb_bob k1 k2 p1 p2 k3, or empty),
+        ``size`` (w, h), ``fov_deg``, ``offset``, ``rotation`` (pitch, yaw, roll)
+        in the config convention, ``baseline`` for a stereo pair and
+        ``readout_time`` (0 = global shutter). Only cameras that exist are
+        listed: a fresh drone creates each default sensor on its first use, so
+        configure or read a camera before asking for its calibration."""
+        ok, infos = self._raw.GetCameraInfo(sensor_id)
+        _check(ok, "GetCameraInfo")
+        return [
+            {
+                "sensor_id": c.sensor_id,
+                "sensor_type": c.sensor_type,
+                "eye": c.eye,
+                "model": c.model,
+                "K": np.array([[c.fx, 0.0, c.cx], [0.0, c.fy, c.cy], [0.0, 0.0, 1.0]]),
+                "D": np.array(c.d),
+                "size": (c.width, c.height),
+                "fov_deg": c.fov_deg,
+                "offset": (c.offset_x, c.offset_y, c.offset_z),
+                "rotation": (c.rotation_pitch, c.rotation_yaw, c.rotation_roll),
+                "baseline": c.baseline,
+                "readout_time": c.readout_time,
+            }
+            for c in infos
+        ]
+
     def depth(self, sensor_id=-1):
         """Depth as an (H, W) uint16 array in millimetres (0 = invalid,
         65535 = clamp - the Kinect/RealSense convention) plus the stamp."""

@@ -32,6 +32,7 @@ using ueds_connector::UedsConnector;
 
 using StereoCameraConfig  = Serializable::Drone::StereoCameraConfig;
 using InstanceSegMapEntry = Serializable::Drone::InstanceSegMapEntry;
+using CameraInfo          = Serializable::Drone::CameraInfo;
 
 PYBIND11_MODULE(flight_forge_drone, m) {
   m.doc() = "FlightForge drone-side client (API 0.14). Sensor calls take sensor_id; -1 addresses the default sensor of that type.";
@@ -58,6 +59,29 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def(py::init<>())
       .def_readonly("id", &InstanceSegMapEntry::id)
       .def_readonly("actor", &InstanceSegMapEntry::actor);
+
+  py::class_<CameraInfo>(m, "CameraInfo")
+      .def(py::init<>())
+      .def_readonly("sensor_id", &CameraInfo::sensor_id_)
+      .def_readonly("sensor_type", &CameraInfo::sensor_type_)
+      .def_readonly("eye", &CameraInfo::eye_)
+      .def_readonly("width", &CameraInfo::width_)
+      .def_readonly("height", &CameraInfo::height_)
+      .def_readonly("model", &CameraInfo::model_)
+      .def_readonly("fx", &CameraInfo::fx_)
+      .def_readonly("fy", &CameraInfo::fy_)
+      .def_readonly("cx", &CameraInfo::cx_)
+      .def_readonly("cy", &CameraInfo::cy_)
+      .def_readonly("d", &CameraInfo::d_)
+      .def_readonly("fov_deg", &CameraInfo::fov_deg_)
+      .def_readonly("offset_x", &CameraInfo::offset_x_)
+      .def_readonly("offset_y", &CameraInfo::offset_y_)
+      .def_readonly("offset_z", &CameraInfo::offset_z_)
+      .def_readonly("rotation_pitch", &CameraInfo::rotation_pitch_)
+      .def_readonly("rotation_yaw", &CameraInfo::rotation_yaw_)
+      .def_readonly("rotation_roll", &CameraInfo::rotation_roll_)
+      .def_readonly("baseline", &CameraInfo::baseline_)
+      .def_readonly("readout_time", &CameraInfo::readout_time_);
 
   py::class_<SensorInfo>(m, "SensorInfo")
       .def(py::init<>())
@@ -419,6 +443,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def("AddSensor", &UedsConnector::AddSensor, py::call_guard<py::gil_scoped_release>())
       .def("RemoveSensor", &UedsConnector::RemoveSensor, py::call_guard<py::gil_scoped_release>())
       .def("ListSensors", &UedsConnector::ListSensors, py::call_guard<py::gil_scoped_release>())
+      .def("GetCameraInfo", &UedsConnector::GetCameraInfo, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("AddDevice", &UedsConnector::AddDevice, py::call_guard<py::gil_scoped_release>(), py::arg("device_name"), py::arg("offset"), py::arg("rotation"), py::arg("show_mesh") = true)
       .def("ListDevices", &UedsConnector::ListDevices, py::call_guard<py::gil_scoped_release>())
       .def(

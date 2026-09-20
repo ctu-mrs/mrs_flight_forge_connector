@@ -507,6 +507,34 @@ FF_TEST(TestClockMessages)
 
 //}
 
+/* camera info //{ */
+
+FF_TEST(TestCameraInfoMessage)
+{
+  using namespace Serializable::Drone;
+
+  GetCameraInfo::Response In{};
+  CameraInfo C;
+  C.sensor_id_ = 4;
+  C.eye_       = 1;
+  C.model_     = "pinhole";
+  C.fx_        = 320.5;
+  C.d_         = {0.1, 0.01, 0.001, 0.0001, 0.00001};
+  C.baseline_  = 12.0;
+  In.cameras_.push_back(C);
+
+  const GetCameraInfo::Response Out = RoundTrip(In);
+  Check(Out.cameras_.size() == 1 && Out.cameras_[0].sensor_id_ == 4 && Out.cameras_[0].eye_ == 1 && Out.cameras_[0].model_ == "pinhole" &&
+            Out.cameras_[0].fx_ == 320.5 && Out.cameras_[0].d_.size() == 5 && Out.cameras_[0].d_[4] == 0.00001 && Out.cameras_[0].baseline_ == 12.0,
+        "GetCameraInfo::Response");
+
+  GetCameraInfo::Request Req{};
+  Req.sensor_id_ = 7;
+  Check(RoundTrip(Req).sensor_id_ == 7, "GetCameraInfo::Request");
+}
+
+//}
+
 /* meta //{ */
 
 FF_TEST(TestMetaMessage)

@@ -39,12 +39,25 @@ def test_camera_info(drone):
     K, size = drone.camera_intrinsics()
     infos = drone.camera_info()
     rgb = [c for c in infos if c["sensor_id"] == 0][0]
-    assert rgb["model"] == "pinhole"
+    assert rgb["projection"] == "pinhole" and rgb["distortion_model"] == "plumb_bob"
     assert rgb["size"] == size
     assert np.allclose(rgb["K"], K)
-    assert rgb["D"].size == 0
+    assert rgb["K"][0, 2] == pytest.approx(size[0] / 2.0 - 0.5)  # OpenCV pixel convention
+    assert rgb["D"].shape == (5,) and not rgb["D"].any()
     assert rgb["readout_time"] == 0.0
     assert drone.camera_info(0)[0]["sensor_id"] == 0
+
+
+def test_fisheye_calibration_round_trip(drone):
+    sensor_id = drone.add_sensor(7)  # fisheye
+    k = (-0.012, 0.021, -0.017, 0.004)
+    drone.set_fisheye_calibration(254.3, 252.9, 405.7, 291.2, k=k, fov_deg=190.0, sensor_id=sensor_id)
+    (info,) = drone.camera_info(sensor_id)
+    assert info["projection"] == "fisheye_kannala_brandt" and info["distortion_model"] == "equidistant"
+    assert np.allclose(info["K"], [[254.3, 0.0, 405.7], [0.0, 252.9, 291.2], [0.0, 0.0, 1.0]])
+    assert np.allclose(info["D"], k)
+    assert info["fov_deg"] == 190.0
+    drone.remove_sensor(sensor_id)
 
 
 def test_meta_describes_the_wire(sim):

@@ -43,12 +43,12 @@ def spawn_grid_yaml():
     return "\n".join(lines)
 
 
-def expected_pixel(K, point_scene, dist=None):
-    """Scene point (m) -> pixel for a camera at CAMERA_SCENE looking along +x with
+def expected_pixel(K, point_scene, camera_scene, dist=None):
+    """Scene point (m) -> pixel for a camera at camera_scene looking along +x with
     zero rotation. Camera frame: z forward = scene x, x right = scene -y,
     y down = scene -z. With dist = [k1 k2 k3 p1 p2] the forward Brown-Conrady
     model is applied before K."""
-    px, py, pz = np.asarray(point_scene) - CAMERA_SCENE
+    px, py, pz = np.asarray(point_scene) - camera_scene
     x, y, z = -py, -pz, px
     xn, yn = x / z, y / z
 
@@ -66,8 +66,8 @@ def expected_pixel(K, point_scene, dist=None):
 def settle(drone, sensor_id):
     """A projection change reaches the served image a few frames late: the target is
     resized and the warp LUT rebuilt on the game thread while frames already in
-    flight carry the old calibration."""
-    time.sleep(0.3)
+    flight carry the old calibration; spawned meshes load asynchronously."""
+    time.sleep(1.5)
     for _ in range(3):
         drone.instance_segmentation(sensor_id)
 
@@ -86,9 +86,13 @@ def run_check(drone, sensor_id, cube_ids, label, dist=None):
     K, (width, height) = drone.camera_intrinsics(sensor_id)
     print(f"\n[{label}] K =\n{K.round(2)}  ({width}x{height})")
 
+    # the camera sits at its mount offset from the drone (scene axes are world axes in metres)
+    (info,) = drone.camera_info(sensor_id)
+    camera_scene = CAMERA_SCENE + np.asarray(info["offset"]) / 100.0
+
     settle(drone, sensor_id)
     observed = cube_centroids(drone, sensor_id, cube_ids)
-    predictions = [expected_pixel(K, point, dist) for point in GRID]
+    predictions = [expected_pixel(K, point, camera_scene, dist) for point in GRID]
 
     # every cube is a distinct instance, so each blob claims its nearest prediction unambiguously
     errors = []

@@ -929,6 +929,16 @@ std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int s
     config.height_            = response.config.height_;
     config.lens_model_        = response.config.lens_model_;
     config.full_frame_        = response.config.full_frame_;
+
+    config.intrinsics_.use_custom_ = response.config.intrinsics_.use_custom_;
+    config.intrinsics_.fx_         = response.config.intrinsics_.fx_;
+    config.intrinsics_.fy_         = response.config.intrinsics_.fy_;
+    config.intrinsics_.cx_         = response.config.intrinsics_.cx_;
+    config.intrinsics_.cy_         = response.config.intrinsics_.cy_;
+    config.kb_k1_                  = response.config.kb_k1_;
+    config.kb_k2_                  = response.config.kb_k2_;
+    config.kb_k3_                  = response.config.kb_k3_;
+    config.kb_k4_                  = response.config.kb_k4_;
   }
 
   return std::make_pair(success, config);
@@ -953,6 +963,16 @@ bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, in
   request.config.height_            = config.height_;
   request.config.lens_model_        = config.lens_model_;
   request.config.full_frame_        = config.full_frame_;
+
+  request.config.intrinsics_.use_custom_ = config.intrinsics_.use_custom_;
+  request.config.intrinsics_.fx_         = config.intrinsics_.fx_;
+  request.config.intrinsics_.fy_         = config.intrinsics_.fy_;
+  request.config.intrinsics_.cx_         = config.intrinsics_.cx_;
+  request.config.intrinsics_.cy_         = config.intrinsics_.cy_;
+  request.config.kb_k1_                  = config.kb_k1_;
+  request.config.kb_k2_                  = config.kb_k2_;
+  request.config.kb_k3_                  = config.kb_k3_;
+  request.config.kb_k4_                  = config.kb_k4_;
 
   Serializable::Drone::SetFisheyeCameraConfig::Response response{};
   const auto                                            status = Request(request, response);

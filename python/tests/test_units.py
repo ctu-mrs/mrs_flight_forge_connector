@@ -88,3 +88,31 @@ def test_stereo_config_property_roundtrip():
     distortion.p2 = 0.001
     config.distortion = distortion
     assert config.distortion.enable and config.distortion.p2 == pytest.approx(0.001)
+
+
+def test_event_batch_decode():
+    # the wire packs x | y << 16 | polarity << 31 and microseconds after the base stamp
+    from flightforge.client import EventBatch
+
+    xyp = np.array([5 | (7 << 16) | (1 << 31), 1279 | (719 << 16)], dtype=np.uint32)
+    t_us = np.array([0, 1500], dtype=np.uint32)
+    base = 12.25
+
+    batch = EventBatch(
+        x=(xyp & 0xFFFF).astype(np.uint16),
+        y=((xyp >> 16) & 0x7FFF).astype(np.uint16),
+        polarity=np.where(xyp >> 31, 1, -1).astype(np.int8),
+        t=base + t_us.astype(np.float64) * 1e-6,
+        stamp=12.3,
+        dropped=0,
+        width=1280,
+        height=720,
+    )
+
+    assert list(batch.x) == [5, 1279] and list(batch.y) == [7, 719]
+    assert list(batch.polarity) == [1, -1]
+    assert np.allclose(batch.t, [12.25, 12.2515])
+    assert len(batch) == 2
+
+    image = batch.accumulate()
+    assert image.shape == (720, 1280) and image[7, 5] == 1 and image[719, 1279] == -1

@@ -40,6 +40,18 @@ public:
 
   std::tuple<bool> SetLocationAndRotationAsync(const Coordinates& coordinate, const Rotation& rotation, const bool should_collide);
 
+  // a pose timeline the pawn interpolates along per tick; replaces the previous one, empty detaches
+  bool SetPoseTrajectory(const std::vector<PoseSample>& samples);
+
+  /**
+   * Angular rate per propeller [rad/s], in the frame's propeller order: rear-left,
+   * rear-right, front-left, front-right, then any an external model added. Sign gives
+   * the direction of turn. Fewer values than the frame has leaves the rest untouched;
+   * an empty list hands them back to their default spin. out_count reports how many
+   * propellers the frame actually has.
+   */
+  bool SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count);
+
   std::pair<bool, bool> GetMoveLineVisible();
 
   bool SetMoveLineVisible(bool visible);
@@ -68,9 +80,8 @@ public:
 
   /* event camera //{ */
 
-  // Drains the event buffer accumulated since the previous call. Events are
-  // time-sorted; batch stamp is the last processed frame's stamp.
-  std::tuple<bool, std::vector<CameraEvent>, double> GetEventCameraData(int sensorId = -1);
+  // drains the events since the previous call, time-sorted; stamp is the sim time the batch is complete up to
+  std::pair<bool, CameraEvents> GetEventCameraData(int sensorId = -1);
 
   std::pair<bool, EventCameraConfig> GetEventCameraConfig(int sensorId = -1);
 

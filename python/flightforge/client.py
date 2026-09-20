@@ -4,6 +4,8 @@ Raises on failure instead of returning success flags, decodes images to numpy
 arrays, and converts point clouds to (N, k) float arrays.
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from ._native import drone as _d
@@ -36,6 +38,29 @@ def _decode_image(buffer):
         from PIL import Image
 
         return np.asarray(Image.open(io.BytesIO(bytes(buffer))).convert("RGB"))
+
+
+@dataclass
+class EventBatch:
+    """Events drained from an event camera, as parallel arrays."""
+
+    x: np.ndarray
+    y: np.ndarray
+    polarity: np.ndarray
+    t: np.ndarray
+    stamp: float
+    dropped: int
+    width: int
+    height: int
+
+    def __len__(self):
+        return int(self.x.size)
+
+    def accumulate(self):
+        """(H, W) int32 image: +1 per brighter event, -1 per darker."""
+        image = np.zeros((self.height, self.width), dtype=np.int32)
+        np.add.at(image, (self.y, self.x), self.polarity.astype(np.int32))
+        return image
 
 
 class Drone:
@@ -84,6 +109,27 @@ class Drone:
             _d.Rotation(*[float(v) for v in orientation]),
             check_collisions,
         )
+
+    def set_propeller_speeds(self, speeds):
+        """Angular rate per propeller [rad/s]; returns how many the frame has.
+
+        Order is the frame's own: rear-left, rear-right, front-left, front-right, then
+        any propeller an external model added. Sign is the direction of turn, so a
+        quad's counter-rotating pairs differ in sign. Passing fewer values than the
+        frame has leaves the rest untouched, and an empty list hands them back to the
+        uniform default spin."""
+        ok, count = self._raw.SetPropellerSpeeds([float(v) for v in speeds])
+        _check(ok, "SetPropellerSpeeds")
+        return count
+
+    def set_pose_trajectory(self, samples):
+        """Hands the pawn a pose timeline to follow: an (N, 7) array of rows
+        [t, x, y, z, pitch, yaw, roll], t in sim seconds ascending, position in world
+        centimetres, angles in degrees. The pawn interpolates along it at every tick, so
+        sensors see the motion between your dynamics samples instead of teleport steps.
+        Replaces the previous timeline; an empty array detaches the pawn."""
+        arr = np.asarray(samples, dtype=np.float64).reshape(-1, 7)
+        _check(self._raw.SetPoseTrajectory(arr), "SetPoseTrajectory")
 
     def crashed(self):
         ok, crashed = self._raw.GetCrashState()
@@ -202,11 +248,55 @@ class Drone:
         _check(ok, "SetRgbCameraConfig")
 
     def events(self, sensor_id=-1):
-        """((N,4) float array of x, y, polarity, stamp — time-sorted; batch stamp)."""
-        ok, events, stamp = self._raw.GetEventCameraData(sensor_id)
+        """((N,4) float array of x, y, polarity (+1/-1), stamp — time-sorted; batch stamp).
+
+        Drains everything since the previous call. See :meth:`event_batch` for the
+        compact form and the drop count."""
+        batch = self.event_batch(sensor_id)
+        arr = np.empty((batch.x.size, 4), dtype=np.float64)
+        arr[:, 0] = batch.x
+        arr[:, 1] = batch.y
+        arr[:, 2] = batch.polarity
+        arr[:, 3] = batch.t
+        return arr, batch.stamp
+
+    def event_batch(self, sensor_id=-1):
+        """One drained :class:`EventBatch`: x, y as uint16, polarity as int8 (+1/-1),
+        t as float64 sim seconds, plus the batch stamp, the sensor size and how many
+        events the readout cap or a full buffer dropped since the previous drain."""
+        ok, xyp, t_us, base, stamp, dropped, width, height = self._raw.GetEventCameraData(sensor_id)
         _check(ok, "GetEventCameraData")
-        arr = np.array([[e.x, e.y, e.polarity, e.stamp] for e in events], dtype=np.float64)
-        return arr.reshape(-1, 4), stamp
+        return EventBatch(
+            x=(xyp & 0xFFFF).astype(np.uint16),
+            y=((xyp >> 16) & 0x7FFF).astype(np.uint16),
+            polarity=np.where(xyp >> 31, 1, -1).astype(np.int8),
+            t=base + t_us.astype(np.float64) * 1e-6,
+            stamp=stamp,
+            dropped=dropped,
+            width=width,
+            height=height,
+        )
+
+    def event_camera_config(self, sensor_id=-1):
+        ok, config = self._raw.GetEventCameraConfig(sensor_id)
+        _check(ok, "GetEventCameraConfig")
+        return config
+
+    def set_event_camera_config(self, sensor_id=-1, **fields):
+        """Updates the named fields of the event camera's config and applies it.
+
+        Optics: width, height, fov, offset, orientation. Pixel model: contrast_threshold_pos
+        / _neg (log units), threshold_sigma (per-pixel mismatch), refractory_period (s),
+        cutoff_hz (photoreceptor bandwidth at full scale), leak_rate_hz, shot_noise_rate_hz,
+        hot_pixel_fraction, max_event_rate_hz (readout ceiling, 0 = unlimited),
+        max_events_per_frame, use_gpu, seed, use_sim_time."""
+        config = self.event_camera_config(sensor_id)
+        for name, value in fields.items():
+            if not hasattr(config, name):
+                raise AttributeError(f"EventCameraConfig has no field {name!r}")
+            setattr(config, name, value)
+        ok = self._raw.SetEventCameraConfig(config, sensor_id)
+        _check(ok, "SetEventCameraConfig")
 
     def instance_segmentation(self, sensor_id=-1):
         """Per-actor instance ids as an (H, W) uint32 array (0 = background) plus
@@ -369,6 +459,30 @@ class Simulator:
         _check(ok, "SetTimeDilation")
         return applied
 
+    def set_fixed_timestep(self, dt, adaptive_min_dt=0.0):
+        """Makes every engine tick advance sim time by exactly ``dt`` seconds, however
+        long the frame takes to render; 0 restores the wall-clock timestep. Returns
+        what is in effect.
+
+        With ``adaptive_min_dt`` > 0 the step shrinks towards that floor whenever an
+        event camera saw more than one contrast threshold of change in a pixel, which
+        keeps fast motion from aliasing (the ESIM rule)."""
+        ok, applied = self._raw.SetFixedTimestep(float(dt), float(adaptive_min_dt))
+        _check(ok, "SetFixedTimestep")
+        return applied
+
+    def set_lockstep(self, enabled=True):
+        """Pauses the world; from then on it advances only through :meth:`step`."""
+        _check(self._raw.SetLockstep(bool(enabled)), "SetLockstep")
+
+    def step(self, ticks=1):
+        """Runs ``ticks`` engine ticks and returns (sim_time, ticks_so_far) once their
+        frames are rendered and every camera has its data: a pose or trajectory set
+        before the call is what the sensors saw, and the events are ready after it."""
+        ok, sim_time, tick_count = self._raw.Step(int(ticks))
+        _check(ok, "Step")
+        return sim_time, tick_count
+
     def fps(self):
         ok, fps = self._raw.GetFps()
         _check(ok, "GetFps")
@@ -426,7 +540,7 @@ class Simulator:
         Returns (vertices (N,3) float32, faces (M,3) uint32, truncated, sources), in
         the scene frame: right-handed metres relative to the world origin. `extent`
         half-sizes an axis-aligned box filter around `center`; any zero disables it.
-        Drones are excluded; landscape/BSP geometry is not exported."""
+        Drones are excluded; static meshes and landscape are exported, BSP is not."""
         ok, vertices, faces, truncated, sources = self._raw.GetWorldMesh(
             [float(v) for v in center], [float(v) for v in extent], int(max_triangles)
         )

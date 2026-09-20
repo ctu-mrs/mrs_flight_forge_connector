@@ -1,11 +1,16 @@
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#include <cstring>
 
 #include <flight_forge_connector/flight_forge_connector.h>
 
 namespace py = pybind11;
 
 using ueds_connector::CameraEvent;
+using ueds_connector::CameraEvents;
+using ueds_connector::PoseSample;
 using ueds_connector::CameraDistortion;
 using ueds_connector::CameraNoise;
 using ueds_connector::CameraRollingShutter;
@@ -271,7 +276,17 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("height", &EventCameraConfig::height_)
       .def_readwrite("contrast_threshold_pos", &EventCameraConfig::contrast_threshold_pos_)
       .def_readwrite("contrast_threshold_neg", &EventCameraConfig::contrast_threshold_neg_)
-      .def_readwrite("use_sim_time", &EventCameraConfig::use_sim_time_);
+      .def_readwrite("use_sim_time", &EventCameraConfig::use_sim_time_)
+      .def_readwrite("threshold_sigma", &EventCameraConfig::threshold_sigma_)
+      .def_readwrite("refractory_period", &EventCameraConfig::refractory_period_)
+      .def_readwrite("cutoff_hz", &EventCameraConfig::cutoff_hz_)
+      .def_readwrite("leak_rate_hz", &EventCameraConfig::leak_rate_hz_)
+      .def_readwrite("shot_noise_rate_hz", &EventCameraConfig::shot_noise_rate_hz_)
+      .def_readwrite("hot_pixel_fraction", &EventCameraConfig::hot_pixel_fraction_)
+      .def_readwrite("max_event_rate_hz", &EventCameraConfig::max_event_rate_hz_)
+      .def_readwrite("max_events_per_frame", &EventCameraConfig::max_events_per_frame_)
+      .def_readwrite("use_gpu", &EventCameraConfig::use_gpu_)
+      .def_readwrite("seed", &EventCameraConfig::seed_);
 
   py::class_<CameraEvent>(m, "CameraEvent")
       .def(py::init<>())
@@ -288,7 +303,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("fov", &FisheyeCameraConfig::fov_)
       .def_readwrite("width", &FisheyeCameraConfig::width_)
       .def_readwrite("height", &FisheyeCameraConfig::height_)
-      .def_readwrite("lens_model", &FisheyeCameraConfig::lens_model_);
+      .def_readwrite("lens_model", &FisheyeCameraConfig::lens_model_)
+      .def_readwrite("full_frame", &FisheyeCameraConfig::full_frame_);
 
   //}
 
@@ -315,7 +331,52 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def("SetRgbCameraConfig", &UedsConnector::SetRgbCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
       .def("GetStereoCameraConfig", &UedsConnector::GetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("SetStereoCameraConfig", &UedsConnector::SetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
-      .def("GetEventCameraData", &UedsConnector::GetEventCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def(
+          "GetEventCameraData",
+          [](UedsConnector& drone, int sensor_id) {
+            bool         ok;
+            CameraEvents events;
+            {
+              py::gil_scoped_release release;
+              std::tie(ok, events) = drone.GetEventCameraData(sensor_id);
+            }
+            py::array_t<uint32_t> xyp(static_cast<py::ssize_t>(events.xyp.size()));
+            py::array_t<uint32_t> t_us(static_cast<py::ssize_t>(events.t_us.size()));
+            std::memcpy(xyp.mutable_data(), events.xyp.data(), events.xyp.size() * sizeof(uint32_t));
+            std::memcpy(t_us.mutable_data(), events.t_us.data(), events.t_us.size() * sizeof(uint32_t));
+            return py::make_tuple(ok, xyp, t_us, events.base_stamp, events.stamp, events.dropped, events.width, events.height);
+          },
+          py::arg("sensor_id") = -1)
+      .def(
+          "SetPropellerSpeeds",
+          [](UedsConnector& drone, const std::vector<double>& speeds) {
+            int32_t count = 0;
+            bool    ok;
+            {
+              py::gil_scoped_release release;
+              ok = drone.SetPropellerSpeeds(speeds, count);
+            }
+            return py::make_tuple(ok, count);
+          },
+          py::arg("speeds"))
+      .def(
+          "SetPoseTrajectory",
+          [](UedsConnector& drone, py::array_t<double, py::array::c_style | py::array::forcecast> samples) {
+            if (samples.ndim() != 2 || samples.shape(1) != 7) {
+              throw std::invalid_argument("SetPoseTrajectory expects an (N, 7) array of t, x, y, z, pitch, yaw, roll");
+            }
+            std::vector<PoseSample> out(static_cast<size_t>(samples.shape(0)));
+            const double*           row = samples.data();
+            for (auto& s : out) {
+              s.t           = row[0];
+              s.position    = Coordinates{row[1], row[2], row[3]};
+              s.orientation = Rotation{row[4], row[5], row[6]};
+              row += 7;
+            }
+            py::gil_scoped_release release;
+            return drone.SetPoseTrajectory(out);
+          },
+          py::arg("samples"))
       .def("GetEventCameraConfig", &UedsConnector::GetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def("SetEventCameraConfig", &UedsConnector::SetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
       .def("GetFisheyeCameraData", &UedsConnector::GetFisheyeCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)

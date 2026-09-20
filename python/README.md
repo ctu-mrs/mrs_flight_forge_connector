@@ -35,6 +35,10 @@ drone = sim.spawn_drone((0, 0, 200), "x500")
 image, stamp = drone.rgb()                     # HxWx3 uint8
 points, origin, stamp = drone.lidar()          # (N,4) distances + directions
 events, stamp = drone.events()                 # (N,4) event camera batch
+batch = drone.event_batch()                    # the same as packed x/y/polarity/t arrays
+sim.set_fixed_timestep(1e-3)                   # every tick advances sim time by exactly 1 ms
+sim.set_lockstep(True); sim.step(200)          # client-clocked: 200 ticks, sensors complete on return
+drone.set_pose_trajectory(rows)                # (N,7) [t, x, y, z, pitch, yaw, roll] the pawn follows
 drone.add_device("realsense_d435i", offset=(12, 0, -2))
 ids = sim.spawn_objects(open("scene.yaml").read())
 ```

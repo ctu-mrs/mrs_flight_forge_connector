@@ -159,7 +159,7 @@ std::tuple<uint32_t, socket_status> SocketClient::ReceiveMessage() {
 
   if (IsSocketValid_()) {
 
-    auto select_status = socket_->select(kissnet::fds_read, 1000);
+    auto select_status = socket_->select(kissnet::fds_read, receive_timeout_ms_);
 
     if (select_status.get_value() == socket_status::timed_out) {
       return std::make_tuple(0, select_status);

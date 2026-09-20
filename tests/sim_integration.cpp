@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
 #include <memory>
@@ -530,6 +531,88 @@ FF_TEST(LivoxPatternSetsTheBeamLength)
   Drone->RemoveSensor(SensorId);
 }
 
+/* event camera in lockstep //{ */
+
+// A 100 deg/s yaw over 200 stepped milliseconds must yield a sorted event stream
+// that lies inside the stepped interval, on either pixel-model path.
+void CheckEventStream(const bool bUseGpu)
+{
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_EVENT_CAMERA));
+  FF_REQUIRE(AddOk && SensorId >= 0);
+
+  auto [CfgOk, Config] = Drone->GetEventCameraConfig(SensorId);
+  FF_REQUIRE(CfgOk);
+  Config.width_   = 320;
+  Config.height_  = 240;
+  Config.use_gpu_ = bUseGpu;
+  FF_REQUIRE(Drone->SetEventCameraConfig(Config, SensorId));
+
+  double Applied = 0.0;
+  FF_REQUIRE(GameMode->SetFixedTimestep(0.001, 0.0, Applied));
+  FF_CHECK(std::fabs(Applied - 0.001) < 1e-9);
+  FF_REQUIRE(GameMode->SetLockstep(true));
+
+  double   SimTime = 0.0;
+  uint64_t Ticks   = 0;
+  FF_REQUIRE(GameMode->Step(20, SimTime, Ticks));
+  Drone->GetEventCameraData(SensorId);
+
+  const auto [LocOk, Location] = Drone->GetLocation();
+  const auto [RotOk, Rotation] = Drone->GetRotation();
+  FF_REQUIRE(LocOk && RotOk);
+
+  std::vector<ueds_connector::PoseSample> Samples;
+  for (int i = 0; i <= 20; ++i) {
+    ueds_connector::PoseSample Sample;
+    Sample.t                = SimTime + 0.01 * i;
+    Sample.position         = Location;
+    Sample.orientation      = Rotation;
+    Sample.orientation.yaw += 100.0 * 0.01 * i;
+    Samples.push_back(Sample);
+  }
+  FF_REQUIRE(Drone->SetPoseTrajectory(Samples));
+
+  const double Start = SimTime;
+  FF_REQUIRE(GameMode->Step(200, SimTime, Ticks));
+  FF_CHECK(std::fabs((SimTime - Start) - 0.2) < 2e-3);
+
+  const auto [EvOk, Events] = Drone->GetEventCameraData(SensorId);
+  FF_REQUIRE(EvOk);
+  FF_CHECK(Events.width == 320 && Events.height == 240);
+  FF_CHECK(Events.size() > 1000);
+  FF_CHECK(Events.dropped == 0);
+  FF_CHECK(Events.base_stamp >= Start - 1e-9);
+  FF_CHECK(Events.stamp <= SimTime + 1e-9);
+
+  bool Sorted = true, InBounds = true;
+  for (size_t i = 0; i < Events.size(); ++i) {
+    const auto Event = Events.at(i);
+    InBounds         = InBounds && Event.x < 320 && Event.y < 240;
+    Sorted           = Sorted && (i == 0 || Events.t_us[i] >= Events.t_us[i - 1]);
+  }
+  FF_CHECK(Sorted);
+  FF_CHECK(InBounds);
+  FF_CHECK(Events.size() == 0 || Events.at(Events.size() - 1).stamp <= Events.stamp + 1e-6);
+
+  std::cout << "    " << (bUseGpu ? "gpu" : "cpu") << " events " << Events.size() << " over " << (SimTime - Start) << " s" << std::endl;
+
+  FF_CHECK(GameMode->SetLockstep(false));
+  FF_CHECK(GameMode->SetFixedTimestep(0.0, 0.0, Applied));
+  FF_CHECK(Drone->RemoveSensor(SensorId));
+}
+
+FF_TEST(EventCameraLockstepGpu)
+{
+  CheckEventStream(true);
+}
+
+FF_TEST(EventCameraLockstepCpu)
+{
+  CheckEventStream(false);
+}
+
+/* //} */
+
 // Coarse guards, not benchmarks. A 2 ms sleep once sat on every reply, putting a 2.1 ms
 // floor under the pose read a control loop makes most; these thresholds are loose enough
 // to survive a busy machine but would catch that class of regression.
@@ -555,9 +638,12 @@ FF_TEST(RequestLatencyStaysLow)
 
 int main()
 {
-  GameMode = std::make_unique<ueds_connector::GameModeController>(kAddress, kGameModePort);
+  const char* PortEnv = std::getenv("FLIGHTFORGE_GAMEMODE_PORT");
+  const uint16_t GameModePort = PortEnv ? static_cast<uint16_t>(std::atoi(PortEnv)) : kGameModePort;
+
+  GameMode = std::make_unique<ueds_connector::GameModeController>(kAddress, GameModePort);
   if (!GameMode->ConnectSimple()) {
-    std::cout << "SKIP: no simulator reachable on " << kAddress << ":" << kGameModePort << std::endl;
+    std::cout << "SKIP: no simulator reachable on " << kAddress << ":" << GameModePort << std::endl;
     return FF_SKIP_EXIT_CODE;
   }
 

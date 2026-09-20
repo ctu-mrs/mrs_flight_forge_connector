@@ -69,8 +69,8 @@ def main():
     config.contrast_threshold_neg = 0.25
     drone.SetEventCameraConfig(config)
 
-    ok, events, stamp = drone.GetEventCameraData()
-    print(f"event batch: {len(events)} events, batch stamp t={stamp:.3f}")
+    ok, xyp, t_us, base, stamp, dropped, width, height = drone.GetEventCameraData()
+    print(f"event batch: {len(xyp)} events ({width}x{height}), batch stamp t={stamp:.3f}")
 
     # --- fisheye ---
     ok, fisheye, stamp, size = drone.GetFisheyeCameraData()

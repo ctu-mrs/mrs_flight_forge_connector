@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <vector>
 
@@ -8,7 +10,7 @@
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
 #define API_VERSION_MAJOR 0
-#define API_VERSION_MINOR 16
+#define API_VERSION_MINOR 18
 
 namespace ueds_connector
 {
@@ -57,6 +59,23 @@ public:
    * value, so out_applied reports what actually took effect.
    */
   bool SetTimeDilation(double dilation, double& out_applied);
+
+  /**
+   * Every engine tick then advances sim time by exactly dt, however long the frame
+   * takes to render; 0 restores the wall-clock timestep. With adaptive_min_dt > 0 the
+   * step shrinks towards that floor whenever an event camera saw more than one
+   * contrast threshold of change in a pixel (ESIM's anti-aliasing rule).
+   */
+  bool SetFixedTimestep(double dt, double adaptive_min_dt, double& out_applied);
+
+  /** Pauses the world; from then on it advances only through Step(). */
+  bool SetLockstep(bool enabled);
+
+  /**
+   * Runs the given number of ticks and returns once their frames are rendered and every
+   * camera has its data, with the sim time reached and the ticks run so far.
+   */
+  bool Step(int ticks, double& out_sim_time, uint64_t& out_tick_count);
   
   bool SetGraphicsSettings(const int& graphicsSettings);
 

@@ -747,6 +747,21 @@ FF_TEST(RequestLatencyStaysLow)
   FF_CHECK(Median < 1.0);
 }
 
+// a reply typed as the sync op made the client wait out its 1 s receive timeout on every call
+FF_TEST(AsyncPoseIsAcknowledgedPromptly)
+{
+  const auto [Ok, Location] = Drone->GetLocation();
+  FF_REQUIRE(Ok);
+
+  const auto Start = std::chrono::steady_clock::now();
+  const auto [Acked] = Drone->SetLocationAndRotationAsync(Location, ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
+
+  std::cout << "    async pose " << Ms << " ms" << std::endl;
+  FF_CHECK(Acked);
+  FF_CHECK(Ms < 100.0);
+}
+
 /* //} */
 
 }  // namespace

@@ -66,7 +66,13 @@ inline int RunAll()
   int ran     = 0;
   int skipped = 0;
 
+  const char* Filter = std::getenv("FF_FILTER");
+
   for (const FTestCase& Test : Registry()) {
+    if (Filter && std::string(Test.name).find(Filter) == std::string::npos) {
+      continue;
+    }
+
     const int Before = Failures();
     std::cout << "[ RUN  ] " << Test.name << std::endl;
 

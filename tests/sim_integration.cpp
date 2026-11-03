@@ -762,6 +762,46 @@ FF_TEST(AsyncPoseIsAcknowledgedPromptly)
   FF_CHECK(Ms < 100.0);
 }
 
+// width and height from a baseline or progressive JPEG's frame header
+std::pair<int, int> decodedSize(const std::vector<unsigned char>& Jpeg)
+{
+  for (size_t i = 2; i + 8 < Jpeg.size();) {
+    if (Jpeg[i] != 0xFF) {
+      return {0, 0};
+    }
+    const unsigned char Marker = Jpeg[i + 1];
+    const size_t        Length = (Jpeg[i + 2] << 8) | Jpeg[i + 3];
+    if (Marker == 0xC0 || Marker == 0xC2) {
+      return {(Jpeg[i + 7] << 8) | Jpeg[i + 8], (Jpeg[i + 5] << 8) | Jpeg[i + 6]};
+    }
+    i += 2 + Length;
+  }
+  return {0, 0};
+}
+
+FF_TEST(TwoCamerasOfOneTypeKeepTheirOwnResolution)
+{
+  const auto [OkA, A] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
+  const auto [OkB, B] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
+  FF_REQUIRE(OkA && OkB && A != B);
+
+  ueds_connector::RgbCameraConfig Cfg{};
+  Cfg.width_  = 320;
+  Cfg.height_ = 240;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(Cfg, A));
+  Cfg.width_  = 160;
+  Cfg.height_ = 120;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(Cfg, B));
+
+  FF_CHECK(decodedSize(std::get<1>(Drone->GetRgbCameraData(A))) == std::make_pair(320, 240));
+  FF_CHECK(decodedSize(std::get<1>(Drone->GetRgbCameraData(B))) == std::make_pair(160, 120));
+
+  FF_REQUIRE(Drone->RemoveSensor(A));
+  FF_CHECK(decodedSize(std::get<1>(Drone->GetRgbCameraData(B))) == std::make_pair(160, 120));
+
+  Drone->RemoveSensor(B);
+}
+
 /* //} */
 
 }  // namespace

@@ -7,12 +7,14 @@ arrays, and converts point clouds to (N, k) float arrays.
 import json
 from dataclasses import dataclass
 
+import os
 import numpy as np
 
 from ._native import drone as _d
 from ._native import game_mode as _g
 
-DEFAULT_GAME_MODE_PORT = 8551
+# FLIGHTFORGE_GAMEMODE_PORT moves the client off a port another simulator already owns
+DEFAULT_GAME_MODE_PORT = int(os.environ.get("FLIGHTFORGE_GAMEMODE_PORT", 8551))
 
 
 class FlightForgeError(RuntimeError):

@@ -86,6 +86,7 @@ struct WorldName
         {"erding_airbase", "ErdingAirBase"},
         {"temesvar", "Temesvar_annotated"},
         {"electric_towers", "ElectricTowers"},
+        {"eletric_towers", "ElectricTowers"},
         {"race_1", "Race_1"},
         {"race_2", "Race_2"},
         {"race_3", "Race_3"},
@@ -93,6 +94,8 @@ struct WorldName
         {"service_tunnel", "ServiceTunnel"},
         {"dead_spruce_forest", "DeadSpruceForestBiome_Example_Daytime"},
         {"mala_skala", "MalaSkala"},
+        {"kayenta_mine", "kayenta_mine"},
+        {"sprind_lab", "SprindLab"},
         {"spring_lab", "SprindLab"},
     };
     return map;

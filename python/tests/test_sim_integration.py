@@ -136,6 +136,7 @@ def test_scene_editor_roundtrip(sim):
 
         exported = sim.export_scene()
         assert "Cube" in exported
+        assert "class: prop/box" in exported  # the host project's Cube rule
 
         sim.clear_objects()
         assert sim.objects() == {}
@@ -353,6 +354,31 @@ def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
             assert sim.collapse_classes(np.array([expected_class]), 1)[0] == by_path["prop"]
     finally:
         sim.clear_objects()
+        sim.remove_drone(drone)
+        drone.close()
+
+
+def test_segmentation_covers_rendered_geometry(sim):
+    """Every pixel the renderer put geometry into carries an instance id: the depth
+    buffer is the oracle, which unlike a physics trace sees masked leaves, wind and
+    foliage without collision the same way the id pass must."""
+    import flight_forge_drone as ffd
+
+    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
+    try:
+        drone.set_pose(sim.scene_to_world([0.0, 0.0, 3.0]), (-20.0, 0.0, 0.0))
+        camera = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
+        time.sleep(2.0)
+        for _ in range(4):
+            drone.panoptic(camera)
+            drone.depth()
+        ids, _, _ = drone.panoptic(camera)
+        depth, _ = drone.depth()
+        geometry = (depth > 0) & (depth < 65535)
+        assert geometry.sum() > 10000
+        unlabelled = geometry & (ids == 0)
+        assert unlabelled.sum() / geometry.sum() < 0.01
+    finally:
         sim.remove_drone(drone)
         drone.close()
 

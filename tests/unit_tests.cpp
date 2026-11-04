@@ -36,6 +36,13 @@ FF_TEST(WorldNameCatalog)
     FF_CHECK(!Name.empty());
     FF_CHECK(!Level.empty());
   }
+
+  // names the 0.11 clients' configs use must keep resolving
+  for (const char* Legacy : {"eletric_towers", "electric_towers", "sprind_lab", "kayenta_mine", "mala_skala", "warehouse"}) {
+    FF_CHECK(Levels.count(Legacy) == 1);
+  }
+  FF_CHECK(Levels.at("sprind_lab") == "SprindLab");
+  FF_CHECK(Levels.at("kayenta_mine") == "kayenta_mine");
 }
 
 /* //} */

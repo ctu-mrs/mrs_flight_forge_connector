@@ -371,6 +371,8 @@ struct RgbCameraConfig
   CameraNoise          noise_;
   CameraRollingShutter rolling_shutter_;
   CameraCompression    compression_;
+
+  double capture_rate_ = 0.0;  // Hz in simulated time, 0 = every tick
 };
 
 struct EventCameraConfig
@@ -491,6 +493,8 @@ struct FisheyeCameraConfig
   double kb_k2_ = 0.0;
   double kb_k3_ = 0.0;
   double kb_k4_ = 0.0;
+
+  double capture_rate_ = 0.0;  // Hz in simulated time, 0 = every tick
 };
 
 //}

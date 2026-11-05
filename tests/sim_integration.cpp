@@ -5,6 +5,7 @@
 #include <iostream>
 #include <thread>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -800,6 +801,56 @@ FF_TEST(TwoCamerasOfOneTypeKeepTheirOwnResolution)
   FF_CHECK(decodedSize(std::get<1>(Drone->GetRgbCameraData(B))) == std::make_pair(160, 120));
 
   Drone->RemoveSensor(B);
+}
+
+// distinct stamps over N lockstep ticks at a given capture rate
+static size_t stampsOverTicks(int SensorId, int Ticks)
+{
+  std::set<double> Stamps;
+  double           T;
+  uint64_t         Count;
+  for (int i = 0; i < Ticks; i++) {
+    if (!GameMode->Step(1, T, Count)) {
+      return 0;
+    }
+    Stamps.insert(std::get<2>(Drone->GetRgbCameraData(SensorId)));
+  }
+  return Stamps.size();
+}
+
+FF_TEST(CaptureRateHoldsInLockstep)
+{
+  double Applied = 0.0;
+  FF_REQUIRE(GameMode->SetFixedTimestep(0.01, 0.0, Applied));
+  FF_REQUIRE(GameMode->SetLockstep(true));
+
+  const auto [OkA, A] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
+  FF_REQUIRE(OkA);
+  ueds_connector::RgbCameraConfig Cfg{};
+  Cfg.width_        = 320;
+  Cfg.height_       = 240;
+  Cfg.capture_rate_ = 20.0;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(Cfg, A));
+
+  double   T;
+  uint64_t Count;
+  FF_REQUIRE(GameMode->Step(5, T, Count));
+  Drone->GetRgbCameraData(A);  // starts the stream
+
+  const size_t Stamps = stampsOverTicks(A, 100);
+  std::cout << "    20 Hz camera over 100 ticks of 10 ms: " << Stamps << " distinct stamps" << std::endl;
+  FF_CHECK(Stamps >= 19 && Stamps <= 21);
+
+  Cfg.capture_rate_ = 0.0;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(Cfg, A));
+  GameMode->Step(5, T, Count);
+  const size_t EveryTick = stampsOverTicks(A, 10);
+  std::cout << "    every-tick camera over 10 ticks: " << EveryTick << " distinct stamps" << std::endl;
+  FF_CHECK(EveryTick >= 9);
+
+  GameMode->SetLockstep(false);
+  GameMode->SetFixedTimestep(0.0, 0.0, Applied);
+  Drone->RemoveSensor(A);
 }
 
 /* //} */

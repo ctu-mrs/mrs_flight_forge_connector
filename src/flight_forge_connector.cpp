@@ -546,6 +546,7 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
     config.enable_motion_blur_     = response.config.enable_motion_blur_;
     config.motion_blur_amount_     = response.config.motion_blur_amount_;
     config.motion_blur_distortion_ = response.config.motion_blur_distortion_;
+    config.capture_rate_           = response.config.capture_rate_;
 
     config.exposure_.manual_          = response.config.exposure_.manual_;
     config.exposure_.shutter_time_    = response.config.exposure_.shutter_time_;
@@ -662,6 +663,7 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
   request.config.enable_motion_blur_ = config.enable_motion_blur_;
   request.config.motion_blur_amount_ = config.motion_blur_amount_;
   request.config.motion_blur_distortion_ = config.motion_blur_distortion_;
+  request.config.capture_rate_           = config.capture_rate_;
 
   request.config.exposure_.manual_          = config.exposure_.manual_;
   request.config.exposure_.shutter_time_    = config.exposure_.shutter_time_;
@@ -929,6 +931,7 @@ std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int s
     config.height_            = response.config.height_;
     config.lens_model_        = response.config.lens_model_;
     config.full_frame_        = response.config.full_frame_;
+    config.capture_rate_      = response.config.capture_rate_;
 
     config.intrinsics_.use_custom_ = response.config.intrinsics_.use_custom_;
     config.intrinsics_.fx_         = response.config.intrinsics_.fx_;
@@ -963,6 +966,7 @@ bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, in
   request.config.height_            = config.height_;
   request.config.lens_model_        = config.lens_model_;
   request.config.full_frame_        = config.full_frame_;
+  request.config.capture_rate_      = config.capture_rate_;
 
   request.config.intrinsics_.use_custom_ = config.intrinsics_.use_custom_;
   request.config.intrinsics_.fx_         = config.intrinsics_.fx_;

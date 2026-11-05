@@ -129,6 +129,7 @@ FF_TEST(TestRgbCameraConfig)
   In.enable_motion_blur_     = true;
   In.motion_blur_amount_     = 0.7;
   In.motion_blur_distortion_ = 42.0;
+  In.capture_rate_           = 12.5;
 
   In.exposure_.manual_       = true;
   In.exposure_.shutter_time_ = 0.005;
@@ -158,6 +159,7 @@ FF_TEST(TestRgbCameraConfig)
             Out.enable_motion_blur_ == In.enable_motion_blur_ && Out.motion_blur_amount_ == In.motion_blur_amount_ &&
             Out.motion_blur_distortion_ == In.motion_blur_distortion_,
         "RgbCameraConfig flags");
+  Check(Out.capture_rate_ == In.capture_rate_, "RgbCameraConfig.capture_rate");
   Check(Out.exposure_.manual_ == In.exposure_.manual_ && Out.exposure_.shutter_time_ == In.exposure_.shutter_time_, "RgbCameraConfig.exposure");
   Check(Out.lens_.fstop_ == In.lens_.fstop_ && Out.lens_.white_temp_ == In.lens_.white_temp_, "RgbCameraConfig.lens");
   Check(Out.intrinsics_.use_custom_ == In.intrinsics_.use_custom_ && Out.intrinsics_.fx_ == In.intrinsics_.fx_ && Out.intrinsics_.cy_ == In.intrinsics_.cy_,
@@ -177,6 +179,7 @@ FF_TEST(TestStereoCameraConfig)
   using namespace Serializable::Drone;
 
   StereoCameraConfig In{};
+  In.capture_rate_ = 7.5;
   In.show_debug_camera_    = true;
   In.offset_x_left_        = -1.0;
   In.offset_x_right_       = 1.0;
@@ -208,6 +211,7 @@ FF_TEST(TestStereoCameraConfig)
   Check(Out.offset_x_left_ == In.offset_x_left_ && Out.offset_x_right_ == In.offset_x_right_ && Out.rotation_roll_right_ == In.rotation_roll_right_ &&
             Out.fov_ == In.fov_ && Out.width_ == In.width_ && Out.enable_raytracing_ == In.enable_raytracing_,
         "StereoCameraConfig basics");
+  Check(Out.capture_rate_ == In.capture_rate_, "StereoCameraConfig.capture_rate");
   Check(Out.intrinsics_.use_custom_ == In.intrinsics_.use_custom_ && Out.intrinsics_.fx_ == In.intrinsics_.fx_, "StereoCameraConfig.intrinsics");
   Check(Out.distortion_.enable_ == In.distortion_.enable_ && Out.distortion_.p2_ == In.distortion_.p2_, "StereoCameraConfig.distortion");
 }

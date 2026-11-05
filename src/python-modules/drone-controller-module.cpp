@@ -224,6 +224,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("enable_motion_blur", &RgbCameraConfig::enable_motion_blur_)
       .def_readwrite("motion_blur_amount", &RgbCameraConfig::motion_blur_amount_)
       .def_readwrite("motion_blur_distortion", &RgbCameraConfig::motion_blur_distortion_)
+      .def_readwrite("capture_rate", &RgbCameraConfig::capture_rate_)
       .def_readwrite("exposure", &RgbCameraConfig::exposure_)
       .def_readwrite("lens", &RgbCameraConfig::lens_)
       .def_readwrite("intrinsics", &RgbCameraConfig::intrinsics_)
@@ -290,7 +291,8 @@ PYBIND11_MODULE(flight_forge_drone, m) {
           })
       .def_readwrite("enable_temporal_aa", &StereoCameraConfig::enable_temporal_aa_)
       .def_readwrite("enable_raytracing", &StereoCameraConfig::enable_raytracing_)
-      .def_readwrite("enable_hdr", &StereoCameraConfig::enable_hdr_);
+      .def_readwrite("enable_hdr", &StereoCameraConfig::enable_hdr_)
+      .def_readwrite("capture_rate", &StereoCameraConfig::capture_rate_);
 
   py::class_<EventCameraConfig>(m, "EventCameraConfig")
       .def(py::init<>())
@@ -331,6 +333,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("height", &FisheyeCameraConfig::height_)
       .def_readwrite("lens_model", &FisheyeCameraConfig::lens_model_)
       .def_readwrite("full_frame", &FisheyeCameraConfig::full_frame_)
+      .def_readwrite("capture_rate", &FisheyeCameraConfig::capture_rate_)
       .def_readwrite("intrinsics", &FisheyeCameraConfig::intrinsics_)
       .def_readwrite("kb_k1", &FisheyeCameraConfig::kb_k1_)
       .def_readwrite("kb_k2", &FisheyeCameraConfig::kb_k2_)

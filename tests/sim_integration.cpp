@@ -70,11 +70,20 @@ FF_TEST(FpsReports)
 
 FF_TEST(RgbCapture)
 {
-  const auto [Ok, Image, Stamp, Size] = Drone->GetRgbCameraData();
+  // the first frames of a new camera can still be black
+  bool bLit = false;
+  for (int Attempt = 0; Attempt < 40 && !bLit; ++Attempt) {
+    const auto [Ok, Image, Stamp, Size] = Drone->GetRgbCameraData();
 
-  FF_REQUIRE(Ok);
-  FF_CHECK(!Image.empty());
-  FF_CHECK(Stamp > 0.0);
+    FF_REQUIRE(Ok);
+    FF_CHECK(!Image.empty());
+    FF_CHECK(Stamp > 0.0);
+    bLit = std::any_of(Image.begin(), Image.end(), [](const unsigned char Value) { return Value != 0; });
+    if (!bLit) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+  FF_CHECK(bLit);
 }
 
 /* //} */

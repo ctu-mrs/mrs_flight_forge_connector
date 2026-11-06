@@ -151,6 +151,13 @@ public:
    * substring of the name. OutTruncated is set when the server-side cap was hit.
    */
   std::pair<bool, std::vector<std::string>> ListAssets(const std::string& path_prefix, const std::string& name_filter, bool& OutTruncated);
+
+  /* A manifest or a directory of glTF models, on the simulator's machine. Returns the objects it holds. */
+  std::pair<bool, int> LoadLibrary(const std::string& path, std::string& OutError);
+
+  /* One page of what can be placed, project assets included; OutTotal counts every match. */
+  std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> ListLibrary(const std::string& library, const std::string& cls, const std::string& filter, int offset,
+                                                                                  int limit, int& OutTotal);
   //}
 };
 

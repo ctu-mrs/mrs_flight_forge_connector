@@ -158,6 +158,34 @@ FF_TEST(NoiseAndRollingShutterRoundTrip)
 
 /* scene editor //{ */
 
+FF_TEST(GroundFrameSitsBelowThePlayerStart)
+{
+  GameMode->RemoveAllSpawnedObjects();
+
+  std::string Error;
+  const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml("frame: ground\nobjects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [5.0, 0.0, 1.0]\n", Error);
+  FF_REQUIRE(SpawnOk && Ids.size() == 1);
+
+  const auto [ListOk, Objects] = GameMode->ListSpawnedObjects();
+  FF_REQUIRE(ListOk && Objects.size() == 1);
+  FF_CHECK_NEAR(Objects[0].position[2], 1.0 - 0.9212, 0.01);
+
+  const auto [ExportOk, Yaml] = GameMode->ExportScene();
+  FF_REQUIRE(ExportOk);
+  FF_CHECK(Yaml.find("ground") != std::string::npos);
+
+  GameMode->RemoveAllSpawnedObjects();
+
+  const auto [RestoreOk, RestoredIds] = GameMode->SpawnObjectsFromYaml(Yaml, Error);
+  FF_REQUIRE(RestoreOk && RestoredIds.size() == 1);
+
+  const auto [RelistOk, Restored] = GameMode->ListSpawnedObjects();
+  FF_REQUIRE(RelistOk && Restored.size() == 1);
+  FF_CHECK_NEAR(Restored[0].position[2], 1.0 - 0.9212, 0.01);
+
+  GameMode->RemoveAllSpawnedObjects();
+}
+
 FF_TEST(SceneEditorRoundTrip)
 {
   // Counts and the exported document below are only meaningful against a known scene, and

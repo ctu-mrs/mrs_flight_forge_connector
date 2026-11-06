@@ -1,3 +1,4 @@
+#include <fstream>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -184,6 +185,64 @@ FF_TEST(GroundFrameSitsBelowThePlayerStart)
   FF_CHECK_NEAR(Restored[0].position[2], 1.0 - 0.9212, 0.01);
 
   GameMode->RemoveAllSpawnedObjects();
+}
+
+FF_TEST(LibraryPlacesAtItsScaleOnItsBase)
+{
+  const std::string Path = "/tmp/ff_test_library.yaml";
+
+  std::ofstream(Path) << "name: test\n"
+                         "objects:\n"
+                         "  - id: crate\n"
+                         "    asset: /Engine/BasicShapes/Cube\n"
+                         "    class: box\n"
+                         "    description: a wooden crate\n"
+                         "    scale: 2.0\n"
+                         "    height: 2.0\n"
+                         "    base_z: 0.5\n";
+
+  std::string Error;
+  const auto [LoadOk, Count] = GameMode->LoadLibrary(Path, Error);
+  FF_REQUIRE(LoadOk);
+  FF_CHECK(Count == 1);
+
+  int  Total = 0;
+  const auto [ListOk, Found] = GameMode->ListLibrary("test", "", "WOODEN", 0, 10, Total);
+  FF_REQUIRE(ListOk && Found.size() == 1);
+  FF_CHECK(Total == 1);
+  FF_CHECK(Found[0].spawn_name == "lib:test/crate");
+
+  const auto [ProjectOk, Project] = GameMode->ListLibrary("project", "", "", 0, 1, Total);
+  FF_CHECK(ProjectOk);
+
+  GameMode->RemoveAllSpawnedObjects();
+
+  const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml("frame: ground\nobjects:\n  - asset: lib:test/crate\n    position: [5.0, 0.0, 0.0]\n", Error);
+  FF_REQUIRE(SpawnOk && Ids.size() == 1);
+
+  // listed poses name the base, which sits 0.9212 below the PlayerStart frame's z = 0
+  const auto [ObjectsOk, Objects] = GameMode->ListSpawnedObjects();
+  FF_REQUIRE(ObjectsOk && Objects.size() == 1);
+  FF_CHECK(Objects[0].asset == "lib:test/crate");
+  FF_CHECK_NEAR(Objects[0].scale[2], 2.0, 0.001);
+  FF_CHECK_NEAR(Objects[0].position[2], -0.9212, 0.01);
+
+  const auto [ExportOk, Yaml] = GameMode->ExportScene();
+  FF_REQUIRE(ExportOk);
+
+  GameMode->RemoveAllSpawnedObjects();
+
+  const auto [RestoreOk, RestoredIds] = GameMode->SpawnObjectsFromYaml(Yaml, Error);
+  FF_REQUIRE(RestoreOk && RestoredIds.size() == 1);
+
+  const auto [RelistOk, Restored] = GameMode->ListSpawnedObjects();
+  FF_REQUIRE(RelistOk && Restored.size() == 1);
+  FF_CHECK_NEAR(Restored[0].position[2], -0.9212, 0.01);
+
+  GameMode->RemoveAllSpawnedObjects();
+
+  const auto [BadOk, BadIds] = GameMode->SpawnObjectsFromYaml("objects:\n  - asset: lib:test/missing\n", Error);
+  FF_CHECK(BadIds.empty());
 }
 
 FF_TEST(SceneEditorRoundTrip)

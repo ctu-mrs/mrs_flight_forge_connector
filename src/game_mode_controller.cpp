@@ -414,8 +414,15 @@ std::pair<bool, std::vector<int>> GameModeController::SpawnObjectsFromYaml(const
   request.yaml = yaml;
 
   Serializable::GameMode::SpawnObjectsFromYaml::Response response{};
-  const auto                                            status  = Request(request, response);
-  const auto                                            success = status && response.status;
+
+  // the reply waits for every glTF import
+  const int saved_timeout = GetReceiveTimeoutMs();
+  SetReceiveTimeoutMs(std::max(saved_timeout, 90000));
+
+  const auto status  = Request(request, response);
+  const auto success = status && response.status;
+
+  SetReceiveTimeoutMs(saved_timeout);
 
   OutError = status ? response.error : "no response from the simulator";
 
@@ -569,6 +576,46 @@ std::pair<bool, std::vector<std::string>> GameModeController::ListAssets(const s
   OutTruncated = success && response.truncated;
 
   return std::make_pair(success, success ? response.assets : std::vector<std::string>());
+}
+
+//}
+
+/* loadLibrary() //{ */
+
+std::pair<bool, int> GameModeController::LoadLibrary(const std::string& path, std::string& OutError) {
+
+  Serializable::GameMode::LoadLibrary::Request request{};
+  request.path = path;
+
+  Serializable::GameMode::LoadLibrary::Response response{};
+  const auto                                    status = Request(request, response);
+
+  OutError = status ? response.error : "no reply";
+
+  return std::make_pair(status && response.status, response.count);
+}
+
+//}
+
+/* listLibrary() //{ */
+
+std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> GameModeController::ListLibrary(const std::string& library, const std::string& cls,
+                                                                                                    const std::string& filter, int offset, int limit, int& OutTotal) {
+
+  Serializable::GameMode::ListLibrary::Request request{};
+  request.library = library;
+  request.cls     = cls;
+  request.filter  = filter;
+  request.offset  = offset;
+  request.limit   = limit;
+
+  Serializable::GameMode::ListLibrary::Response response{};
+  const auto                                    status  = Request(request, response);
+  const auto                                    success = status && response.status;
+
+  OutTotal = success ? response.total : 0;
+
+  return std::make_pair(success, response.objects);
 }
 
 //}

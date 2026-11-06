@@ -213,6 +213,46 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
             return py::make_tuple(result.first, result.second, truncated);
           },
           py::arg("path_prefix") = "", py::arg("name_filter") = "", "Returns (success, assets, truncated).")
+      .def(
+          "LoadLibrary",
+          [](GameModeController& controller, const std::string& path) {
+            std::string          error;
+            std::pair<bool, int> result;
+            {
+              py::gil_scoped_release release;
+              result = controller.LoadLibrary(path, error);
+            }
+            return py::make_tuple(result.first, result.second, error);
+          },
+          py::arg("path"), "Returns (success, count, error).")
+      .def(
+          "ListLibrary",
+          [](GameModeController& controller, const std::string& library, const std::string& cls, const std::string& filter, int offset, int limit) {
+            int                                                                 total = 0;
+            std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> result;
+            {
+              py::gil_scoped_release release;
+              result = controller.ListLibrary(library, cls, filter, offset, limit, total);
+            }
+            py::list objects;
+            for (const auto& o : result.second) {
+              py::dict d;
+              d["library"]     = o.library;
+              d["id"]          = o.id;
+              d["spawn_name"]  = o.spawn_name;
+              d["class"]       = o.cls;
+              d["description"] = o.description;
+              d["license"]     = o.license;
+              d["thumbnail"]   = o.thumbnail;
+              d["scale"]       = o.scale;
+              d["height_m"]    = o.height_m;
+              d["runtime"]     = o.runtime;
+              objects.append(d);
+            }
+            return py::make_tuple(result.first, objects, total);
+          },
+          py::arg("library") = "", py::arg("cls") = "", py::arg("filter") = "", py::arg("offset") = 0, py::arg("limit") = 200,
+          "Returns (success, objects, total).")
       .def(py::pickle(
           [](const GameModeController& controller) { return py::make_tuple(controller.getAddress(), controller.getPort()); },
           [](py::tuple t) {

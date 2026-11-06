@@ -698,5 +698,19 @@ class Simulator:
         _check(ok, "ListAssets")
         return list(names), truncated
 
+    def load_library(self, path):
+        """Loads a manifest or a directory of glTF models on the simulator's machine.
+        Returns how many objects it holds."""
+        ok, count, error = self._raw.LoadLibrary(path)
+        _check(ok, f"LoadLibrary: {error}")
+        return count
+
+    def library(self, library="", cls="", filter="", offset=0, limit=200):
+        """One page of what can be placed, as dicts; `spawn_name` goes in an object's
+        `asset`. Returns (objects, total)."""
+        ok, objects, total = self._raw.ListLibrary(library, cls, filter, offset, limit)
+        _check(ok, "ListLibrary")
+        return objects, total
+
     def close(self):
         self._raw.Disconnect()

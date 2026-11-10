@@ -311,6 +311,31 @@ FF_TEST(SceneEditorRoundTrip)
   GameMode->RemoveAllSpawnedObjects();
 }
 
+// an on-disk model imports off the game thread, so this checks the reply still waits for its collision
+FF_TEST(ModelFileCollidesOnceSpawned)
+{
+  GameMode->RemoveAllSpawnedObjects();
+
+  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 600.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  const auto [BeforeOk, Before] = Drone->GetRangefinderData();
+  FF_REQUIRE(BeforeOk);
+  FF_REQUIRE(Before < 0.0 || Before > 400.0);
+
+  std::string Error;
+  const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml("frame: world\nobjects:\n  - asset: Models/helhest.glb\n    position: [0.0, 0.0, 3.0]\n", Error);
+  FF_REQUIRE(SpawnOk && Ids.size() == 1);
+
+  const auto [AfterOk, After] = Drone->GetRangefinderData();
+  FF_REQUIRE(AfterOk);
+  FF_CHECK(After > 0.0 && After < 300.0);
+
+  GameMode->RemoveAllSpawnedObjects();
+
+  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 200.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+}
+
 FF_TEST(AssetCatalog)
 {
   bool bTruncated           = false;

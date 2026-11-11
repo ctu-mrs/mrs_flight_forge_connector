@@ -9,7 +9,7 @@
 #include <vector>
 #include "ueds-connector/drone-controller.h"
 
-std::unique_ptr<ueds_connector::DroneController> droneController;
+std::unique_ptr<flightforge::RobotClient> droneController;
 
 
 double test() {
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  droneController = std::make_unique<ueds_connector::DroneController>(LOCALHOST, port);
+  droneController = std::make_unique<flightforge::RobotClient>(LOCALHOST, port);
   auto connect_result = droneController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to drone controller. connect_result was " << connect_result << std::endl;
@@ -73,11 +73,11 @@ int main(int argc, char* argv[]) {
      
   for (int i = 0; i < widths.size(); i++) {
     for (int j = 0; j < fovs.size(); j++) {
-  ueds_connector::CameraConfig config{};
+  flightforge::CameraConfig config{};
   config.showDebugCamera = false;
   config.angleFOV = fovs[j];
-  config.offset = ueds_connector::Coordinates(0, 0, 0);
-  config.orientation = ueds_connector::Rotation(0, 0, 0);
+  config.offset = flightforge::Coordinates(0, 0, 0);
+  config.orientation = flightforge::Rotation(0, 0, 0);
   config.Width = widths[i];
   config.Height = heights[i];
 

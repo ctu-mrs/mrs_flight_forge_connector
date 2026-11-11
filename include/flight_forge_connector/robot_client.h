@@ -7,21 +7,21 @@
 #include <flight_forge_connector/socket_client.h>
 #include <flight_forge_connector/serialization/serializable_shared.h>
 
-namespace ueds_connector
+namespace flightforge
 {
 
 // Drone-side client. Since API 0.14 every sensor call takes a sensor id;
 // the default -1 addresses the default sensor of that type, which the
 // simulator creates lazily on first use. Additional sensors come from
 // AddSensor/AddDevice and are addressed by the returned ids.
-class UedsConnector : public SocketClient {
+class RobotClient : public SocketClient {
 
 public:
-  UedsConnector() : SocketClient() {
+  RobotClient() : SocketClient() {
     scope_ = Serializable::Registry::Scope::Drone;
   }
 
-  UedsConnector(const std::string& address, uint16_t port) : SocketClient(address, port) {
+  RobotClient(const std::string& address, uint16_t port) : SocketClient(address, port) {
     scope_ = Serializable::Registry::Scope::Drone;
   }
 
@@ -171,4 +171,4 @@ public:
   //}
 };
 
-}  // namespace ueds_connector
+}  // namespace flightforge

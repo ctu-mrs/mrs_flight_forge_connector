@@ -33,7 +33,7 @@ def ring_yaml(count=12, radius=5.0):
 
 def main():
     sim = Simulator()
-    drone = sim.spawn_drone((0.0, 0.0, 150.0), "x500")
+    drone = sim.spawn_robot((0.0, 0.0, 150.0), "x500")
 
     # more objects than the stencil range could ever label uniquely
     sim.spawn_objects(ring_yaml())
@@ -62,7 +62,7 @@ def main():
         pass
 
     sim.clear_objects()
-    sim.remove_drone(drone)
+    sim.remove_robot(drone)
     drone.close()
     sim.close()
 

@@ -8,7 +8,7 @@
 
 #include "ueds-connector/drone-controller.h"
 
-std::unique_ptr<ueds_connector::DroneController> droneController;
+std::unique_ptr<flightforge::RobotClient> droneController;
 
 void interruptHandler(int s) {
   std::cout << "Got exit signal " << s << std::endl;
@@ -31,7 +31,7 @@ int main() {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  droneController = std::make_unique<ueds_connector::DroneController>(LOCALHOST, 4000);
+  droneController = std::make_unique<flightforge::RobotClient>(LOCALHOST, 4000);
   auto connect_result = droneController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to drone controller. connect_result was " << connect_result << std::endl;

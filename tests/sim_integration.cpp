@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include <flight_forge_connector/flight_forge_connector.h>
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/robot_client.h>
+#include <flight_forge_connector/simulator_client.h>
 
 #include "test_framework.h"
 
@@ -21,8 +21,8 @@ namespace
 constexpr const char* kAddress      = "127.0.0.1";
 constexpr uint16_t    kGameModePort = 8551;
 
-std::unique_ptr<ueds_connector::GameModeController> GameMode;
-std::unique_ptr<ueds_connector::UedsConnector>      Drone;
+std::unique_ptr<flightforge::SimulatorClient> GameMode;
+std::unique_ptr<flightforge::RobotClient>      Drone;
 int                                                 DronePort = -1;
 
 // An /Engine path resolves without search_paths and exists in every install, so the test
@@ -316,7 +316,7 @@ FF_TEST(ModelFileCollidesOnceSpawned)
 {
   GameMode->RemoveAllSpawnedObjects();
 
-  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 600.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  Drone->SetLocationAndRotationAsync(flightforge::Coordinates(0.0, 0.0, 600.0), flightforge::Rotation(0.0, 0.0, 0.0), false);
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
   const auto [BeforeOk, Before] = Drone->GetRangefinderData();
@@ -333,7 +333,7 @@ FF_TEST(ModelFileCollidesOnceSpawned)
 
   GameMode->RemoveAllSpawnedObjects();
 
-  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 200.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  Drone->SetLocationAndRotationAsync(flightforge::Coordinates(0.0, 0.0, 200.0), flightforge::Rotation(0.0, 0.0, 0.0), false);
 }
 
 FF_TEST(AssetCatalog)
@@ -355,7 +355,7 @@ FF_TEST(MutualVisibilityToggles)
 
 FF_TEST(SensorLifecycle)
 {
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_RGB_CAMERA));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_RGB_CAMERA));
   FF_REQUIRE(AddOk && SensorId >= 0);
 
   const auto [ListOk, Sensors] = Drone->ListSensors();
@@ -381,7 +381,7 @@ FF_TEST(CameraInfoMatchesTheConfigs)
 
   const Serializable::Drone::CameraInfo* Rgb = nullptr;
   for (const auto& C : Cameras) {
-    if (C.sensor_type_ == static_cast<int>(ueds_connector::SENSOR_RGB_CAMERA) && C.sensor_id_ == 0) {
+    if (C.sensor_type_ == static_cast<int>(flightforge::SENSOR_RGB_CAMERA) && C.sensor_id_ == 0) {
       Rgb = &C;
     }
   }
@@ -407,7 +407,7 @@ FF_TEST(CameraInfoMatchesTheConfigs)
 
   // a stereo pair comes back as two eyes sharing K, with the baseline between the mounts
   // (a fresh stereo sensor has both eyes on the same mount until configured)
-  const auto [StereoOk, StereoId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_STEREO_CAMERA));
+  const auto [StereoOk, StereoId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_STEREO_CAMERA));
   FF_REQUIRE(StereoOk && StereoId >= 0);
   auto [StereoCfgOk, StereoCfg] = Drone->GetStereoCameraConfig(StereoId);
   FF_REQUIRE(StereoCfgOk);
@@ -425,7 +425,7 @@ FF_TEST(CameraInfoMatchesTheConfigs)
   FF_CHECK(Drone->RemoveSensor(StereoId));
 
   // a fisheye reports its lens model and a focal that puts theta = fov/2 on the image circle
-  const auto [FishOk, FishId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_FISHEYE_CAMERA));
+  const auto [FishOk, FishId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_FISHEYE_CAMERA));
   FF_REQUIRE(FishOk && FishId >= 0);
   const auto [FishCfgOk, FishCfg] = Drone->GetFisheyeCameraConfig(FishId);
   const auto [FishInfoOk, Fish]   = Drone->GetCameraInfo(FishId);
@@ -442,7 +442,7 @@ FF_TEST(CameraInfoMatchesTheConfigs)
 
   // a Kannala-Brandt calibration goes in and comes back verbatim
   auto Kb                  = FishCfg;
-  Kb.lens_model_           = ueds_connector::FISHEYE_KANNALA_BRANDT;
+  Kb.lens_model_           = flightforge::FISHEYE_KANNALA_BRANDT;
   Kb.intrinsics_.use_custom_ = true;
   Kb.intrinsics_.fx_       = 254.3;
   Kb.intrinsics_.fy_       = 252.9;
@@ -563,9 +563,9 @@ const std::string kRoomYaml = "objects:\n"
 
 constexpr double PluginDefaultBeamCm = 1000.0;
 
-ueds_connector::LidarConfig LivoxConfig(const ueds_connector::LidarConfig& Base)
+flightforge::LidarConfig LivoxConfig(const flightforge::LidarConfig& Base)
 {
-  ueds_connector::LidarConfig Config = Base;
+  flightforge::LidarConfig Config = Base;
   Config.Enable                      = true;
   Config.Livox                       = true;
   Config.LivoxSensor                 = "mid360";
@@ -582,9 +582,9 @@ FF_TEST(LidarDoesNotSeeItsOwnAirframe)
   const auto [SpawnOk, Ids] = GameMode->SpawnObjectsFromYaml(kRoomYaml, Error);
   FF_REQUIRE(SpawnOk);
 
-  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 600.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  Drone->SetLocationAndRotationAsync(flightforge::Coordinates(0.0, 0.0, 600.0), flightforge::Rotation(0.0, 0.0, 0.0), false);
 
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_LIDAR_LIVOX));
   FF_REQUIRE(AddOk && SensorId >= 0);
 
   const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
@@ -608,15 +608,15 @@ FF_TEST(LidarDoesNotSeeItsOwnAirframe)
   GameMode->RemoveAllSpawnedObjects();
 
   // put the drone back where the other tests expect it
-  Drone->SetLocationAndRotationAsync(ueds_connector::Coordinates(0.0, 0.0, 200.0), ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  Drone->SetLocationAndRotationAsync(flightforge::Coordinates(0.0, 0.0, 200.0), flightforge::Rotation(0.0, 0.0, 0.0), false);
 }
 
 // Every Livox cursor used to start at pattern position zero, so two of them created
 // together walked the pattern in lockstep and returned the same directions.
 FF_TEST(TwoLivoxesDoNotShareAPhase)
 {
-  const auto [AddA, SensorA] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
-  const auto [AddB, SensorB] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  const auto [AddA, SensorA] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_LIDAR_LIVOX));
+  const auto [AddB, SensorB] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_LIDAR_LIVOX));
   FF_REQUIRE(AddA && AddB && SensorA != SensorB);
 
   for (const int SensorId : {SensorA, SensorB}) {
@@ -651,7 +651,7 @@ FF_TEST(TwoLivoxesDoNotShareAPhase)
 // A class mask has a handful of flat colours; a photograph has thousands.
 FF_TEST(SegmentationReturnsAMaskNotAPhotograph)
 {
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_RGB_SEG_CAMERA));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_RGB_SEG_CAMERA));
   FF_REQUIRE(AddOk && SensorId >= 0);
 
   const auto [ConfigOk, Config] = Drone->GetRgbCameraConfig(SensorId);
@@ -710,13 +710,13 @@ FF_TEST(ClearingAnEmptySceneSucceeds)
 // serve than the span it represents, so the next poll is later still.
 FF_TEST(LivoxBacklogStaysBounded)
 {
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_LIDAR_LIVOX));
   FF_REQUIRE(AddOk);
 
   const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
   FF_REQUIRE(ConfigOk);
 
-  ueds_connector::LidarConfig Config = LivoxConfig(Base);
+  flightforge::LidarConfig Config = LivoxConfig(Base);
   Config.Frequency                   = 10.0;
   FF_REQUIRE(Drone->SetLidarConfig(Config, SensorId));
 
@@ -739,7 +739,7 @@ FF_TEST(LivoxBacklogStaysBounded)
 // far away. Selecting a pattern must lift the beam to the sensor's own range.
 FF_TEST(LivoxPatternSetsTheBeamLength)
 {
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_LIDAR_LIVOX));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_LIDAR_LIVOX));
   FF_REQUIRE(AddOk);
 
   const auto [ConfigOk, Base] = Drone->GetLidarConfig(SensorId);
@@ -753,7 +753,7 @@ FF_TEST(LivoxPatternSetsTheBeamLength)
 
   for (const Expectation& Case : {Expectation{"avia", 40000.0}, Expectation{"mid360", 6000.0}}) {
 
-    ueds_connector::LidarConfig Config = Base;
+    flightforge::LidarConfig Config = Base;
     Config.Enable                      = true;
     Config.Livox                       = true;
     Config.LivoxSensor                 = Case.Sensor;
@@ -774,7 +774,7 @@ FF_TEST(LivoxPatternSetsTheBeamLength)
 // that lies inside the stepped interval, on either pixel-model path.
 void CheckEventStream(const bool bUseGpu)
 {
-  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(ueds_connector::SENSOR_EVENT_CAMERA));
+  const auto [AddOk, SensorId] = Drone->AddSensor(static_cast<int>(flightforge::SENSOR_EVENT_CAMERA));
   FF_REQUIRE(AddOk && SensorId >= 0);
 
   auto [CfgOk, Config] = Drone->GetEventCameraConfig(SensorId);
@@ -798,9 +798,9 @@ void CheckEventStream(const bool bUseGpu)
   const auto [RotOk, Rotation] = Drone->GetRotation();
   FF_REQUIRE(LocOk && RotOk);
 
-  std::vector<ueds_connector::PoseSample> Samples;
+  std::vector<flightforge::PoseSample> Samples;
   for (int i = 0; i <= 20; ++i) {
-    ueds_connector::PoseSample Sample;
+    flightforge::PoseSample Sample;
     Sample.t                = SimTime + 0.01 * i;
     Sample.position         = Location;
     Sample.orientation      = Rotation;
@@ -876,7 +876,7 @@ FF_TEST(AsyncPoseIsAcknowledgedPromptly)
   FF_REQUIRE(Ok);
 
   const auto Start = std::chrono::steady_clock::now();
-  const auto [Acked] = Drone->SetLocationAndRotationAsync(Location, ueds_connector::Rotation(0.0, 0.0, 0.0), false);
+  const auto [Acked] = Drone->SetLocationAndRotationAsync(Location, flightforge::Rotation(0.0, 0.0, 0.0), false);
   const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
 
   std::cout << "    async pose " << Ms << " ms" << std::endl;
@@ -903,11 +903,11 @@ std::pair<int, int> decodedSize(const std::vector<unsigned char>& Jpeg)
 
 FF_TEST(TwoCamerasOfOneTypeKeepTheirOwnResolution)
 {
-  const auto [OkA, A] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
-  const auto [OkB, B] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
+  const auto [OkA, A] = Drone->AddSensor(flightforge::SENSOR_RGB_CAMERA);
+  const auto [OkB, B] = Drone->AddSensor(flightforge::SENSOR_RGB_CAMERA);
   FF_REQUIRE(OkA && OkB && A != B);
 
-  ueds_connector::RgbCameraConfig Cfg{};
+  flightforge::RgbCameraConfig Cfg{};
   Cfg.width_  = 320;
   Cfg.height_ = 240;
   FF_REQUIRE(Drone->SetRgbCameraConfig(Cfg, A));
@@ -945,9 +945,9 @@ FF_TEST(CaptureRateHoldsInLockstep)
   FF_REQUIRE(GameMode->SetFixedTimestep(0.01, 0.0, Applied));
   FF_REQUIRE(GameMode->SetLockstep(true));
 
-  const auto [OkA, A] = Drone->AddSensor(ueds_connector::SENSOR_RGB_CAMERA);
+  const auto [OkA, A] = Drone->AddSensor(flightforge::SENSOR_RGB_CAMERA);
   FF_REQUIRE(OkA);
-  ueds_connector::RgbCameraConfig Cfg{};
+  flightforge::RgbCameraConfig Cfg{};
   Cfg.width_        = 320;
   Cfg.height_       = 240;
   Cfg.capture_rate_ = 20.0;
@@ -983,13 +983,13 @@ int main()
   const char* PortEnv = std::getenv("FLIGHTFORGE_GAMEMODE_PORT");
   const uint16_t GameModePort = PortEnv ? static_cast<uint16_t>(std::atoi(PortEnv)) : kGameModePort;
 
-  GameMode = std::make_unique<ueds_connector::GameModeController>(kAddress, GameModePort);
+  GameMode = std::make_unique<flightforge::SimulatorClient>(kAddress, GameModePort);
   if (!GameMode->ConnectSimple()) {
     std::cout << "SKIP: no simulator reachable on " << kAddress << ":" << GameModePort << std::endl;
     return FF_SKIP_EXIT_CODE;
   }
 
-  ueds_connector::Coordinates SpawnLocation(0.0, 0.0, 200.0);
+  flightforge::Coordinates SpawnLocation(0.0, 0.0, 200.0);
   std::string                 Frame          = "x500";
   const auto [SpawnOk, Port]                 = GameMode->SpawnDroneAtLocation(SpawnLocation, Frame);
   if (!SpawnOk) {
@@ -998,7 +998,7 @@ int main()
   }
   DronePort = Port;
 
-  Drone = std::make_unique<ueds_connector::UedsConnector>(kAddress, DronePort);
+  Drone = std::make_unique<flightforge::RobotClient>(kAddress, DronePort);
   if (!Drone->ConnectSimple()) {
     std::cerr << "FAIL: could not connect to the spawned drone on port " << DronePort << std::endl;
     return EXIT_FAILURE;

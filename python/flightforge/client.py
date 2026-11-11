@@ -72,11 +72,11 @@ class EventBatch:
         return image
 
 
-class Drone:
+class Robot:
     """One UAV: pose control and every sensor, addressed pythonically."""
 
     def __init__(self, address, port):
-        self._raw = _d.DroneController(address, port)
+        self._raw = _d.RobotClient(address, port)
         self._port = port
         _check(self._raw.ConnectSimple(), "drone connect")
 
@@ -469,7 +469,7 @@ class Simulator:
 
     def __init__(self, address="127.0.0.1", port=DEFAULT_GAME_MODE_PORT):
         self._address = address
-        self._raw = _g.GameModeController(address, port)
+        self._raw = _g.SimulatorClient(address, port)
         _check(self._raw.ConnectSimple(), "simulator connect")
 
         ok, (major, minor) = self._raw.GetApiVersion()
@@ -518,13 +518,13 @@ class Simulator:
         _check(ok, "GetMeta")
         return problems
 
-    def spawn_drone(self, position=(0.0, 0.0, 100.0), frame="x500"):
-        """Spawns a UAV and returns a connected :class:`Drone`."""
+    def spawn_robot(self, position=(0.0, 0.0, 100.0), frame="x500"):
+        """Spawns a UAV and returns a connected :class:`Robot`."""
         ok, port = self._raw.SpawnDroneAtLocation(_d.Coordinates(*[float(v) for v in position]), frame)
         _check(ok, f"SpawnDroneAtLocation({frame})")
-        return Drone(self._address, port)
+        return Robot(self._address, port)
 
-    def remove_drone(self, drone_or_port):
+    def remove_robot(self, drone_or_port):
         port = drone_or_port if isinstance(drone_or_port, int) else drone_or_port.port
         return self._raw.RemoveDrone(port)
 
@@ -543,7 +543,7 @@ class Simulator:
     # things in the wrong place:
     #
     #   spawn_objects / objects / move_object   metres, relative to world_origin
-    #   spawn_drone / set_pose / get_position   centimetres, absolute world
+    #   spawn_robot / set_pose / get_position   centimetres, absolute world
     #
     # so an object at [0, 0, 0] is NOT where a drone at (0, 0, 0) sits - they differ by
     # world_origin, which is wherever the level's "UAV" PlayerStart happens to be.

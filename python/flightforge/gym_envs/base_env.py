@@ -70,7 +70,7 @@ class FlightForgeNavEnvBase(gymnasium.Env):
 
     def _ensure_drone(self):
         if self._drone is None:
-            self._drone = self._sim.spawn_drone(self._start, self._drone_frame)
+            self._drone = self._sim.spawn_robot(self._start, self._drone_frame)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -122,7 +122,7 @@ class FlightForgeNavEnvBase(gymnasium.Env):
 
     def close(self):
         if self._drone is not None:
-            self._sim.remove_drone(self._drone)
+            self._sim.remove_robot(self._drone)
             self._drone.close()
             self._drone = None
         if self._owns_sim:

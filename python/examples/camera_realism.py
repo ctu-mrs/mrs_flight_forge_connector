@@ -32,7 +32,7 @@ CALIBRATION = {
 
 def main():
     sim = Simulator()
-    drone = sim.spawn_drone((0.0, 0.0, 200.0), "x500")
+    drone = sim.spawn_robot((0.0, 0.0, 200.0), "x500")
 
     drone.set_camera_intrinsics(**CALIBRATION["K"])
     drone.set_camera_distortion(**CALIBRATION["dist"])
@@ -68,7 +68,7 @@ def main():
     except ImportError:
         pass
 
-    sim.remove_drone(drone)
+    sim.remove_robot(drone)
     drone.close()
     sim.close()
 

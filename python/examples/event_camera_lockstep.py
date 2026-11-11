@@ -23,7 +23,7 @@ def main():
     device = sys.argv[1] if len(sys.argv) > 1 else "prophesee_evk4"
 
     sim = Simulator()
-    drone = sim.spawn_drone((0.0, 0.0, 300.0))
+    drone = sim.spawn_robot((0.0, 0.0, 300.0))
 
     sensors = drone.add_device(device, offset=(10.0, 0.0, 0.0))
     event_id = next(sensor_id for sensor_id, sensor_type in sensors if sensor_type == 6)
@@ -71,7 +71,7 @@ def main():
     sim.set_lockstep(False)
     sim.set_fixed_timestep(0.0)
     drone.set_pose_trajectory(np.zeros((0, 7)))
-    sim.remove_drone(drone)
+    sim.remove_robot(drone)
 
 
 if __name__ == "__main__":

@@ -12,15 +12,15 @@
 #define API_VERSION_MAJOR Serializable::api_version_major
 #define API_VERSION_MINOR Serializable::api_version_minor
 
-namespace ueds_connector
+namespace flightforge
 {
 
-class GameModeController : public SocketClient {
+class SimulatorClient : public SocketClient {
 public:
-  GameModeController() : SocketClient() {
+  SimulatorClient() : SocketClient() {
     scope_ = Serializable::Registry::Scope::GameMode;
   }
-  GameModeController(const std::string& address, uint16_t port) : SocketClient(address, port) {
+  SimulatorClient(const std::string& address, uint16_t port) : SocketClient(address, port) {
     scope_ = Serializable::Registry::Scope::GameMode;
   }
 
@@ -30,7 +30,7 @@ public:
 
   std::pair<bool, int> SpawnDrone();
 
-  std::pair<bool, int> SpawnDroneAtLocation(ueds_connector::Coordinates &Location, std::string &TypeUav);
+  std::pair<bool, int> SpawnDroneAtLocation(flightforge::Coordinates &Location, std::string &TypeUav);
 
   bool RemoveDrone(const int port);
 
@@ -94,7 +94,7 @@ public:
 
   bool SetForestHillyLevel(const int HillyLevel);
 
-  std::pair<bool, ueds_connector::Coordinates> GetWorldOrigin();
+  std::pair<bool, flightforge::Coordinates> GetWorldOrigin();
 
   bool SetWeather(const int& type_id);
 
@@ -161,4 +161,4 @@ public:
   //}
 };
 
-}  // namespace ueds_connector
+}  // namespace flightforge

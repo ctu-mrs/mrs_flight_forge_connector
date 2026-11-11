@@ -116,7 +116,7 @@ def main():
     sim.clear_objects()
 
     camera_world = sim.scene_to_world(CAMERA_SCENE)
-    drone = sim.spawn_drone(camera_world, "x500")
+    drone = sim.spawn_robot(camera_world, "x500")
     drone.set_pose(camera_world, (0.0, 0.0, 0.0))
 
     sensor_id = drone.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
@@ -139,7 +139,7 @@ def main():
     run_check(drone, sensor_id, cube_ids, "brown-conrady distorted", dist=dist)
 
     sim.clear_objects()
-    sim.remove_drone(drone)
+    sim.remove_robot(drone)
     drone.close()
     sim.close()
 

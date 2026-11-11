@@ -12,12 +12,12 @@
 #include "ueds-connector/drone-controller.h"
 #include "ueds-connector/game-mode-controller.h"
 
-using DroneController = ueds_connector::DroneController;
+using RobotClient = flightforge::RobotClient;
 
-std::unique_ptr<ueds_connector::GameModeController> gameModeController;
+std::unique_ptr<flightforge::SimulatorClient> gameModeController;
 
 
-double test(std::vector<std::unique_ptr<DroneController>>& droneControllers) {
+double test(std::vector<std::unique_ptr<RobotClient>>& droneControllers) {
   int num_images = 50;
   std::vector<int> counters(droneControllers.size(), 0);
   std::vector<std::thread> threads;
@@ -93,15 +93,15 @@ int main(int argc, char* argv[]) {
 //  sigaction(SIGINT, &sigIntHandler, nullptr);
 //#endif
 
-  gameModeController = std::make_unique<ueds_connector::GameModeController>(LOCALHOST, 8000);
+  gameModeController = std::make_unique<flightforge::SimulatorClient>(LOCALHOST, 8000);
   auto connect_result = gameModeController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
     return 1;
   }
 
-  ueds_connector::Coordinates world_origin{};
-  std::vector<std::unique_ptr<DroneController>> droneControllers;
+  flightforge::Coordinates world_origin{};
+  std::vector<std::unique_ptr<RobotClient>> droneControllers;
 
   for(int i=0; i<positionX.size(); i++){
     bool res;
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
     if (res) {
       std::cout << "SpawnDrone successful, port: " << port << std::endl;
 
-      droneControllers.emplace_back(std::make_unique<ueds_connector::DroneController>(LOCALHOST, port));
+      droneControllers.emplace_back(std::make_unique<flightforge::RobotClient>(LOCALHOST, port));
       connect_result = droneControllers[i]->Connect();
       if (connect_result != 1) {
         std::cout << "Error connecting to drone controller. connect_result was " << connect_result << std::endl;
@@ -127,11 +127,11 @@ int main(int argc, char* argv[]) {
         }
       }
 
-      ueds_connector::Coordinates coordinates{};
+      flightforge::Coordinates coordinates{};
       coordinates.x = positionX[i] + world_origin.x;
       coordinates.y = positionY[i] + world_origin.y;
       coordinates.z = positionZ[i] + world_origin.z;
-      ueds_connector::Coordinates teleportedTo{}; ueds_connector::Coordinates impactPoint{}; bool isHit;
+      flightforge::Coordinates teleportedTo{}; flightforge::Coordinates impactPoint{}; bool isHit;
 //      std::tie(res, teleportedTo, isHit, impactPoint) = droneControllers[i]->SetLocation(coordinates, false);
 //      //std::this_thread::sleep_for(std::chrono::seconds(1));
 //      while (!res) {
@@ -152,11 +152,11 @@ int main(int argc, char* argv[]) {
 
   for (int i = 0; i < widths.size(); i++) {
     for (int fov : fovs) {
-      ueds_connector::CameraConfig config{};
+      flightforge::CameraConfig config{};
       config.showDebugCamera = false;
       config.angleFOV = fov;
-      config.offset = ueds_connector::Coordinates(0, 0, 0);
-      config.orientation = ueds_connector::Rotation(0, 0, 0);
+      config.offset = flightforge::Coordinates(0, 0, 0);
+      config.orientation = flightforge::Rotation(0, 0, 0);
       config.Width = widths[i];
       config.Height = heights[i];
 

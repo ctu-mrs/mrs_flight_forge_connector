@@ -1,15 +1,15 @@
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/simulator_client.h>
 
 #include <algorithm>
 #include <sstream>
 
 using kissnet::socket_status;
-using ueds_connector::CameraCaptureModeEnum;
-using ueds_connector::GameModeController;
+using flightforge::CameraCaptureModeEnum;
+using flightforge::SimulatorClient;
 
 /* getDrones() //{ */
 
-std::pair<bool, std::vector<int>> GameModeController::GetDrones() {
+std::pair<bool, std::vector<int>> SimulatorClient::GetDrones() {
 
   Serializable::GameMode::GetDrones::Request request{};
 
@@ -24,7 +24,7 @@ std::pair<bool, std::vector<int>> GameModeController::GetDrones() {
 
 /* GetWorldOrigin() //{ */
 
-std::pair<bool, ueds_connector::Coordinates> GameModeController::GetWorldOrigin() {
+std::pair<bool, flightforge::Coordinates> SimulatorClient::GetWorldOrigin() {
 
   Serializable::GameMode::GetWorldOrigin::Request request{};
 
@@ -32,7 +32,7 @@ std::pair<bool, ueds_connector::Coordinates> GameModeController::GetWorldOrigin(
   const auto                                 status  = Request(request, response);
   const auto                                 success = status && response.status;
 
-  ueds_connector::Coordinates coordinates{};
+  flightforge::Coordinates coordinates{};
 
   if (success) {
     coordinates.x = response.x;
@@ -47,7 +47,7 @@ std::pair<bool, ueds_connector::Coordinates> GameModeController::GetWorldOrigin(
 
 /* spawnDrone() //{ */
 
-std::pair<bool, int> GameModeController::SpawnDrone() {
+std::pair<bool, int> SimulatorClient::SpawnDrone() {
 
   Serializable::GameMode::SpawnDrone::Request request{};
 
@@ -62,7 +62,7 @@ std::pair<bool, int> GameModeController::SpawnDrone() {
 
 /* spawnDrone() //{ */
 
-std::pair<bool, int> GameModeController::SpawnDroneAtLocation(ueds_connector::Coordinates &Location, std::string &TypeUav) {
+std::pair<bool, int> SimulatorClient::SpawnDroneAtLocation(flightforge::Coordinates &Location, std::string &TypeUav) {
 
   Serializable::GameMode::SpawnDroneAtLocation::Request request{};
   request.x = Location.x;
@@ -81,7 +81,7 @@ std::pair<bool, int> GameModeController::SpawnDroneAtLocation(ueds_connector::Co
 
 /* removeDrone() //{ */
 
-bool GameModeController::RemoveDrone(const int port) {
+bool SimulatorClient::RemoveDrone(const int port) {
 
   Serializable::GameMode::RemoveDrone::Request request{};
   request.port = port;
@@ -97,7 +97,7 @@ bool GameModeController::RemoveDrone(const int port) {
 
 /* SetForestDensity() //{ */
 
-bool GameModeController::SetForestDensity(const int DensityLevel) {
+bool SimulatorClient::SetForestDensity(const int DensityLevel) {
 
   Serializable::GameMode::SetForestDensity::Request request{};
   request.Density_Level = DensityLevel;
@@ -113,7 +113,7 @@ bool GameModeController::SetForestDensity(const int DensityLevel) {
 
 /* SetForestHillyLevel() //{ */
 
-bool GameModeController::SetForestHillyLevel(const int HillyLevel) {
+bool SimulatorClient::SetForestHillyLevel(const int HillyLevel) {
 
   Serializable::GameMode::SetForestHillyLevel::Request request{};
   request.Hilly_Level = HillyLevel;
@@ -129,7 +129,7 @@ bool GameModeController::SetForestHillyLevel(const int HillyLevel) {
 
 /* SetWeather() //{ */
 
-bool GameModeController::SetWeather(const int& type_id){
+bool SimulatorClient::SetWeather(const int& type_id){
 
   Serializable::GameMode::SetWeather::Request request{};
   request.weather_id = type_id;
@@ -145,7 +145,7 @@ bool GameModeController::SetWeather(const int& type_id){
 
 /* SetDatetime() //{ */
 
-bool GameModeController::SetDatetime(const int& hour, const int& minute){
+bool SimulatorClient::SetDatetime(const int& hour, const int& minute){
 
   Serializable::GameMode::SetDaytime::Request request{};
   request.hour = hour;
@@ -162,7 +162,7 @@ bool GameModeController::SetDatetime(const int& hour, const int& minute){
 
 /* SetMutualDroneVisibility() //{ */
 
-bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &enabled)
+bool flightforge::SimulatorClient::SetMutualDroneVisibility(const bool &enabled)
 {
   Serializable::GameMode::SetMutualVisibility::Request request{};
   request.mutual_visibiliti_enabled = enabled;
@@ -178,7 +178,7 @@ bool ueds_connector::GameModeController::SetMutualDroneVisibility(const bool &en
 
 /* getCameraCaptureMode() //{ */
 
-std::pair<bool, CameraCaptureModeEnum> GameModeController::GetCameraCaptureMode() {
+std::pair<bool, CameraCaptureModeEnum> SimulatorClient::GetCameraCaptureMode() {
 
   Serializable::GameMode::GetCameraCaptureMode::Request request{};
 
@@ -198,7 +198,7 @@ std::pair<bool, CameraCaptureModeEnum> GameModeController::GetCameraCaptureMode(
 
 /* setCameraCaptureMode() //{ */
 
-bool GameModeController::SetCameraCaptureMode(const CameraCaptureModeEnum& cameraCaptureMode) {
+bool SimulatorClient::SetCameraCaptureMode(const CameraCaptureModeEnum& cameraCaptureMode) {
 
   Serializable::GameMode::SetCameraCaptureMode::Request request{};
   request.cameraCaptureMode = static_cast<Serializable::GameMode::CameraCaptureModeEnum>(cameraCaptureMode);
@@ -214,7 +214,7 @@ bool GameModeController::SetCameraCaptureMode(const CameraCaptureModeEnum& camer
 
 /* SetGraphicsSettings() //{ */
 
-bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
+bool SimulatorClient::SetGraphicsSettings(const int& graphicsSettings) {
 
   Serializable::GameMode::SetGraphicsSettings::Request request{};
   request.graphicsSettings = graphicsSettings;
@@ -230,7 +230,7 @@ bool GameModeController::SetGraphicsSettings(const int& graphicsSettings) {
 
 /* SwitchWorldLevel() //{ */
 
-bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
+bool SimulatorClient::SwitchWorldLevel(const std::string& worldLevelName){
 
   Serializable::GameMode::SwitchWorldLevel::Request request{};
   request.worldLevelName = worldLevelName;
@@ -246,7 +246,7 @@ bool GameModeController::SwitchWorldLevel(const std::string& worldLevelName){
 
 /* getFps() //{ */
 
-std::pair<bool, float> GameModeController::GetFps() {
+std::pair<bool, float> SimulatorClient::GetFps() {
 
   Serializable::GameMode::GetFps::Request request{};
 
@@ -261,7 +261,7 @@ std::pair<bool, float> GameModeController::GetFps() {
 
 /* getApiVersion() //{ */
 
-std::pair<bool, std::pair<int,int>> GameModeController::GetApiVersion() {
+std::pair<bool, std::pair<int,int>> SimulatorClient::GetApiVersion() {
 
   Serializable::GameMode::GetApiVersion::Request request{};
 
@@ -276,7 +276,7 @@ std::pair<bool, std::pair<int,int>> GameModeController::GetApiVersion() {
 
 /* getClassMap() //{ */
 
-std::pair<bool, Serializable::GameMode::GetClassMap::Response> GameModeController::GetClassMap() {
+std::pair<bool, Serializable::GameMode::GetClassMap::Response> SimulatorClient::GetClassMap() {
 
   Serializable::GameMode::GetClassMap::Request request{};
 
@@ -290,7 +290,7 @@ std::pair<bool, Serializable::GameMode::GetClassMap::Response> GameModeControlle
 
 /* getTime() //{ */
 
-std::pair<bool, double> GameModeController::GetTime() {
+std::pair<bool, double> SimulatorClient::GetTime() {
 
   Serializable::GameMode::GetTime::Request request{};
 
@@ -305,7 +305,7 @@ std::pair<bool, double> GameModeController::GetTime() {
 
 /* getSimTime() //{ */
 
-bool GameModeController::GetSimTime(double& out_sim_seconds, double& out_dilation) {
+bool SimulatorClient::GetSimTime(double& out_sim_seconds, double& out_dilation) {
 
   Serializable::GameMode::GetTime::Request request{};
 
@@ -325,7 +325,7 @@ bool GameModeController::GetSimTime(double& out_sim_seconds, double& out_dilatio
 
 /* setFixedTimestep() //{ */
 
-bool GameModeController::SetFixedTimestep(double dt, double adaptive_min_dt, double& out_applied) {
+bool SimulatorClient::SetFixedTimestep(double dt, double adaptive_min_dt, double& out_applied) {
 
   Serializable::GameMode::SetFixedTimestep::Request request{};
   request.dt              = dt;
@@ -346,7 +346,7 @@ bool GameModeController::SetFixedTimestep(double dt, double adaptive_min_dt, dou
 
 /* setLockstep() //{ */
 
-bool GameModeController::SetLockstep(bool enabled) {
+bool SimulatorClient::SetLockstep(bool enabled) {
 
   Serializable::GameMode::SetLockstep::Request request{};
   request.enabled = enabled;
@@ -361,7 +361,7 @@ bool GameModeController::SetLockstep(bool enabled) {
 
 /* step() //{ */
 
-bool GameModeController::Step(int ticks, double& out_sim_time, uint64_t& out_tick_count) {
+bool SimulatorClient::Step(int ticks, double& out_sim_time, uint64_t& out_tick_count) {
 
   Serializable::GameMode::Step::Request request{};
   request.ticks = ticks;
@@ -388,7 +388,7 @@ bool GameModeController::Step(int ticks, double& out_sim_time, uint64_t& out_tic
 
 /* setTimeDilation() //{ */
 
-bool GameModeController::SetTimeDilation(double dilation, double& out_applied) {
+bool SimulatorClient::SetTimeDilation(double dilation, double& out_applied) {
 
   Serializable::GameMode::SetTimeDilation::Request request{};
   request.dilation = dilation;
@@ -408,7 +408,7 @@ bool GameModeController::SetTimeDilation(double dilation, double& out_applied) {
 
 /* spawnObjectsFromYaml() //{ */
 
-std::pair<bool, std::vector<int>> GameModeController::SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError) {
+std::pair<bool, std::vector<int>> SimulatorClient::SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError) {
 
   Serializable::GameMode::SpawnObjectsFromYaml::Request request{};
   request.yaml = yaml;
@@ -433,7 +433,7 @@ std::pair<bool, std::vector<int>> GameModeController::SpawnObjectsFromYaml(const
 
 /* removeSpawnedObject() //{ */
 
-std::pair<bool, int> GameModeController::RemoveSpawnedObject(const int object_id) {
+std::pair<bool, int> SimulatorClient::RemoveSpawnedObject(const int object_id) {
 
   Serializable::GameMode::RemoveSpawnedObject::Request request{};
   request.object_id = object_id;
@@ -449,7 +449,7 @@ std::pair<bool, int> GameModeController::RemoveSpawnedObject(const int object_id
 
 /* removeAllSpawnedObjects() //{ */
 
-std::pair<bool, int> GameModeController::RemoveAllSpawnedObjects() {
+std::pair<bool, int> SimulatorClient::RemoveAllSpawnedObjects() {
 
   // A negative id is the clear-everything sentinel.
   return RemoveSpawnedObject(-1);
@@ -459,7 +459,7 @@ std::pair<bool, int> GameModeController::RemoveAllSpawnedObjects() {
 
 /* moveSpawnedObject() //{ */
 
-bool GameModeController::MoveSpawnedObject(const int object_id, const std::array<double, 3>& position, const std::array<double, 3>& orientation,
+bool SimulatorClient::MoveSpawnedObject(const int object_id, const std::array<double, 3>& position, const std::array<double, 3>& orientation,
                                            const std::array<double, 3>& scale) {
 
   Serializable::GameMode::MoveSpawnedObject::Request request{};
@@ -478,7 +478,7 @@ bool GameModeController::MoveSpawnedObject(const int object_id, const std::array
 
 /* listSpawnedObjects() //{ */
 
-std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> GameModeController::ListSpawnedObjects() {
+std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> SimulatorClient::ListSpawnedObjects() {
 
   Serializable::GameMode::ListSpawnedObjects::Request request{};
 
@@ -493,7 +493,7 @@ std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> GameMode
 
 /* exportScene() //{ */
 
-std::pair<bool, std::string> GameModeController::ExportScene() {
+std::pair<bool, std::string> SimulatorClient::ExportScene() {
 
   Serializable::GameMode::ExportScene::Request request{};
 
@@ -508,7 +508,7 @@ std::pair<bool, std::string> GameModeController::ExportScene() {
 
 /* getWorldMesh() //{ */
 
-bool GameModeController::GetWorldMesh(const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles,
+bool SimulatorClient::GetWorldMesh(const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles,
                                       std::vector<float>& out_vertices, std::vector<uint32_t>& out_indices, bool& out_truncated, int32_t& out_sources) {
 
   Serializable::GameMode::GetWorldMesh::Request request{};
@@ -538,7 +538,7 @@ bool GameModeController::GetWorldMesh(const std::array<double, 3>& center, const
 
 /* getDistanceBatch() //{ */
 
-bool GameModeController::GetDistanceBatch(const std::vector<float>& query_points, double max_radius, double tolerance, bool terrain_only,
+bool SimulatorClient::GetDistanceBatch(const std::vector<float>& query_points, double max_radius, double tolerance, bool terrain_only,
                                           std::vector<float>& out_distances) {
 
   Serializable::GameMode::GetDistanceBatch::Request request{};
@@ -562,7 +562,7 @@ bool GameModeController::GetDistanceBatch(const std::vector<float>& query_points
 
 /* listAssets() //{ */
 
-std::pair<bool, std::vector<std::string>> GameModeController::ListAssets(const std::string& path_prefix, const std::string& name_filter,
+std::pair<bool, std::vector<std::string>> SimulatorClient::ListAssets(const std::string& path_prefix, const std::string& name_filter,
                                                                          bool& OutTruncated) {
 
   Serializable::GameMode::ListAssets::Request request{};
@@ -582,7 +582,7 @@ std::pair<bool, std::vector<std::string>> GameModeController::ListAssets(const s
 
 /* loadLibrary() //{ */
 
-std::pair<bool, int> GameModeController::LoadLibrary(const std::string& path, std::string& OutError) {
+std::pair<bool, int> SimulatorClient::LoadLibrary(const std::string& path, std::string& OutError) {
 
   Serializable::GameMode::LoadLibrary::Request request{};
   request.path = path;
@@ -599,7 +599,7 @@ std::pair<bool, int> GameModeController::LoadLibrary(const std::string& path, st
 
 /* listLibrary() //{ */
 
-std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> GameModeController::ListLibrary(const std::string& library, const std::string& cls,
+std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> SimulatorClient::ListLibrary(const std::string& library, const std::string& cls,
                                                                                                     const std::string& filter, int offset, int limit, int& OutTotal) {
 
   Serializable::GameMode::ListLibrary::Request request{};

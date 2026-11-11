@@ -7,7 +7,7 @@
 #include <memory>
 #include <optional>
 
-#include "flight_forge_connector/game_mode_controller.h"
+#include "flight_forge_connector/simulator_client.h"
 #include "flight_forge_connector/data_types.h"
 
 bool parseInt(std::string choice, int& _int) {
@@ -59,7 +59,7 @@ bool parseInts(std::string choice, int& a, int& b) {
   return true;
 }
 
-std::unique_ptr<ueds_connector::GameModeController> gameModeController;
+std::unique_ptr<flightforge::SimulatorClient> gameModeController;
 
 void interruptHandler(int s) {
   std::cout << "Got exit signal " << s << std::endl;
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  gameModeController = std::make_unique<ueds_connector::GameModeController>(address, port);
+  gameModeController = std::make_unique<flightforge::SimulatorClient>(address, port);
   bool connect_result = gameModeController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
 
 
   std::string s = "medium";
-  gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
+  gameModeController->SetGraphicsSettings(flightforge::GraphicsSettings::Name2Id().at(s));
 
   while (true) {
     std::cout << "Exit: x" << std::endl;
@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
         std::cout << std::endl;
       }
     } else if (choice_char == '2') {
-      ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,2.0);
+      flightforge::Coordinates spawn_coord = flightforge::Coordinates(0.0,0.0,2.0);
       auto [res,origin] = gameModeController->GetWorldOrigin();
       if (res) {
         std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
@@ -224,13 +224,13 @@ int main(int argc, char* argv[]) {
       int mode;
       const auto parseRes = parseInt(choice, mode);
       if (parseRes && mode >= 0 && mode <= 2) {
-        ueds_connector::CameraCaptureModeEnum captureMode;
+        flightforge::CameraCaptureModeEnum captureMode;
         if (mode == 0)
-          captureMode = ueds_connector::CAPTURE_ALL_FRAMES;
+          captureMode = flightforge::CAPTURE_ALL_FRAMES;
         else if (mode == 1)
-          captureMode = ueds_connector::CAPTURE_ON_MOVEMENT;
+          captureMode = flightforge::CAPTURE_ON_MOVEMENT;
         else
-          captureMode = ueds_connector::CAPTURE_ON_DEMAND;
+          captureMode = flightforge::CAPTURE_ON_DEMAND;
 
         const auto success = gameModeController->SetCameraCaptureMode(captureMode);
 
@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
     else if( choice_char == '9'){
       
       //std::string w = "race_2";
-      //gameModeController->SwitchWorldLevel(ueds_connector::WorldName::Name2Id().at(w));
+      //gameModeController->SwitchWorldLevel(flightforge::WorldName::Name2Id().at(w));
 
       int id_world;
       bool parse_res = parseString(choice);
@@ -318,7 +318,7 @@ int main(int argc, char* argv[]) {
     else if (choice_char == 'a') {
       
       //std::string s = "high";
-      // res = gameModeController->SetGraphicsSettings(ueds_connector::GraphicsSettings::Name2Id().at(s));
+      // res = gameModeController->SetGraphicsSettings(flightforge::GraphicsSettings::Name2Id().at(s));
       
       int id;
       bool parse_res = parseInt(choice, id);
@@ -385,7 +385,7 @@ int main(int argc, char* argv[]) {
       }
     }
     else if (choice_char == 'f') {
-      ueds_connector::Coordinates spawn_coord = ueds_connector::Coordinates(0.0,0.0,2.0);
+      flightforge::Coordinates spawn_coord = flightforge::Coordinates(0.0,0.0,2.0);
       auto [res,origin] = gameModeController->GetWorldOrigin();
       if (res) {
         std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
@@ -396,7 +396,7 @@ int main(int argc, char* argv[]) {
 
       
 
-      const std::vector<std::string>& uav_types = ueds_connector::UavFrameType::KnownNames();
+      const std::vector<std::string>& uav_types = flightforge::UavFrameType::KnownNames();
 
       for(size_t i = 0; i < uav_types.size(); i++){
         std::string uav_type = uav_types[i];
@@ -413,7 +413,7 @@ int main(int argc, char* argv[]) {
 
       }
     }else if(choice_char == 'w'){
-      const std::map<std::string, std::string>& maps = ueds_connector::WorldName::Name2Level();
+      const std::map<std::string, std::string>& maps = flightforge::WorldName::Name2Level();
 
       for(size_t i = 0; i < maps.size(); i++){
         const auto& entry = *std::next(maps.begin(), i);

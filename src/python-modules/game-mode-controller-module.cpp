@@ -4,13 +4,13 @@
 
 #include <cstring>
 
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/simulator_client.h>
 
 namespace py = pybind11;
 
-using ueds_connector::CameraCaptureModeEnum;
-using ueds_connector::Coordinates;
-using ueds_connector::GameModeController;
+using flightforge::CameraCaptureModeEnum;
+using flightforge::Coordinates;
+using flightforge::SimulatorClient;
 
 PYBIND11_MODULE(flight_forge_game_mode, m) {
   m.doc() = "FlightForge game-mode client (API 0.14). Worlds and drone frames are addressed by name; objects spawn from YAML documents.";
@@ -28,13 +28,13 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
       .def_readonly("orientation", &Serializable::GameMode::SpawnedObjectInfo::orientation)
       .def_readonly("scale", &Serializable::GameMode::SpawnedObjectInfo::scale);
 
-  py::class_<GameModeController>(m, "GameModeController")
+  py::class_<SimulatorClient>(m, "SimulatorClient")
       .def(py::init<const std::string&, uint16_t>())
-      .def("ConnectSimple", &GameModeController::ConnectSimple, py::call_guard<py::gil_scoped_release>())
-      .def("Ping", &GameModeController::Ping, py::call_guard<py::gil_scoped_release>())
+      .def("ConnectSimple", &SimulatorClient::ConnectSimple, py::call_guard<py::gil_scoped_release>())
+      .def("Ping", &SimulatorClient::Ping, py::call_guard<py::gil_scoped_release>())
       .def(
           "GetMeta",
-          [](GameModeController& client) {
+          [](SimulatorClient& client) {
             bool                                    ok;
             Serializable::Common::GetMeta::Response meta;
             {
@@ -59,18 +59,18 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
             out["catalogue_json"] = meta.catalogue_json_;
             return py::make_tuple(ok, out);
           })
-      .def("CheckCompatibility", &GameModeController::CheckCompatibility, py::call_guard<py::gil_scoped_release>(), py::arg("op_names") = std::vector<std::string>{})
-      .def("Disconnect", &GameModeController::Disconnect, py::call_guard<py::gil_scoped_release>())
-      .def("GetDrones", &GameModeController::GetDrones, py::call_guard<py::gil_scoped_release>())
-      .def("SpawnDrone", &GameModeController::SpawnDrone, py::call_guard<py::gil_scoped_release>())
-      .def("SpawnDroneAtLocation", &GameModeController::SpawnDroneAtLocation, py::call_guard<py::gil_scoped_release>(), py::arg("location"), py::arg("frame_name"))
-      .def("RemoveDrone", &GameModeController::RemoveDrone, py::call_guard<py::gil_scoped_release>())
-      .def("GetCameraCaptureMode", &GameModeController::GetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
-      .def("SetCameraCaptureMode", &GameModeController::SetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
-      .def("GetFps", &GameModeController::GetFps, py::call_guard<py::gil_scoped_release>())
+      .def("CheckCompatibility", &SimulatorClient::CheckCompatibility, py::call_guard<py::gil_scoped_release>(), py::arg("op_names") = std::vector<std::string>{})
+      .def("Disconnect", &SimulatorClient::Disconnect, py::call_guard<py::gil_scoped_release>())
+      .def("GetDrones", &SimulatorClient::GetDrones, py::call_guard<py::gil_scoped_release>())
+      .def("SpawnDrone", &SimulatorClient::SpawnDrone, py::call_guard<py::gil_scoped_release>())
+      .def("SpawnDroneAtLocation", &SimulatorClient::SpawnDroneAtLocation, py::call_guard<py::gil_scoped_release>(), py::arg("location"), py::arg("frame_name"))
+      .def("RemoveDrone", &SimulatorClient::RemoveDrone, py::call_guard<py::gil_scoped_release>())
+      .def("GetCameraCaptureMode", &SimulatorClient::GetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
+      .def("SetCameraCaptureMode", &SimulatorClient::SetCameraCaptureMode, py::call_guard<py::gil_scoped_release>())
+      .def("GetFps", &SimulatorClient::GetFps, py::call_guard<py::gil_scoped_release>())
       .def(
           "GetClassMap",
-          [](GameModeController& controller) {
+          [](SimulatorClient& controller) {
             bool                                           ok;
             Serializable::GameMode::GetClassMap::Response map;
             {
@@ -87,19 +87,19 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
             }
             return py::make_tuple(ok, classes, map.hash_);
           })
-      .def("GetApiVersion", &GameModeController::GetApiVersion, py::call_guard<py::gil_scoped_release>())
-      .def("GetTime", &GameModeController::GetTime, py::call_guard<py::gil_scoped_release>())
-      .def("SetGraphicsSettings", &GameModeController::SetGraphicsSettings, py::call_guard<py::gil_scoped_release>())
-      .def("SwitchWorldLevel", &GameModeController::SwitchWorldLevel, py::call_guard<py::gil_scoped_release>(), py::arg("level_name_or_package_path"))
-      .def("SetForestDensity", &GameModeController::SetForestDensity, py::call_guard<py::gil_scoped_release>())
-      .def("SetForestHillyLevel", &GameModeController::SetForestHillyLevel, py::call_guard<py::gil_scoped_release>())
-      .def("GetWorldOrigin", &GameModeController::GetWorldOrigin, py::call_guard<py::gil_scoped_release>())
-      .def("SetWeather", &GameModeController::SetWeather, py::call_guard<py::gil_scoped_release>())
-      .def("SetDatetime", &GameModeController::SetDatetime, py::call_guard<py::gil_scoped_release>())
-      .def("SetMutualDroneVisibility", &GameModeController::SetMutualDroneVisibility, py::call_guard<py::gil_scoped_release>())
+      .def("GetApiVersion", &SimulatorClient::GetApiVersion, py::call_guard<py::gil_scoped_release>())
+      .def("GetTime", &SimulatorClient::GetTime, py::call_guard<py::gil_scoped_release>())
+      .def("SetGraphicsSettings", &SimulatorClient::SetGraphicsSettings, py::call_guard<py::gil_scoped_release>())
+      .def("SwitchWorldLevel", &SimulatorClient::SwitchWorldLevel, py::call_guard<py::gil_scoped_release>(), py::arg("level_name_or_package_path"))
+      .def("SetForestDensity", &SimulatorClient::SetForestDensity, py::call_guard<py::gil_scoped_release>())
+      .def("SetForestHillyLevel", &SimulatorClient::SetForestHillyLevel, py::call_guard<py::gil_scoped_release>())
+      .def("GetWorldOrigin", &SimulatorClient::GetWorldOrigin, py::call_guard<py::gil_scoped_release>())
+      .def("SetWeather", &SimulatorClient::SetWeather, py::call_guard<py::gil_scoped_release>())
+      .def("SetDatetime", &SimulatorClient::SetDatetime, py::call_guard<py::gil_scoped_release>())
+      .def("SetMutualDroneVisibility", &SimulatorClient::SetMutualDroneVisibility, py::call_guard<py::gil_scoped_release>())
       .def(
           "SpawnObjectsFromYaml",
-          [](GameModeController& controller, const std::string& yaml) {
+          [](SimulatorClient& controller, const std::string& yaml) {
             std::string                       error;
             std::pair<bool, std::vector<int>> result;
             {
@@ -109,15 +109,15 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
             return py::make_tuple(result.first, result.second, error);
           },
           py::arg("yaml"), "Returns (success, object_ids, error).")
-      .def("RemoveSpawnedObject", &GameModeController::RemoveSpawnedObject, py::call_guard<py::gil_scoped_release>())
-      .def("RemoveAllSpawnedObjects", &GameModeController::RemoveAllSpawnedObjects, py::call_guard<py::gil_scoped_release>())
-      .def("MoveSpawnedObject", &GameModeController::MoveSpawnedObject, py::call_guard<py::gil_scoped_release>(), py::arg("object_id"), py::arg("position"),
+      .def("RemoveSpawnedObject", &SimulatorClient::RemoveSpawnedObject, py::call_guard<py::gil_scoped_release>())
+      .def("RemoveAllSpawnedObjects", &SimulatorClient::RemoveAllSpawnedObjects, py::call_guard<py::gil_scoped_release>())
+      .def("MoveSpawnedObject", &SimulatorClient::MoveSpawnedObject, py::call_guard<py::gil_scoped_release>(), py::arg("object_id"), py::arg("position"),
            py::arg("orientation"), py::arg("scale") = std::array<double, 3>{1.0, 1.0, 1.0})
-      .def("ListSpawnedObjects", &GameModeController::ListSpawnedObjects, py::call_guard<py::gil_scoped_release>())
-      .def("ExportScene", &GameModeController::ExportScene, py::call_guard<py::gil_scoped_release>())
+      .def("ListSpawnedObjects", &SimulatorClient::ListSpawnedObjects, py::call_guard<py::gil_scoped_release>())
+      .def("ExportScene", &SimulatorClient::ExportScene, py::call_guard<py::gil_scoped_release>())
       .def(
           "GetSimTime",
-          [](GameModeController& controller) {
+          [](SimulatorClient& controller) {
             double sim = 0.0, dilation = 1.0;
             bool   ok;
             {
@@ -128,7 +128,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           })
       .def(
           "SetTimeDilation",
-          [](GameModeController& controller, double dilation) {
+          [](SimulatorClient& controller, double dilation) {
             double applied = 1.0;
             bool   ok;
             {
@@ -140,7 +140,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("dilation"))
       .def(
           "SetFixedTimestep",
-          [](GameModeController& controller, double dt, double adaptive_min_dt) {
+          [](SimulatorClient& controller, double dt, double adaptive_min_dt) {
             double applied = 0.0;
             bool   ok;
             {
@@ -150,10 +150,10 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
             return py::make_tuple(ok, applied);
           },
           py::arg("dt"), py::arg("adaptive_min_dt") = 0.0)
-      .def("SetLockstep", &GameModeController::SetLockstep, py::call_guard<py::gil_scoped_release>(), py::arg("enabled") = true)
+      .def("SetLockstep", &SimulatorClient::SetLockstep, py::call_guard<py::gil_scoped_release>(), py::arg("enabled") = true)
       .def(
           "Step",
-          [](GameModeController& controller, int ticks) {
+          [](SimulatorClient& controller, int ticks) {
             double   sim_time   = 0.0;
             uint64_t tick_count = 0;
             bool     ok;
@@ -166,7 +166,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("ticks") = 1)
       .def(
           "GetWorldMesh",
-          [](GameModeController& controller, const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles) {
+          [](SimulatorClient& controller, const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles) {
             std::vector<float>    vertices;
             std::vector<uint32_t> indices;
             bool                  truncated = false;
@@ -187,7 +187,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("max_triangles") = 0)
       .def(
           "GetDistanceBatch",
-          [](GameModeController& controller, py::array_t<float, py::array::c_style | py::array::forcecast> points, double max_radius, double tolerance,
+          [](SimulatorClient& controller, py::array_t<float, py::array::c_style | py::array::forcecast> points, double max_radius, double tolerance,
              bool terrain_only) {
             std::vector<float> query(points.data(), points.data() + points.size());
             std::vector<float> distances;
@@ -203,7 +203,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("points"), py::arg("max_radius") = 5.0, py::arg("tolerance") = 0.001, py::arg("terrain_only") = false)
       .def(
           "ListAssets",
-          [](GameModeController& controller, const std::string& path_prefix, const std::string& name_filter) {
+          [](SimulatorClient& controller, const std::string& path_prefix, const std::string& name_filter) {
             bool                                      truncated = false;
             std::pair<bool, std::vector<std::string>> result;
             {
@@ -215,7 +215,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("path_prefix") = "", py::arg("name_filter") = "", "Returns (success, assets, truncated).")
       .def(
           "LoadLibrary",
-          [](GameModeController& controller, const std::string& path) {
+          [](SimulatorClient& controller, const std::string& path) {
             std::string          error;
             std::pair<bool, int> result;
             {
@@ -227,7 +227,7 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("path"), "Returns (success, count, error).")
       .def(
           "ListLibrary",
-          [](GameModeController& controller, const std::string& library, const std::string& cls, const std::string& filter, int offset, int limit) {
+          [](SimulatorClient& controller, const std::string& library, const std::string& cls, const std::string& filter, int offset, int limit) {
             int                                                                 total = 0;
             std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> result;
             {
@@ -254,12 +254,12 @@ PYBIND11_MODULE(flight_forge_game_mode, m) {
           py::arg("library") = "", py::arg("cls") = "", py::arg("filter") = "", py::arg("offset") = 0, py::arg("limit") = 200,
           "Returns (success, objects, total).")
       .def(py::pickle(
-          [](const GameModeController& controller) { return py::make_tuple(controller.getAddress(), controller.getPort()); },
+          [](const SimulatorClient& controller) { return py::make_tuple(controller.getAddress(), controller.getPort()); },
           [](py::tuple t) {
             if (t.size() != 2)
               throw std::runtime_error("Invalid state!");
 
-            auto controller = new GameModeController(t[0].cast<std::string>(), t[1].cast<uint16_t>());
+            auto controller = new SimulatorClient(t[0].cast<std::string>(), t[1].cast<uint16_t>());
             if (!controller->ConnectSimple()) {
               throw std::runtime_error("Unable to connect to the server!");
             }

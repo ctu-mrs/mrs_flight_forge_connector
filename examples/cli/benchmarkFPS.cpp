@@ -10,7 +10,7 @@
 
 #include "ueds-connector/game-mode-controller.h"
 
-std::unique_ptr<ueds_connector::GameModeController> gameModeController;
+std::unique_ptr<flightforge::SimulatorClient> gameModeController;
 
 void interruptHandler(int s) {
   std::cout << "Got exit signal " << s << std::endl;
@@ -34,7 +34,7 @@ int main() {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  gameModeController = std::make_unique<ueds_connector::GameModeController>(LOCALHOST, 8000);
+  gameModeController = std::make_unique<flightforge::SimulatorClient>(LOCALHOST, 8000);
   auto connect_result = gameModeController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;

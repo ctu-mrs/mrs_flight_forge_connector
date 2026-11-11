@@ -61,7 +61,7 @@ def spawn_ring(sim):
         y = CIRCLE_RADIUS_UU * math.sin(angle)
         yaw_to_center = math.degrees(math.atan2(-y, -x))
 
-        drone = sim.spawn_drone((x, y, ALTITUDE_UU), "x500")
+        drone = sim.spawn_robot((x, y, ALTITUDE_UU), "x500")
         drone.set_pose((x, y, ALTITUDE_UU), (0.0, yaw_to_center, 0.0))
 
         mjcf = QUADROTOR_MJCF.format(x=x / 100.0, y=-y / 100.0)
@@ -127,7 +127,7 @@ def main():
         print("install opencv-python to save the proof images")
 
     for _, drone, _, _ in robots:
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         drone.close()
     sim.close()
 

@@ -9,7 +9,7 @@
 #include <vector>
 #include "ueds-connector/drone-controller.h"
 
-std::unique_ptr<ueds_connector::DroneController> droneController;
+std::unique_ptr<flightforge::RobotClient> droneController;
 
 
 double test() {
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  droneController = std::make_unique<ueds_connector::DroneController>(LOCALHOST, port);
+  droneController = std::make_unique<flightforge::RobotClient>(LOCALHOST, port);
   auto connect_result = droneController->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to drone controller. connect_result was " << connect_result << std::endl;
@@ -68,15 +68,15 @@ int main(int argc, char* argv[]) {
      
   for (int i = 0; i < vert.size(); i++) {
     for (int j = 0; j < hor.size(); j++) {
-      ueds_connector::LidarConfig config{};
+      flightforge::LidarConfig config{};
       config.Enable = false;
       config.showBeams = false;
       config.BeamHorRays = hor[j];
       config.BeamVertRays = vert[i];
       config.beamLength = 1000;
       config.Frequency = 10;
-      config.offset = ueds_connector::Coordinates(0, 0, 6);
-      config.orientation = ueds_connector::Rotation(0, 90, 0);
+      config.offset = flightforge::Coordinates(0, 0, 6);
+      config.orientation = flightforge::Rotation(0, 90, 0);
       config.FOVHor = 360;
       config.FOVVert = 50;
 

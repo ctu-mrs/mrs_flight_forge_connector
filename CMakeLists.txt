@@ -8,9 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(LIBRARY_NAME flight_forge_connector)
 project(${LIBRARY_NAME} VERSION 1.0)
 
-if (WIN32)
-    link_libraries(ws2_32 wsock32)
-endif()
+find_package(Threads REQUIRED)
 
 # Add the fpng library from gitman
 add_library(fpng STATIC
@@ -42,25 +40,4 @@ option(BUILD_TESTS "Build the wire-protocol tests" OFF)
 if (BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
-
-option(BUILD_PYTHON_LIB "Build python lib" OFF)
-if (BUILD_PYTHON_LIB)
-    add_subdirectory(extern/pybind11)
-
-    pybind11_add_module(
-            flight_forge_game_mode
-            src/simulator_client.cpp
-            src/socket_client.cpp
-            src/python-modules/game-mode-controller-module.cpp
-            )
-    target_include_directories(flight_forge_game_mode PRIVATE include)
-
-    pybind11_add_module(
-            flight_forge_drone
-            src/robot_client.cpp
-            src/socket_client.cpp
-            src/python-modules/drone-controller-module.cpp
-            )
-    target_include_directories(flight_forge_drone PRIVATE include)
 endif()

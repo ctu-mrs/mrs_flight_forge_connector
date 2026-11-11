@@ -1,621 +1,441 @@
 #include <flight_forge_connector/simulator_client.h>
 
-#include <algorithm>
-#include <sstream>
+#include <flight_forge_connector/wire_convert.h>
 
-using kissnet::socket_status;
-using flightforge::CameraCaptureModeEnum;
-using flightforge::SimulatorClient;
+#include "reply_helpers.h"
 
-/* getDrones() //{ */
-
-std::pair<bool, std::vector<int>> SimulatorClient::GetDrones() {
-
-  Serializable::GameMode::GetDrones::Request request{};
-
-  Serializable::GameMode::GetDrones::Response response{};
-  const auto                                  status  = Request(request, response);
-  const auto                                  success = status && response.status;
-
-  return std::make_pair(success, success ? response.ports : std::vector<int>());
-}
-
-//}
-
-/* GetWorldOrigin() //{ */
-
-std::pair<bool, flightforge::Coordinates> SimulatorClient::GetWorldOrigin() {
-
-  Serializable::GameMode::GetWorldOrigin::Request request{};
-
-  Serializable::GameMode::GetWorldOrigin::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  flightforge::Coordinates coordinates{};
-
-  if (success) {
-    coordinates.x = response.x;
-    coordinates.y = response.y;
-    coordinates.z = response.z;
-  }
-
-  return std::make_pair(success, coordinates);
-}
-
-//}
-
-/* spawnDrone() //{ */
-
-std::pair<bool, int> SimulatorClient::SpawnDrone() {
-
-  Serializable::GameMode::SpawnDrone::Request request{};
-
-  Serializable::GameMode::SpawnDrone::Response response{};
-  const auto                                   status  = Request(request, response);
-  const auto                                   success = status && response.status;
-
-  return std::make_pair(success, success ? response.port : 0);
-}
-
-//}
-
-/* spawnDrone() //{ */
-
-std::pair<bool, int> SimulatorClient::SpawnDroneAtLocation(flightforge::Coordinates &Location, std::string &TypeUav) {
-
-  Serializable::GameMode::SpawnDroneAtLocation::Request request{};
-  request.x = Location.x;
-  request.y = Location.y;
-  request.z = Location.z;
-  request.MeshName = TypeUav;
-
-  Serializable::GameMode::SpawnDroneAtLocation::Response response{};
-  const auto                                   status  = Request(request, response);
-  const auto                                   success = status && response.status;
-
-  return std::make_pair(success, success ? response.port : 0);
-}
-
-//}
-
-/* removeDrone() //{ */
-
-bool SimulatorClient::RemoveDrone(const int port) {
-
-  Serializable::GameMode::RemoveDrone::Request request{};
-  request.port = port;
-
-  Serializable::GameMode::RemoveDrone::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* SetForestDensity() //{ */
-
-bool SimulatorClient::SetForestDensity(const int DensityLevel) {
-
-  Serializable::GameMode::SetForestDensity::Request request{};
-  request.Density_Level = DensityLevel;
-
-  Serializable::GameMode::SetForestDensity::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* SetForestHillyLevel() //{ */
-
-bool SimulatorClient::SetForestHillyLevel(const int HillyLevel) {
-
-  Serializable::GameMode::SetForestHillyLevel::Request request{};
-  request.Hilly_Level = HillyLevel;
-
-  Serializable::GameMode::SetForestHillyLevel::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* SetWeather() //{ */
-
-bool SimulatorClient::SetWeather(const int& type_id){
-
-  Serializable::GameMode::SetWeather::Request request{};
-  request.weather_id = type_id;
-
-  Serializable::GameMode::SetWeather::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return success; 
-}
-
-//}
-
-/* SetDatetime() //{ */
-
-bool SimulatorClient::SetDatetime(const int& hour, const int& minute){
-
-  Serializable::GameMode::SetDaytime::Request request{};
-  request.hour = hour;
-  request.minute = minute;
-
-  Serializable::GameMode::SetDaytime::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return success; 
-}
-
-//}
-
-/* SetMutualDroneVisibility() //{ */
-
-bool flightforge::SimulatorClient::SetMutualDroneVisibility(const bool &enabled)
+namespace flightforge
 {
-  Serializable::GameMode::SetMutualVisibility::Request request{};
-  request.mutual_visibiliti_enabled = enabled;
 
-  Serializable::GameMode::SetMutualVisibility::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
+using FBB = flatbuffers::FlatBufferBuilder;
 
-  return success;
+SimulatorClient::SimulatorClient(const std::string& address, const uint16_t port) : connection_(std::make_shared<Connection>(address, port)) {
 }
 
-//}
+SimulatorClient::SimulatorClient(std::shared_ptr<Connection> connection) : connection_(std::move(connection)) {
+}
 
-/* getCameraCaptureMode() //{ */
+/* connection //{ */
 
-std::pair<bool, CameraCaptureModeEnum> SimulatorClient::GetCameraCaptureMode() {
+Status SimulatorClient::Ping() {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreatePingRequest(b)));
+}
 
-  Serializable::GameMode::GetCameraCaptureMode::Request request{};
-
-  Serializable::GameMode::GetCameraCaptureMode::Response response{};
-  const auto                                             status  = Request(request, response);
-  const auto                                             success = status && response.status;
-
-  CameraCaptureModeEnum captureMode = CameraCaptureModeEnum::CAPTURE_ALL_FRAMES;
-  if (success) {
-    captureMode = static_cast<CameraCaptureModeEnum>(response.cameraCaptureMode);
+Expected<ApiInfo> SimulatorClient::GetInfo() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetInfoRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetInfoResponse>(reply, status);
+  if (!body) {
+    return status;
   }
 
-  return std::make_pair(success, captureMode);
-}
-
-//}
-
-/* setCameraCaptureMode() //{ */
-
-bool SimulatorClient::SetCameraCaptureMode(const CameraCaptureModeEnum& cameraCaptureMode) {
-
-  Serializable::GameMode::SetCameraCaptureMode::Request request{};
-  request.cameraCaptureMode = static_cast<Serializable::GameMode::CameraCaptureModeEnum>(cameraCaptureMode);
-
-  Serializable::GameMode::SetCameraCaptureMode::Response response{};
-  const auto                                             status  = Request(request, response);
-  const auto                                             success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* SetGraphicsSettings() //{ */
-
-bool SimulatorClient::SetGraphicsSettings(const int& graphicsSettings) {
-
-  Serializable::GameMode::SetGraphicsSettings::Request request{};
-  request.graphicsSettings = graphicsSettings;
-
-  Serializable::GameMode::SetGraphicsSettings::Response response{};
-  const auto                                             status  = Request(request, response);
-  const auto                                             success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* SwitchWorldLevel() //{ */
-
-bool SimulatorClient::SwitchWorldLevel(const std::string& worldLevelName){
-
-  Serializable::GameMode::SwitchWorldLevel::Request request{};
-  request.worldLevelName = worldLevelName;
-
-  Serializable::GameMode::SwitchWorldLevel::Response response{};
-  const auto                                             status  = Request(request, response);
-  const auto                                             success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* getFps() //{ */
-
-std::pair<bool, float> SimulatorClient::GetFps() {
-
-  Serializable::GameMode::GetFps::Request request{};
-
-  Serializable::GameMode::GetFps::Response response{};
-  const auto                               status  = Request(request, response);
-  const auto                               success = status && response.status;
-
-  return std::make_pair(success, success ? response.fps : 0);
-}
-
-//}
-
-/* getApiVersion() //{ */
-
-std::pair<bool, std::pair<int,int>> SimulatorClient::GetApiVersion() {
-
-  Serializable::GameMode::GetApiVersion::Request request{};
-
-  Serializable::GameMode::GetApiVersion::Response response{};
-  const auto                                      status  = Request(request, response);
-  const auto                                      success = status && response.status;
-
-  return std::make_pair(success, success ? std::make_pair(response.api_version_major, response.api_version_minor) : std::make_pair(-1, -1));
-}
-
-//}
-
-/* getClassMap() //{ */
-
-std::pair<bool, Serializable::GameMode::GetClassMap::Response> SimulatorClient::GetClassMap() {
-
-  Serializable::GameMode::GetClassMap::Request request{};
-
-  Serializable::GameMode::GetClassMap::Response response{};
-  const auto                                    status = Request(request, response);
-
-  return std::make_pair(status && response.status, response);
-}
-
-//}
-
-/* getTime() //{ */
-
-std::pair<bool, double> SimulatorClient::GetTime() {
-
-  Serializable::GameMode::GetTime::Request request{};
-
-  Serializable::GameMode::GetTime::Response response{};
-  const auto                                status  = Request(request, response);
-  const auto                                success = status && response.status;
-
-  return std::make_pair(success, success ? response.time : 0);
-}
-
-//}
-
-/* getSimTime() //{ */
-
-bool SimulatorClient::GetSimTime(double& out_sim_seconds, double& out_dilation) {
-
-  Serializable::GameMode::GetTime::Request request{};
-
-  Serializable::GameMode::GetTime::Response response{};
-  const auto                                status  = Request(request, response);
-  const auto                                success = status && response.status;
-
-  if (success) {
-    out_sim_seconds = response.sim_time;
-    out_dilation    = response.time_dilation;
+  ApiInfo info;
+  info.major = body->api_major();
+  info.minor = body->api_minor();
+  if (body->schema()) {
+    info.schema.assign(body->schema()->begin(), body->schema()->end());
   }
-
-  return success;
+  return info;
 }
 
-//}
+/* //} */
 
-/* setFixedTimestep() //{ */
+/* time //{ */
 
-bool SimulatorClient::SetFixedTimestep(double dt, double adaptive_min_dt, double& out_applied) {
-
-  Serializable::GameMode::SetFixedTimestep::Request request{};
-  request.dt              = dt;
-  request.adaptive_min_dt = adaptive_min_dt;
-
-  Serializable::GameMode::SetFixedTimestep::Response response{};
-  const auto                                         status  = Request(request, response);
-  const auto                                         success = status && response.status;
-
-  if (success) {
-    out_applied = response.applied;
+Expected<TimeInfo> SimulatorClient::GetTime() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetTimeRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetTimeResponse>(reply, status);
+  if (!body) {
+    return status;
   }
-
-  return success;
+  return TimeInfo{body->wall_time(), body->sim_time(), body->time_dilation()};
 }
 
-//}
-
-/* setLockstep() //{ */
-
-bool SimulatorClient::SetLockstep(bool enabled) {
-
-  Serializable::GameMode::SetLockstep::Request request{};
-  request.enabled = enabled;
-
-  Serializable::GameMode::SetLockstep::Response response{};
-  const auto                                    status = Request(request, response);
-
-  return status && response.status;
-}
-
-//}
-
-/* step() //{ */
-
-bool SimulatorClient::Step(int ticks, double& out_sim_time, uint64_t& out_tick_count) {
-
-  Serializable::GameMode::Step::Request request{};
-  request.ticks = ticks;
-
-  // the reply comes only after every tick ran and rendered; the server itself gives up after a minute
-  const int saved_timeout = GetReceiveTimeoutMs();
-  SetReceiveTimeoutMs(std::max(saved_timeout, 90000));
-
-  Serializable::GameMode::Step::Response response{};
-  const auto                             status  = Request(request, response);
-  const auto                             success = status && response.status;
-
-  SetReceiveTimeoutMs(saved_timeout);
-
-  if (success) {
-    out_sim_time   = response.sim_time;
-    out_tick_count = response.tick_count;
+Expected<float> SimulatorClient::GetFps() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetFpsRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetFpsResponse>(reply, status);
+  if (!body) {
+    return status;
   }
-
-  return success;
+  return body->fps();
 }
 
-//}
-
-/* setTimeDilation() //{ */
-
-bool SimulatorClient::SetTimeDilation(double dilation, double& out_applied) {
-
-  Serializable::GameMode::SetTimeDilation::Request request{};
-  request.dilation = dilation;
-
-  Serializable::GameMode::SetTimeDilation::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  if (success) {
-    out_applied = response.applied;
+Expected<double> SimulatorClient::SetTimeDilation(const double dilation) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateSetTimeDilationRequest(b, dilation));
+  Status     status;
+  const auto body = Body<wire::SetTimeDilationResponse>(reply, status);
+  if (!body) {
+    return status;
   }
-
-  return success;
+  return body->applied();
 }
 
-//}
-
-/* spawnObjectsFromYaml() //{ */
-
-std::pair<bool, std::vector<int>> SimulatorClient::SpawnObjectsFromYaml(const std::string& yaml, std::string& OutError) {
-
-  Serializable::GameMode::SpawnObjectsFromYaml::Request request{};
-  request.yaml = yaml;
-
-  Serializable::GameMode::SpawnObjectsFromYaml::Response response{};
-
-  // the reply waits for every glTF import
-  const int saved_timeout = GetReceiveTimeoutMs();
-  SetReceiveTimeoutMs(std::max(saved_timeout, 90000));
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  SetReceiveTimeoutMs(saved_timeout);
-
-  OutError = status ? response.error : "no response from the simulator";
-
-  return std::make_pair(success, success ? response.object_ids : std::vector<int>());
+Expected<double> SimulatorClient::SetFixedTimestep(const double dt, const double adaptive_min_dt) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateSetFixedTimestepRequest(b, dt, adaptive_min_dt));
+  Status     status;
+  const auto body = Body<wire::SetFixedTimestepResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->applied();
 }
 
-//}
-
-/* removeSpawnedObject() //{ */
-
-std::pair<bool, int> SimulatorClient::RemoveSpawnedObject(const int object_id) {
-
-  Serializable::GameMode::RemoveSpawnedObject::Request request{};
-  request.object_id = object_id;
-
-  Serializable::GameMode::RemoveSpawnedObject::Response response{};
-  const auto                                           status  = Request(request, response);
-  const auto                                           success = status && response.status;
-
-  return std::make_pair(success, success ? response.removed_count : 0);
+Status SimulatorClient::SetLockstep(const bool enabled) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetLockstepRequest(b, enabled)));
 }
 
-//}
+Expected<StepResult> SimulatorClient::Step(const uint32_t ticks) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateStepRequest(b, ticks), std::nullopt, std::nullopt, step_timeout_);
+  Status     status;
+  const auto body = Body<wire::StepResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return StepResult{body->sim_time(), body->tick_count()};
+}
 
-/* removeAllSpawnedObjects() //{ */
+/* //} */
 
-std::pair<bool, int> SimulatorClient::RemoveAllSpawnedObjects() {
+/* world //{ */
 
-  // A negative id is the clear-everything sentinel.
+Status SimulatorClient::SwitchWorld(const std::string& level) {
+  FBB        b;
+  const auto name = b.CreateString(level);
+  return AsStatus(connection_->Call(b, wire::CreateSwitchWorldRequest(b, name)));
+}
+
+Status SimulatorClient::SetWeather(const wire::Weather weather) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetWeatherRequest(b, weather)));
+}
+
+Status SimulatorClient::SetDaytime(const int hour, const int minute) {
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return Status::Fail("not a time of day");
+  }
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetDaytimeRequest(b, static_cast<uint8_t>(hour), static_cast<uint8_t>(minute))));
+}
+
+Status SimulatorClient::SetGraphicsSettings(const wire::GraphicsQuality quality) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetGraphicsSettingsRequest(b, quality)));
+}
+
+Status SimulatorClient::SetForestDensity(const int level) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetForestDensityRequest(b, level)));
+}
+
+Status SimulatorClient::SetForestHillyLevel(const int level) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetForestHillyLevelRequest(b, level)));
+}
+
+Status SimulatorClient::SetMutualVisibility(const bool enabled) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetMutualVisibilityRequest(b, enabled)));
+}
+
+Expected<wire::CaptureMode> SimulatorClient::GetCaptureMode() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetCaptureModeRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetCaptureModeResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->mode();
+}
+
+Status SimulatorClient::SetCaptureMode(const wire::CaptureMode mode) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetCaptureModeRequest(b, mode)));
+}
+
+Expected<Vec3> SimulatorClient::GetWorldOrigin() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetWorldOriginRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetWorldOriginResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->origin() ? FromWire(*body->origin()) : Vec3{};
+}
+
+Expected<wire::GetClassMapResponseT> SimulatorClient::GetClassMap() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetClassMapRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetClassMapResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  wire::GetClassMapResponseT out;
+  body->UnPackTo(&out);
+  return out;
+}
+
+/* //} */
+
+/* scene //{ */
+
+Expected<std::vector<int>> SimulatorClient::SpawnObjectsFromYaml(const std::string& yaml) {
+  FBB        b;
+  const auto document = b.CreateString(yaml);
+  const auto reply    = connection_->Call(b, wire::CreateSpawnObjectsFromYamlRequest(b, document));
+  Status     status;
+  const auto body = Body<wire::SpawnObjectsFromYamlResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<int> ids;
+  if (body->object_ids()) {
+    ids.assign(body->object_ids()->begin(), body->object_ids()->end());
+  }
+  return ids;
+}
+
+Expected<int> SimulatorClient::RemoveSpawnedObject(const int object_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateRemoveSpawnedObjectRequest(b, object_id));
+  Status     status;
+  const auto body = Body<wire::RemoveSpawnedObjectResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->removed_count();
+}
+
+Expected<int> SimulatorClient::RemoveAllSpawnedObjects() {
   return RemoveSpawnedObject(-1);
 }
 
-//}
-
-/* moveSpawnedObject() //{ */
-
-bool SimulatorClient::MoveSpawnedObject(const int object_id, const std::array<double, 3>& position, const std::array<double, 3>& orientation,
-                                           const std::array<double, 3>& scale) {
-
-  Serializable::GameMode::MoveSpawnedObject::Request request{};
-  request.object_id   = object_id;
-  request.position    = position;
-  request.orientation = orientation;
-  request.scale       = scale;
-
-  Serializable::GameMode::MoveSpawnedObject::Response response{};
-  const auto                                          status = Request(request, response);
-
-  return status && response.status;
+Status SimulatorClient::MoveSpawnedObject(const int object_id, const Pose& pose, const Vec3& scale) {
+  FBB              b;
+  const wire::Pose p = ToWire(pose);
+  const wire::Vec3 s = ToWire(scale);
+  return AsStatus(connection_->Call(b, wire::CreateMoveSpawnedObjectRequest(b, object_id, &p, &s)));
 }
 
-//}
-
-/* listSpawnedObjects() //{ */
-
-std::pair<bool, std::vector<Serializable::GameMode::SpawnedObjectInfo>> SimulatorClient::ListSpawnedObjects() {
-
-  Serializable::GameMode::ListSpawnedObjects::Request request{};
-
-  Serializable::GameMode::ListSpawnedObjects::Response response{};
-  const auto                                           status  = Request(request, response);
-  const auto                                           success = status && response.status;
-
-  return std::make_pair(success, success ? response.objects : std::vector<Serializable::GameMode::SpawnedObjectInfo>());
-}
-
-//}
-
-/* exportScene() //{ */
-
-std::pair<bool, std::string> SimulatorClient::ExportScene() {
-
-  Serializable::GameMode::ExportScene::Request request{};
-
-  Serializable::GameMode::ExportScene::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  return std::make_pair(success, success ? response.yaml : std::string());
-}
-
-//}
-
-/* getWorldMesh() //{ */
-
-bool SimulatorClient::GetWorldMesh(const std::array<double, 3>& center, const std::array<double, 3>& extent, uint32_t max_triangles,
-                                      std::vector<float>& out_vertices, std::vector<uint32_t>& out_indices, bool& out_truncated, int32_t& out_sources) {
-
-  Serializable::GameMode::GetWorldMesh::Request request{};
-  request.center_x_      = center[0];
-  request.center_y_      = center[1];
-  request.center_z_      = center[2];
-  request.extent_x_      = extent[0];
-  request.extent_y_      = extent[1];
-  request.extent_z_      = extent[2];
-  request.max_triangles_ = max_triangles;
-
-  Serializable::GameMode::GetWorldMesh::Response response{};
-  const auto                                     status  = Request(request, response);
-  const auto                                     success = status && response.status;
-
-  if (success) {
-    out_vertices  = std::move(response.vertices_);
-    out_indices   = std::move(response.indices_);
-    out_truncated = response.truncated_;
-    out_sources   = response.source_count_;
+Expected<std::vector<SpawnedObject>> SimulatorClient::ListSpawnedObjects() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateListSpawnedObjectsRequest(b));
+  Status     status;
+  const auto body = Body<wire::ListSpawnedObjectsResponse>(reply, status);
+  if (!body) {
+    return status;
   }
 
-  return success;
+  std::vector<SpawnedObject> objects;
+  if (body->objects()) {
+    for (const wire::SpawnedObject* object : *body->objects()) {
+      SpawnedObject out;
+      out.id      = object->id();
+      out.asset   = object->asset() ? object->asset()->str() : std::string();
+      out.stencil = object->stencil();
+      if (object->pose()) {
+        out.pose = FromWire(*object->pose());
+      }
+      if (object->scale()) {
+        out.scale = FromWire(*object->scale());
+      }
+      objects.push_back(std::move(out));
+    }
+  }
+  return objects;
 }
 
-//}
+Expected<std::string> SimulatorClient::ExportScene() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateExportSceneRequest(b));
+  Status     status;
+  const auto body = Body<wire::ExportSceneResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->yaml() ? body->yaml()->str() : std::string();
+}
 
-/* getDistanceBatch() //{ */
-
-bool SimulatorClient::GetDistanceBatch(const std::vector<float>& query_points, double max_radius, double tolerance, bool terrain_only,
-                                          std::vector<float>& out_distances) {
-
-  Serializable::GameMode::GetDistanceBatch::Request request{};
-  request.query_points_ = query_points;
-  request.max_radius_   = max_radius;
-  request.tolerance_    = tolerance;
-  request.terrain_only_ = terrain_only;
-
-  Serializable::GameMode::GetDistanceBatch::Response response{};
-  const auto                                         status  = Request(request, response);
-  const auto                                         success = status && response.status;
-
-  if (success) {
-    out_distances = std::move(response.distances_);
+Expected<AssetList> SimulatorClient::ListAssets(const std::string& path_prefix, const std::string& name_filter) {
+  FBB        b;
+  const auto prefix = b.CreateString(path_prefix);
+  const auto filter = b.CreateString(name_filter);
+  const auto reply  = connection_->Call(b, wire::CreateListAssetsRequest(b, prefix, filter));
+  Status     status;
+  const auto body = Body<wire::ListAssetsResponse>(reply, status);
+  if (!body) {
+    return status;
   }
 
-  return success;
+  AssetList list;
+  list.truncated = body->truncated();
+  if (body->assets()) {
+    for (const flatbuffers::String* name : *body->assets()) {
+      list.assets.push_back(name->str());
+    }
+  }
+  return list;
 }
 
-//}
-
-/* listAssets() //{ */
-
-std::pair<bool, std::vector<std::string>> SimulatorClient::ListAssets(const std::string& path_prefix, const std::string& name_filter,
-                                                                         bool& OutTruncated) {
-
-  Serializable::GameMode::ListAssets::Request request{};
-  request.path_prefix = path_prefix;
-  request.name_filter = name_filter;
-
-  Serializable::GameMode::ListAssets::Response response{};
-  const auto                                   status  = Request(request, response);
-  const auto                                   success = status && response.status;
-
-  OutTruncated = success && response.truncated;
-
-  return std::make_pair(success, success ? response.assets : std::vector<std::string>());
+Expected<int> SimulatorClient::LoadLibrary(const std::string& path) {
+  FBB        b;
+  const auto where = b.CreateString(path);
+  const auto reply = connection_->Call(b, wire::CreateLoadLibraryRequest(b, where));
+  Status     status;
+  const auto body = Body<wire::LoadLibraryResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->count();
 }
 
-//}
+Expected<LibraryPage> SimulatorClient::ListLibrary(const std::string& library, const std::string& object_class, const std::string& filter,
+                                                   const uint32_t offset, const uint32_t limit) {
+  FBB        b;
+  const auto lib   = b.CreateString(library);
+  const auto cls   = b.CreateString(object_class);
+  const auto words = b.CreateString(filter);
+  const auto reply = connection_->Call(b, wire::CreateListLibraryRequest(b, lib, cls, words, offset, limit));
+  Status     status;
+  const auto body = Body<wire::ListLibraryResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
 
-/* loadLibrary() //{ */
-
-std::pair<bool, int> SimulatorClient::LoadLibrary(const std::string& path, std::string& OutError) {
-
-  Serializable::GameMode::LoadLibrary::Request request{};
-  request.path = path;
-
-  Serializable::GameMode::LoadLibrary::Response response{};
-  const auto                                    status = Request(request, response);
-
-  OutError = status ? response.error : "no reply";
-
-  return std::make_pair(status && response.status, response.count);
+  LibraryPage page;
+  page.total = body->total();
+  if (body->objects()) {
+    for (const wire::LibraryObject* object : *body->objects()) {
+      page.objects.emplace_back();
+      object->UnPackTo(&page.objects.back());
+    }
+  }
+  return page;
 }
 
-//}
+Expected<WorldMesh> SimulatorClient::GetWorldMesh(const Vec3& center, const Vec3& extent, const uint32_t max_triangles) {
+  FBB              b;
+  const wire::Vec3 c = ToWire(center);
+  const wire::Vec3 e = ToWire(extent);
+  const auto       reply = connection_->Call(b, wire::CreateGetWorldMeshRequest(b, &c, &e, max_triangles));
+  Status           status;
+  const auto       body = Body<wire::GetWorldMeshResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
 
-/* listLibrary() //{ */
-
-std::pair<bool, std::vector<Serializable::GameMode::LibraryObject>> SimulatorClient::ListLibrary(const std::string& library, const std::string& cls,
-                                                                                                    const std::string& filter, int offset, int limit, int& OutTotal) {
-
-  Serializable::GameMode::ListLibrary::Request request{};
-  request.library = library;
-  request.cls     = cls;
-  request.filter  = filter;
-  request.offset  = offset;
-  request.limit   = limit;
-
-  Serializable::GameMode::ListLibrary::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  OutTotal = success ? response.total : 0;
-
-  return std::make_pair(success, response.objects);
+  WorldMesh mesh;
+  mesh.truncated    = body->truncated();
+  mesh.source_count = body->source_count();
+  if (body->vertices()) {
+    mesh.vertices.resize(body->vertices()->size());
+    std::memcpy(mesh.vertices.data(), body->vertices()->Data(), mesh.vertices.size() * sizeof(wire::Vec3f));
+  }
+  if (body->indices()) {
+    mesh.indices.assign(body->indices()->begin(), body->indices()->end());
+  }
+  return mesh;
 }
 
-//}
+Expected<std::vector<float>> SimulatorClient::GetDistanceBatch(const std::vector<std::array<float, 3>>& points, const double max_radius, const double tolerance,
+                                                               const bool terrain_only) {
+  static_assert(sizeof(std::array<float, 3>) == sizeof(wire::Vec3f));
+
+  FBB         b;
+  wire::Vec3f* out    = nullptr;
+  const auto   vector = b.CreateUninitializedVectorOfStructs(points.size(), &out);
+  std::memcpy(out, points.data(), points.size() * sizeof(wire::Vec3f));
+
+  const auto reply = connection_->Call(b, wire::CreateGetDistanceBatchRequest(b, vector, max_radius, tolerance, terrain_only));
+  Status     status;
+  const auto body = Body<wire::GetDistanceBatchResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<float> distances;
+  if (body->distances()) {
+    distances.assign(body->distances()->begin(), body->distances()->end());
+  }
+  return distances;
+}
+
+/* //} */
+
+/* robots //{ */
+
+Expected<int> SimulatorClient::SpawnRobot(const std::string& name, const Pose& pose, const std::string& label) {
+  FBB              b;
+  const auto       frame = b.CreateString(name);
+  const auto       tag   = b.CreateString(label);
+  const wire::Pose p     = ToWire(pose);
+  const auto       reply = connection_->Call(b, wire::CreateSpawnRobotRequest(b, frame, 0, &p, tag));
+  Status           status;
+  const auto       body = Body<wire::SpawnRobotResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->robot_id();
+}
+
+Expected<std::vector<RobotInfo>> SimulatorClient::ListRobots() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateListRobotsRequest(b));
+  Status     status;
+  const auto body = Body<wire::ListRobotsResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+
+  std::vector<RobotInfo> robots;
+  if (body->robots()) {
+    for (const wire::RobotInfo* robot : *body->robots()) {
+      robots.push_back(RobotInfo{robot->id(), robot->name() ? robot->name()->str() : std::string(), robot->kind(),
+                                 robot->label() ? robot->label()->str() : std::string()});
+    }
+  }
+  return robots;
+}
+
+Status SimulatorClient::RemoveRobot(const int robot_id) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateRemoveRobotRequest(b), robot_id));
+}
+
+Expected<std::vector<SetStateResult>> SimulatorClient::SetStates(const std::vector<std::pair<int, RobotState>>& states, const bool collide,
+                                                                 const bool wait_applied) {
+  FBB                                                b;
+  std::vector<flatbuffers::Offset<wire::RobotStateEntry>> entries;
+  for (const auto& [id, state] : states) {
+    const auto wire_state = BuildState(b, state);
+    entries.push_back(wire::CreateRobotStateEntry(b, id, wire_state));
+  }
+  const auto list  = b.CreateVector(entries);
+  const auto reply = connection_->Call(b, wire::CreateSetStatesRequest(b, list, collide, wait_applied));
+  if (!reply) {
+    return AsStatus(reply);
+  }
+
+  std::vector<SetStateResult> results;
+  if (const auto body = reply.body<wire::SetStatesResponse>(); body && body->results()) {
+    for (const wire::SetStateResponse* result : *body->results()) {
+      results.push_back(ReadStateResult(result));
+    }
+  }
+  return results;
+}
+
+/* //} */
+
+}  // namespace flightforge

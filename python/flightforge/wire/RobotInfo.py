@@ -45,8 +45,15 @@ class RobotInfo(object):
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
+    # RobotInfo
+    def Label(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.String(o + self._tab.Pos)
+        return None
+
 def RobotInfoStart(builder):
-    builder.StartObject(3)
+    builder.StartObject(4)
 
 def Start(builder):
     RobotInfoStart(builder)
@@ -69,6 +76,12 @@ def RobotInfoAddKind(builder, kind):
 def AddKind(builder, kind):
     RobotInfoAddKind(builder, kind)
 
+def RobotInfoAddLabel(builder, label):
+    builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(label), 0)
+
+def AddLabel(builder, label):
+    RobotInfoAddLabel(builder, label)
+
 def RobotInfoEnd(builder):
     return builder.EndObject()
 
@@ -84,10 +97,12 @@ class RobotInfoT(object):
         id = 0,
         name = None,
         kind = 0,
+        label = None,
     ):
         self.id = id  # type: int
         self.name = name  # type: Optional[str]
         self.kind = kind  # type: int
+        self.label = label  # type: Optional[str]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -113,15 +128,20 @@ class RobotInfoT(object):
         self.id = robotInfo.Id()
         self.name = robotInfo.Name()
         self.kind = robotInfo.Kind()
+        self.label = robotInfo.Label()
 
     # RobotInfoT
     def Pack(self, builder):
         if self.name is not None:
             name = builder.CreateString(self.name)
+        if self.label is not None:
+            label = builder.CreateString(self.label)
         RobotInfoStart(builder)
         RobotInfoAddId(builder, self.id)
         if self.name is not None:
             RobotInfoAddName(builder, name)
         RobotInfoAddKind(builder, self.kind)
+        if self.label is not None:
+            RobotInfoAddLabel(builder, label)
         robotInfo = RobotInfoEnd(builder)
         return robotInfo

@@ -1,57 +1,47 @@
 import numpy as np
 from gymnasium import spaces
 
-from ..client import FlightForgeError
 from .base_env import FlightForgeNavEnvBase
 
 
 class FlightForgeLidarEnv(FlightForgeNavEnvBase):
-    """Goal navigation from lidar distances.
+    """Goal navigation from lidar ranges.
 
-    The observation is the fixed-size vector of beam distances normalized to
-    [0, 1] by the beam length (no-return beams read as 1), concatenated with
-    the normalized goal direction.
+    The observation is the fixed-size vector of beam ranges normalised to [0, 1] by the lidar's range (no return
+    reads as 1), followed by the unit direction to the goal in the ground frame.
     """
 
-    def __init__(self, beam_count=None, beam_length=None, **kwargs):
+    def __init__(self, beam_count=None, beam_range=None, **kwargs):
         super().__init__(**kwargs)
 
         self._beam_count = beam_count
-        self._beam_length = beam_length
+        self._beam_range = beam_range
 
-        # The space has to exist before the first reset: gymnasium.make() wraps the env in
-        # PassiveEnvChecker, which validates observation_space at construction. Deferring it
-        # to reset() makes the env unusable through make() - the only path most callers use.
-        # Pass beam_count and beam_length to skip talking to the simulator here.
-        if self._beam_count is None or self._beam_length is None:
-            self._ensure_drone()
+        # gymnasium.make() validates observation_space at construction, so it cannot wait for the first reset
+        if self._beam_count is None or self._beam_range is None:
+            self._ensure_robot()
             self._read_lidar_geometry()
 
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self._beam_count + 3,), dtype=np.float32)
 
     def _read_lidar_geometry(self):
-        ok_config = self._drone.raw.GetLidarConfig()
-        if not ok_config[0]:
-            raise FlightForgeError("GetLidarConfig failed")
-        config = ok_config[1]
-
+        config = self._robot.lidar_config()
         if self._beam_count is None:
-            self._beam_count = int(config.BeamHorRays * config.BeamVertRays)
-        if self._beam_length is None:
-            self._beam_length = float(config.beamLength)
+            self._beam_count = int(config.horizontal_rays * config.vertical_rays)
+        if self._beam_range is None:
+            self._beam_range = float(config.range_m)
 
     def _observe(self):
-        points, _, _ = self._drone.lidar()
+        ranges = self._robot.lidar_scan().ranges()
 
-        distances = np.full(self._beam_count, 1.0, dtype=np.float32)
-        n = min(len(points), self._beam_count)
+        observation = np.ones(self._beam_count, dtype=np.float32)
+        n = min(ranges.size, self._beam_count)
         if n > 0:
-            raw = points[:n, 0]
-            normalized = np.where(raw < 0, 1.0, np.clip(raw / self._beam_length, 0.0, 1.0))
-            distances[:n] = normalized.astype(np.float32)
+            seen = ranges[:n]
+            observation[:n] = np.where(np.isfinite(seen), np.clip(seen / self._beam_range, 0.0, 1.0), 1.0)
 
-        to_goal = self._goal - self._drone.get_position()
+        to_goal = self._goal - self._robot.get_position()
         norm = np.linalg.norm(to_goal)
         direction = (to_goal / norm if norm > 0 else to_goal).astype(np.float32)
 
-        return np.concatenate([distances, direction])
+        return np.concatenate([observation, direction])

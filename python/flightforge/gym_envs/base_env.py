@@ -1,13 +1,8 @@
 """Shared machinery for the FlightForge navigation environments.
 
-The task: fly from a start pose to a goal position in the running simulator.
-Actions are normalized position/yaw steps applied by teleporting with
-collision checking, so the environments work without any dynamics model; for
-dynamics-in-the-loop training combine :class:`flightforge.MujocoBridge` with a
-custom environment instead.
-
-Coordinates are Unreal units (centimeters, left-handed) as used by the rest of
-the simulator API.
+The task: fly from a start position to a goal in the running simulator. Actions are normalised position and yaw
+steps applied by teleporting with collision checking, so the environments need no dynamics model; for dynamics in
+the loop combine flightforge.MujocoBridge with a custom environment. Positions are ground-frame metres, yaw in rad.
 """
 
 import gymnasium
@@ -15,6 +10,7 @@ import numpy as np
 from gymnasium import spaces
 
 from ..client import Simulator
+from ..geometry import Pose
 
 
 class FlightForgeNavEnvBase(gymnasium.Env):
@@ -24,14 +20,14 @@ class FlightForgeNavEnvBase(gymnasium.Env):
     def __init__(
         self,
         address="127.0.0.1",
-        port=8551,
+        port=None,
         simulator=None,
-        drone_frame="x500",
-        start_position=(0.0, 0.0, 200.0),
-        goal_position=(2000.0, 0.0, 200.0),
-        goal_threshold=100.0,
-        action_step=50.0,
-        yaw_step=10.0,
+        robot_name="x500",
+        start_position=(0.0, 0.0, 2.0),
+        goal_position=(20.0, 0.0, 2.0),
+        goal_threshold=1.0,
+        action_step=0.5,
+        yaw_step=0.175,
         max_steps=500,
         collision_penalty=100.0,
         goal_reward=100.0,
@@ -45,7 +41,7 @@ class FlightForgeNavEnvBase(gymnasium.Env):
         self._sim = simulator if simulator is not None else Simulator(address, port)
         self._owns_sim = simulator is None
 
-        self._drone_frame = drone_frame
+        self._robot_name = robot_name
         self._start = np.asarray(start_position, dtype=np.float64)
         self._goal = np.asarray(goal_position, dtype=np.float64)
         self._goal_threshold = float(goal_threshold)
@@ -55,12 +51,12 @@ class FlightForgeNavEnvBase(gymnasium.Env):
         self._collision_penalty = float(collision_penalty)
         self._goal_reward = float(goal_reward)
 
-        self._drone = None
+        self._robot = None
         self._steps = 0
         self._yaw = 0.0
         self._last_distance = None
 
-        # dx, dy, dz, dyaw in [-1, 1], scaled by action_step / yaw_step
+        # dx, dy, dz, dyaw in [-1, 1], scaled by action_step (m) and yaw_step (rad)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
 
     # subclasses provide observation_space and _observe()
@@ -68,17 +64,17 @@ class FlightForgeNavEnvBase(gymnasium.Env):
     def _observe(self):
         raise NotImplementedError
 
-    def _ensure_drone(self):
-        if self._drone is None:
-            self._drone = self._sim.spawn_robot(self._start, self._drone_frame)
+    def _ensure_robot(self):
+        if self._robot is None:
+            self._robot = self._sim.spawn_robot(self._start, self._robot_name)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._ensure_drone()
+        self._ensure_robot()
         self._yaw = 0.0
         self._steps = 0
-        self._drone.set_pose(self._start, (0.0, self._yaw, 0.0), check_collisions=False)
+        self._robot.set_pose(Pose.at(*self._start, yaw=self._yaw))
         self._last_distance = float(np.linalg.norm(self._goal - self._start))
 
         return self._observe(), {"distance": self._last_distance}
@@ -86,20 +82,19 @@ class FlightForgeNavEnvBase(gymnasium.Env):
     def step(self, action):
         action = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
 
-        position = self._drone.get_position()
+        position = self._robot.get_position()
         target = position + action[:3] * self._action_step
-        self._yaw = (self._yaw + action[3] * self._yaw_step) % 360.0
+        self._yaw = float(np.remainder(self._yaw + action[3] * self._yaw_step + np.pi, 2.0 * np.pi) - np.pi)
 
-        hit, _ = self._drone.set_pose(target, (0.0, self._yaw, 0.0), check_collisions=True)
+        hit = self._robot.set_pose(Pose.at(*target, yaw=self._yaw), collide=True).hit
 
-        position = self._drone.get_position()
+        position = self._robot.get_position()
         distance = float(np.linalg.norm(self._goal - position))
 
-        # progress toward the goal, plus terminal bonuses/penalties
         reward = self._last_distance - distance
         self._last_distance = distance
 
-        crashed = hit or self._drone.crashed()
+        crashed = bool(hit or self._robot.crashed())
         reached = distance < self._goal_threshold
 
         if crashed:
@@ -116,14 +111,14 @@ class FlightForgeNavEnvBase(gymnasium.Env):
 
     def render(self):
         if self.render_mode == "rgb_array":
-            image, _ = self._drone.rgb()
-            return image
+            image, _ = self._robot.rgb()
+            return np.ascontiguousarray(image)
         return None
 
     def close(self):
-        if self._drone is not None:
-            self._sim.remove_robot(self._drone)
-            self._drone.close()
-            self._drone = None
+        if self._robot is not None:
+            self._sim.remove_robot(self._robot)
+            self._robot.close()
+            self._robot = None
         if self._owns_sim:
             self._sim.close()

@@ -49,8 +49,15 @@ class SpawnRobotRequest(object):
             return obj
         return None
 
+    # SpawnRobotRequest
+    def Label(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
+        if o != 0:
+            return self._tab.String(o + self._tab.Pos)
+        return None
+
 def SpawnRobotRequestStart(builder):
-    builder.StartObject(3)
+    builder.StartObject(4)
 
 def Start(builder):
     SpawnRobotRequestStart(builder)
@@ -73,6 +80,12 @@ def SpawnRobotRequestAddPose(builder, pose):
 def AddPose(builder, pose):
     SpawnRobotRequestAddPose(builder, pose)
 
+def SpawnRobotRequestAddLabel(builder, label):
+    builder.PrependUOffsetTRelativeSlot(3, flatbuffers.number_types.UOffsetTFlags.py_type(label), 0)
+
+def AddLabel(builder, label):
+    SpawnRobotRequestAddLabel(builder, label)
+
 def SpawnRobotRequestEnd(builder):
     return builder.EndObject()
 
@@ -93,10 +106,12 @@ class SpawnRobotRequestT(object):
         name = None,
         descriptionYaml = None,
         pose = None,
+        label = None,
     ):
         self.name = name  # type: Optional[str]
         self.descriptionYaml = descriptionYaml  # type: Optional[str]
         self.pose = pose  # type: Optional[flightforge.wire.Pose.PoseT]
+        self.label = label  # type: Optional[str]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -123,6 +138,7 @@ class SpawnRobotRequestT(object):
         self.descriptionYaml = spawnRobotRequest.DescriptionYaml()
         if spawnRobotRequest.Pose() is not None:
             self.pose = flightforge.wire.Pose.PoseT.InitFromObj(spawnRobotRequest.Pose())
+        self.label = spawnRobotRequest.Label()
 
     # SpawnRobotRequestT
     def Pack(self, builder):
@@ -130,6 +146,8 @@ class SpawnRobotRequestT(object):
             name = builder.CreateString(self.name)
         if self.descriptionYaml is not None:
             descriptionYaml = builder.CreateString(self.descriptionYaml)
+        if self.label is not None:
+            label = builder.CreateString(self.label)
         SpawnRobotRequestStart(builder)
         if self.name is not None:
             SpawnRobotRequestAddName(builder, name)
@@ -138,5 +156,7 @@ class SpawnRobotRequestT(object):
         if self.pose is not None:
             pose = self.pose.Pack(builder)
             SpawnRobotRequestAddPose(builder, pose)
+        if self.label is not None:
+            SpawnRobotRequestAddLabel(builder, label)
         spawnRobotRequest = SpawnRobotRequestEnd(builder)
         return spawnRobotRequest

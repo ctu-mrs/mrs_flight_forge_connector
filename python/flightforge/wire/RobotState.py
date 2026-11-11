@@ -113,8 +113,30 @@ class RobotState(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         return o == 0
 
+    # RobotState
+    def BaseLinearVelocity(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            x = o + self._tab.Pos
+            from flightforge.wire.Vec3 import Vec3
+            obj = Vec3()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # RobotState
+    def BaseAngularVelocity(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            x = o + self._tab.Pos
+            from flightforge.wire.Vec3 import Vec3
+            obj = Vec3()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
 def RobotStateStart(builder):
-    builder.StartObject(4)
+    builder.StartObject(6)
 
 def Start(builder):
     RobotStateStart(builder)
@@ -161,6 +183,18 @@ def RobotStateStartLinkPosesVector(builder, numElems):
 def StartLinkPosesVector(builder, numElems):
     return RobotStateStartLinkPosesVector(builder, numElems)
 
+def RobotStateAddBaseLinearVelocity(builder, baseLinearVelocity):
+    builder.PrependStructSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(baseLinearVelocity), 0)
+
+def AddBaseLinearVelocity(builder, baseLinearVelocity):
+    RobotStateAddBaseLinearVelocity(builder, baseLinearVelocity)
+
+def RobotStateAddBaseAngularVelocity(builder, baseAngularVelocity):
+    builder.PrependStructSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(baseAngularVelocity), 0)
+
+def AddBaseAngularVelocity(builder, baseAngularVelocity):
+    RobotStateAddBaseAngularVelocity(builder, baseAngularVelocity)
+
 def RobotStateEnd(builder):
     return builder.EndObject()
 
@@ -168,6 +202,7 @@ def End(builder):
     return RobotStateEnd(builder)
 
 import flightforge.wire.Pose
+import flightforge.wire.Vec3
 try:
     from typing import List, Optional
 except:
@@ -182,11 +217,15 @@ class RobotStateT(object):
         jointPositions = None,
         jointVelocities = None,
         linkPoses = None,
+        baseLinearVelocity = None,
+        baseAngularVelocity = None,
     ):
         self.base = base  # type: Optional[flightforge.wire.Pose.PoseT]
         self.jointPositions = jointPositions  # type: Optional[List[float]]
         self.jointVelocities = jointVelocities  # type: Optional[List[float]]
         self.linkPoses = linkPoses  # type: Optional[List[flightforge.wire.Pose.PoseT]]
+        self.baseLinearVelocity = baseLinearVelocity  # type: Optional[flightforge.wire.Vec3.Vec3T]
+        self.baseAngularVelocity = baseAngularVelocity  # type: Optional[flightforge.wire.Vec3.Vec3T]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -233,6 +272,10 @@ class RobotStateT(object):
                 else:
                     pose_ = flightforge.wire.Pose.PoseT.InitFromObj(robotState.LinkPoses(i))
                     self.linkPoses.append(pose_)
+        if robotState.BaseLinearVelocity() is not None:
+            self.baseLinearVelocity = flightforge.wire.Vec3.Vec3T.InitFromObj(robotState.BaseLinearVelocity())
+        if robotState.BaseAngularVelocity() is not None:
+            self.baseAngularVelocity = flightforge.wire.Vec3.Vec3T.InitFromObj(robotState.BaseAngularVelocity())
 
     # RobotStateT
     def Pack(self, builder):
@@ -267,5 +310,11 @@ class RobotStateT(object):
             RobotStateAddJointVelocities(builder, jointVelocities)
         if self.linkPoses is not None:
             RobotStateAddLinkPoses(builder, linkPoses)
+        if self.baseLinearVelocity is not None:
+            baseLinearVelocity = self.baseLinearVelocity.Pack(builder)
+            RobotStateAddBaseLinearVelocity(builder, baseLinearVelocity)
+        if self.baseAngularVelocity is not None:
+            baseAngularVelocity = self.baseAngularVelocity.Pack(builder)
+            RobotStateAddBaseAngularVelocity(builder, baseAngularVelocity)
         robotState = RobotStateEnd(builder)
         return robotState

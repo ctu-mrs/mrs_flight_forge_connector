@@ -1,174 +1,123 @@
 #pragma once
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include <flight_forge_connector/connection.h>
 #include <flight_forge_connector/data_types.h>
-#include <flight_forge_connector/socket_client.h>
-#include <flight_forge_connector/serialization/serializable_shared.h>
 
 namespace flightforge
 {
 
-// Drone-side client. Since API 0.14 every sensor call takes a sensor id;
-// the default -1 addresses the default sensor of that type, which the
-// simulator creates lazily on first use. Additional sensors come from
-// AddSensor/AddDevice and are addressed by the returned ids.
-class RobotClient : public SocketClient {
-
+// a sensor_id of -1 addresses the robot's default sensor of the op's type, created on first use
+class RobotClient {
 public:
-  RobotClient() : SocketClient() {
-    scope_ = Serializable::Registry::Scope::Drone;
+  RobotClient(std::shared_ptr<Connection> connection, int robot_id);
+  RobotClient(const std::string& address, uint16_t port, int robot_id);
+
+  bool Connect(int attempts = 1, std::chrono::milliseconds retry_delay = std::chrono::milliseconds(500)) {
+    return connection_->Connect(attempts, retry_delay);
+  }
+  void Disconnect() {
+    connection_->Disconnect();
+  }
+  const std::shared_ptr<Connection>& SharedConnection() const {
+    return connection_;
+  }
+  int Id() const {
+    return robot_id_;
   }
 
-  RobotClient(const std::string& address, uint16_t port) : SocketClient(address, port) {
-    scope_ = Serializable::Registry::Scope::Drone;
-  }
+  /* state //{ */
 
-  /* pose + state //{ */
+  Expected<StampedState> GetState();
 
-  std::pair<bool, Coordinates> GetLocation();
+  // returns once the state is applied, with where the base ended up
+  Expected<SetStateResult> SetState(const RobotState& state, bool collide = false);
 
-  std::pair<bool, bool> GetCrashState();
+  // returns before the state is applied, for pose streams
+  Status SetStateAsync(const RobotState& state, bool collide = false);
 
-  std::tuple<bool, Coordinates, bool, Coordinates> SetLocation(const Coordinates& coordinates, bool checkCollisions);
+  Expected<SetStateResult> SetPose(const Pose& pose, bool collide = false);
+  Status                   SetPoseAsync(const Pose& pose, bool collide = false);
 
-  std::pair<bool, Rotation> GetRotation();
+  // rad/s per joint, GetDescription's joint order; empty restores the default spin
+  Status SetJointVelocities(const std::vector<double>& velocities);
 
-  std::tuple<bool, Rotation, bool, Coordinates> SetRotation(const Rotation& rotation);
+  // the base follows the samples, interpolated each tick, and holds the last; empty releases it
+  Status SetTrajectory(const std::vector<TrajectorySample>& samples);
 
-  std::tuple<bool, Coordinates, Rotation, bool, Coordinates> SetLocationAndRotation(const Coordinates& coordinate, const Rotation& rotation,
-                                                                                    const bool should_collide);
+  Expected<wire::GetDescriptionResponseT> GetDescription();
+  Expected<CollisionState>                GetCollision();
 
-  std::tuple<bool> SetLocationAndRotationAsync(const Coordinates& coordinate, const Rotation& rotation, const bool should_collide);
+  Expected<bool> GetMoveLineVisible();
+  Status         SetMoveLineVisible(bool visible);
 
-  // a pose timeline the pawn interpolates along per tick; replaces the previous one, empty detaches
-  bool SetPoseTrajectory(const std::vector<PoseSample>& samples);
+  /* //} */
 
-  /**
-   * Angular rate per propeller [rad/s], in the frame's propeller order: rear-left,
-   * rear-right, front-left, front-right, then any an external model added. Sign gives
-   * the direction of turn. Fewer values than the frame has leaves the rest untouched;
-   * an empty list hands them back to their default spin. out_count reports how many
-   * propellers the frame actually has.
-   */
-  bool SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count);
+  /* sensors and devices //{ */
 
-  std::pair<bool, bool> GetMoveLineVisible();
+  // pose is relative to the link (empty is the base link) or the named mount
+  Expected<int> AddSensor(wire::SensorType type, const std::optional<Pose>& pose = std::nullopt, const std::string& link = "", const std::string& mount = "");
+  Status        RemoveSensor(int sensor_id);
+  Expected<std::vector<SensorInfo>> ListSensors();
 
-  bool SetMoveLineVisible(bool visible);
+  Expected<std::vector<SensorInfo>> AddDevice(const std::string& device_name, const std::optional<Pose>& pose = std::nullopt, bool show_mesh = false,
+                                              const std::string& link = "", const std::string& mount = "");
+  Expected<std::vector<DeviceInfo>> ListDevices();
 
-  //}
+  // -1 lists every camera the robot has
+  Expected<std::vector<wire::CameraInfoT>> GetCameraInfo(int sensor_id = -1);
 
-  /* cameras //{ */
+  /* //} */
 
-  std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetRgbCameraData(int sensorId = -1);
+  /* configs //{ */
 
-  std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> GetStereoCameraData(int sensorId = -1);
+  // also the depth, instance and legacy segmentation cameras' config
+  Expected<wire::RgbCameraConfigT> GetRgbCameraConfig(int sensor_id = -1);
+  Status                           SetRgbCameraConfig(const wire::RgbCameraConfigT& config, int sensor_id = -1);
 
-  std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetRgbSegmented(int sensorId = -1);
+  Expected<wire::StereoCameraConfigT> GetStereoCameraConfig(int sensor_id = -1);
+  Status                              SetStereoCameraConfig(const wire::StereoCameraConfigT& config, int sensor_id = -1);
 
-  std::pair<bool, RgbCameraConfig> GetRgbCameraConfig(int sensorId = -1);
+  Expected<wire::FisheyeCameraConfigT> GetFisheyeCameraConfig(int sensor_id = -1);
+  Status                               SetFisheyeCameraConfig(const wire::FisheyeCameraConfigT& config, int sensor_id = -1);
 
-  bool SetRgbCameraConfig(const RgbCameraConfig& config, int sensorId = -1);
+  Expected<wire::EventCameraConfigT> GetEventCameraConfig(int sensor_id = -1);
+  Status                             SetEventCameraConfig(const wire::EventCameraConfigT& config, int sensor_id = -1);
 
-  // stereo config passes the wire struct through; independent left/right eye
-  // poses since API 0.12 (the fixed baseline is gone)
-  std::pair<bool, Serializable::Drone::StereoCameraConfig> GetStereoCameraConfig(int sensorId = -1);
+  Expected<wire::LidarConfigT> GetLidarConfig(int sensor_id = -1);
+  Status                       SetLidarConfig(const wire::LidarConfigT& config, int sensor_id = -1);
 
-  bool SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config, int sensorId = -1);
+  /* //} */
 
-  //}
+  /* data //{ */
 
-  /* event camera //{ */
+  Expected<Image>       GetRgbCameraData(int sensor_id = -1);
+  Expected<StereoImage> GetStereoCameraData(int sensor_id = -1);
+  Expected<Image>       GetFisheyeCameraData(int sensor_id = -1);
+  Expected<DepthImage>  GetDepthCameraData(int sensor_id = -1);
+  Expected<Image>       GetRgbSegCameraData(int sensor_id = -1);
 
-  // drains the events since the previous call, time-sorted; stamp is the sim time the batch is complete up to
-  std::pair<bool, CameraEvents> GetEventCameraData(int sensorId = -1);
+  // RGBA8: instance id = R + (G << 8) + (B << 16), A the class id
+  Expected<Image>                                  GetInstanceSegData(int sensor_id = -1);
+  Expected<std::vector<wire::InstanceSegEntryT>> GetInstanceSegMap(int sensor_id = -1);
 
-  std::pair<bool, EventCameraConfig> GetEventCameraConfig(int sensorId = -1);
+  // drains the events since the previous call
+  Expected<CameraEvents> GetEventCameraData(int sensor_id = -1);
 
-  bool SetEventCameraConfig(const EventCameraConfig& config, int sensorId = -1);
+  Expected<LidarScan>          GetLidarScan(bool with_intensity = false, bool with_labels = false, int sensor_id = -1);
+  Expected<RangefinderReading> GetRangefinderData(int sensor_id = -1);
 
-  //}
+  /* //} */
 
-  /* fisheye camera //{ */
+private:
+  std::optional<int32_t> Sensor(int sensor_id) const;
 
-  std::tuple<bool, std::vector<unsigned char>, double, uint32_t> GetFisheyeCameraData(int sensorId = -1);
-
-  std::pair<bool, FisheyeCameraConfig> GetFisheyeCameraConfig(int sensorId = -1);
-
-  bool SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId = -1);
-
-  //}
-
-  /* lidar + rangefinder //{ */
-
-  std::tuple<bool, double> GetRangefinderData(int sensorId = -1);
-
-  // Livox mode returns slices sized by elapsed time rather than the beam grid;
-  // the stamp is taken at scan start.
-  std::tuple<bool, std::vector<LidarData>, Coordinates, double> GetLidarData(int sensorId = -1);
-
-  std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> GetLidarSegData(int sensorId = -1);
-
-  std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> GetLidarIntData(int sensorId = -1);
-
-  std::pair<bool, LidarConfig> GetLidarConfig(int sensorId = -1);
-
-  bool SetLidarConfig(const LidarConfig& config, int sensorId = -1);
-
-  //}
-
-  /* sensor + device management //{ */
-
-  // Creates a sensor of the given SensorTypeEnum; returns its id.
-  std::pair<bool, int> AddSensor(int sensorType);
-
-  bool RemoveSensor(int sensorId);
-
-  std::pair<bool, std::vector<SensorInfo>> ListSensors();
-
-  // Instantiates a preconfigured real-world device (see ListDevices) at a
-  // mount pose; a device may create several sensors (e.g. a RealSense D435i
-  // is a stereo pair plus an RGB camera). showMesh attaches a housing-sized
-  // placeholder mesh at the mount pose for visual debugging.
-  std::pair<bool, std::vector<SensorInfo>> AddDevice(const std::string& deviceName, const Coordinates& offset, const Rotation& rotation, bool showMesh);
-
-  std::pair<bool, std::vector<DeviceInfo>> ListDevices();
-
-  /**
-   * The instance-segmentation image: each pixel is a 24-bit per-actor id
-   * (decode as r + (g<<8) + (b<<16); 0 = background), rendered by a dedicated
-   * mesh pass with correct occlusion and no 255-instance stencil cap.
-   */
-  bool GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId = -1);
-
-  /** The id -> actor-path map snapshotted with the last instance-segmentation frame. */
-  std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> GetInstanceSegMap(int sensorId = -1);
-
-  /**
-   * The effective calibration of every camera on the drone (or of one sensor id): model,
-   * K, D, resolution, mount offset/rotation, a stereo pair's baseline, rolling-shutter
-   * readout. One entry per eye. Everything a ROS CameraInfo + TF needs, in one call.
-   * Only cameras that exist are listed: a fresh drone creates each default sensor on
-   * first use, so configure or read a camera before asking for its calibration.
-   */
-  std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> GetCameraInfo(int sensorId = -1);
-
-  /**
-   * One trace of any lidar with the channels asked for. Replaces polling GetLidarData +
-   * GetLidarSegData + GetLidarIntData, which trace separately and, on a Livox, each
-   * consume their own slice of the pattern. Instance ids match the instance camera's.
-   */
-  std::pair<bool, LidarScan> GetLidarScan(bool withLabels = true, bool withIntensity = false, int sensorId = -1);
-
-  /**
-   * Depth image in uint16 millimetres (0 invalid, 65535 clamp - the
-   * Kinect/RealSense convention), row-major width x height, uncompressed.
-   */
-  bool GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId = -1);
-
-  //}
+  std::shared_ptr<Connection> connection_;
+  int                         robot_id_;
 };
 
 }  // namespace flightforge

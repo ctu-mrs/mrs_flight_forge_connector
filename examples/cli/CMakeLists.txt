@@ -1,5 +1,5 @@
 add_executable(debug_cli debug-cli.cpp)
-target_link_libraries(debug_cli PRIVATE ${LIBRARY_NAME} fpng)
+target_link_libraries(debug_cli PRIVATE ${LIBRARY_NAME})
 
 add_executable(debug_game_mode_cli debug_game_mode_cli.cpp)
 target_link_libraries(debug_game_mode_cli PRIVATE ${LIBRARY_NAME})
@@ -11,20 +11,6 @@ target_link_libraries(extract_gt PRIVATE ${LIBRARY_NAME})
 # one frame from every camera, written out as PNGs for eyeballing
 add_executable(capture_all capture_all.cpp)
 target_link_libraries(capture_all PRIVATE ${LIBRARY_NAME} fpng)
-
-# add_executable(bench_fps benchmarkFPS.cpp)
-# target_link_libraries(bench_fps PRIVATE ${LIBRARY_NAME})
-# add_executable(bench_camera cameraFPS.cpp)
-# target_link_libraries(bench_camera PRIVATE ${LIBRARY_NAME})
-# add_executable(bench_lidar lidarFPS.cpp)
-# target_link_libraries(bench_lidar PRIVATE ${LIBRARY_NAME})
-# add_executable(cameraBenchmark cameraBechmark.cpp)
-# target_link_libraries(cameraBenchmark PRIVATE ${LIBRARY_NAME})
-# add_executable(lidarBenchmark lidarBechmark.cpp)
-# target_link_libraries(lidarBenchmark PRIVATE ${LIBRARY_NAME})
-
-# add_executable(cameraMultiBench cameraMultiBench.cpp)
-# target_link_libraries(cameraMultiBench PRIVATE ${LIBRARY_NAME})
 
 # per-sensor timing through the C++ API, which is the path real consumers take
 add_executable(profile_sensors profile_sensors.cpp)

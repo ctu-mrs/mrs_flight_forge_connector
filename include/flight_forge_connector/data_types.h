@@ -1,46 +1,178 @@
 #pragma once
 
+#include <array>
+#include <cmath>
 #include <cstdint>
-
-#include <string>
 #include <map>
+#include <optional>
+#include <string>
 #include <vector>
 
+#include <flight_forge_connector/wire/flightforge_generated.h>
+
+// Everything here is in the wire's frame: the ground frame (x = Unreal +X, y = Unreal -Y, z up), metres, rad.
 namespace flightforge
 {
 
-/* Daytime //{ */
+/* results //{ */
 
-struct Daytime
+struct Status
 {
-  int hour;
-  int minute;
+  bool        ok = false;
+  std::string error;
+
+  explicit operator bool() const {
+    return ok;
+  }
+
+  static Status Ok() {
+    return Status{true, {}};
+  }
+
+  static Status Fail(std::string message) {
+    return Status{false, std::move(message)};
+  }
 };
 
-//}
-
-/* sensor + device identity //{ */
-
-// Matches the simulator's SensorType enum. Sensor requests take a sensor id;
-// -1 addresses the default (lazily created) sensor of the message's type.
-enum SensorTypeEnum : int
+template <typename T>
+struct Expected : Status
 {
-  SENSOR_RGB_CAMERA     = 0,
-  SENSOR_LIDAR          = 1,
-  SENSOR_RANGEFINDER    = 2,
-  SENSOR_LIDAR_LIVOX    = 3,
-  SENSOR_RGB_SEG_CAMERA = 4,
-  SENSOR_STEREO_CAMERA  = 5,
-  SENSOR_EVENT_CAMERA   = 6,
-  SENSOR_FISHEYE_CAMERA = 7,
-  SENSOR_INSTANCE_SEG_CAMERA = 8,
-  SENSOR_DEPTH_CAMERA = 9,
+  T value{};
+
+  Expected() = default;
+  Expected(const Status& status) : Status(status) {}
+  Expected(T v) : Status{true, {}}, value(std::move(v)) {}
+
+  const T& operator*() const {
+    return value;
+  }
+  T& operator*() {
+    return value;
+  }
+  const T* operator->() const {
+    return &value;
+  }
+  T* operator->() {
+    return &value;
+  }
 };
+
+/* //} */
+
+/* geometry //{ */
+
+struct Vec3
+{
+  double x = 0.0;
+  double y = 0.0;
+  double z = 0.0;
+};
+
+// unit quaternion, body to parent
+struct Quat
+{
+  double x = 0.0;
+  double y = 0.0;
+  double z = 0.0;
+  double w = 1.0;
+
+  // rad, applied yaw * pitch * roll about the parent's z, y, x
+  static Quat FromRpy(const double roll, const double pitch, const double yaw) {
+    const double cr = std::cos(roll / 2), sr = std::sin(roll / 2);
+    const double cp = std::cos(pitch / 2), sp = std::sin(pitch / 2);
+    const double cy = std::cos(yaw / 2), sy = std::sin(yaw / 2);
+    return Quat{sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy, cr * cp * cy + sr * sp * sy};
+  }
+
+  static Quat FromYaw(const double yaw) {
+    return FromRpy(0.0, 0.0, yaw);
+  }
+
+  double Yaw() const {
+    return std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+  }
+
+  Vec3 Rotate(const Vec3& v) const {
+    const double tx = 2.0 * (y * v.z - z * v.y), ty = 2.0 * (z * v.x - x * v.z), tz = 2.0 * (x * v.y - y * v.x);
+    return Vec3{v.x + w * tx + (y * tz - z * ty), v.y + w * ty + (z * tx - x * tz), v.z + w * tz + (x * ty - y * tx)};
+  }
+
+  Quat Conjugate() const {
+    return Quat{-x, -y, -z, w};
+  }
+
+  Quat operator*(const Quat& o) const {
+    return Quat{w * o.x + x * o.w + y * o.z - z * o.y, w * o.y - x * o.z + y * o.w + z * o.x, w * o.z + x * o.y - y * o.x + z * o.w,
+                w * o.w - x * o.x - y * o.y - z * o.z};
+  }
+};
+
+struct Pose
+{
+  Vec3 position;
+  Quat orientation;
+
+  static Pose At(const double x, const double y, const double z, const double yaw = 0.0) {
+    return Pose{Vec3{x, y, z}, Quat::FromYaw(yaw)};
+  }
+};
+
+/* //} */
+
+/* robots //{ */
+
+struct RobotState
+{
+  std::optional<Pose>  base;                // absent leaves the base where it is
+  std::vector<double>  joint_positions;     // rad or m, GetDescription's joint order
+  std::vector<double>  joint_velocities;    // rad/s or m/s
+  std::optional<Vec3>  base_linear_velocity;   // m/s
+  std::optional<Vec3>  base_angular_velocity;  // rad/s, body frame
+};
+
+struct StampedState
+{
+  double     stamp = 0.0;  // s, sim
+  RobotState state;
+};
+
+struct SetStateResult
+{
+  int  robot_id = -1;
+  Pose base;
+  bool hit = false;
+  Vec3 impact_point;
+};
+
+struct TrajectorySample
+{
+  double t = 0.0;  // s, sim
+  Pose   base;
+};
+
+struct CollisionState
+{
+  bool collided = false;
+  Vec3 impact_point;
+};
+
+struct RobotInfo
+{
+  int             id = -1;
+  std::string     name;
+  wire::RobotKind kind = wire::RobotKind::GENERIC;
+  std::string     label;
+};
+
+/* //} */
+
+/* sensors //{ */
 
 struct SensorInfo
 {
-  int id;
-  int type;
+  int              id   = -1;
+  wire::SensorType type = wire::SensorType::RGB_CAMERA;
+  std::string      link;
 };
 
 struct DeviceInfo
@@ -49,33 +181,158 @@ struct DeviceInfo
   std::string description;
 };
 
-//}
+// data holds the codec's output, or packed rows of format when compression is NONE
+struct Image
+{
+  double             stamp       = 0.0;
+  uint32_t           width       = 0;
+  uint32_t           height      = 0;
+  wire::PixelFormat  format      = wire::PixelFormat::UNKNOWN;
+  wire::Compression  compression = wire::Compression::NONE;
+  std::vector<uint8_t> data;
+};
+
+struct StereoImage
+{
+  double stamp = 0.0;
+  Image  left;
+  Image  right;
+};
+
+// 0 invalid or too close, 65535 clamped
+struct DepthImage
+{
+  double                stamp  = 0.0;
+  uint32_t              width  = 0;
+  uint32_t              height = 0;
+  std::vector<uint16_t> mm;
+};
+
+struct LidarScan
+{
+  double                           stamp = 0.0;
+  Pose                             sensor_pose;  // ground frame, at scan time
+  uint32_t                         rows = 0;     // 0 when not organised
+  uint32_t                         cols = 0;
+  std::vector<std::array<float, 3>> points;      // m, sensor frame, NaN for no return
+  std::vector<int32_t>             intensity;
+  std::vector<int32_t>             class_id;
+  std::vector<uint32_t>            instance_id;
+};
+
+struct RangefinderReading
+{
+  double stamp = 0.0;
+  double range = 0.0;  // m, NaN for no return
+};
+
+struct CameraEvent
+{
+  uint16_t x        = 0;
+  uint16_t y        = 0;
+  int8_t   polarity = 0;  // +1 brighter, -1 darker
+  double   stamp    = 0.0;
+};
+
+// xyp = x | y << 16 | brighter << 31, t_us after base_stamp, time-sorted
+struct CameraEvents
+{
+  std::vector<uint32_t> xyp;
+  std::vector<uint32_t> t_us;
+
+  double   base_stamp = 0.0;
+  double   stamp      = 0.0;  // the batch is complete up to here
+  uint32_t dropped    = 0;
+  uint32_t width      = 0;
+  uint32_t height     = 0;
+
+  size_t size() const {
+    return xyp.size();
+  }
+
+  CameraEvent at(const size_t i) const {
+    return CameraEvent{static_cast<uint16_t>(xyp[i] & 0xFFFFu), static_cast<uint16_t>((xyp[i] >> 16) & 0x7FFFu),
+                       static_cast<int8_t>((xyp[i] & 0x80000000u) ? 1 : -1), base_stamp + t_us[i] * 1e-6};
+  }
+
+  std::vector<CameraEvent> unpack() const {
+    std::vector<CameraEvent> events(xyp.size());
+    for (size_t i = 0; i < xyp.size(); ++i) {
+      events[i] = at(i);
+    }
+    return events;
+  }
+};
+
+/* //} */
+
+/* simulator //{ */
+
+struct ApiInfo
+{
+  uint16_t             major = 0;
+  uint16_t             minor = 0;
+  std::vector<uint8_t> schema;  // flightforge.bfbs
+};
+
+struct TimeInfo
+{
+  double wall_time     = 0.0;
+  double sim_time      = 0.0;
+  double time_dilation = 1.0;
+};
+
+struct StepResult
+{
+  double   sim_time   = 0.0;
+  uint64_t tick_count = 0;
+};
+
+struct SpawnedObject
+{
+  int         id = -1;
+  std::string asset;
+  int         stencil = -1;
+  Pose        pose;
+  Vec3        scale{1.0, 1.0, 1.0};
+};
+
+struct AssetList
+{
+  std::vector<std::string> assets;
+  bool                     truncated = false;
+};
+
+struct LibraryPage
+{
+  std::vector<wire::LibraryObjectT> objects;
+  uint32_t                          total = 0;
+};
+
+struct WorldMesh
+{
+  std::vector<std::array<float, 3>> vertices;
+  std::vector<uint32_t>             indices;
+  bool                              truncated    = false;
+  int                               source_count = 0;
+};
+
+/* //} */
 
 /* name helpers //{ */
 
 struct UavFrameType
 {
-  // Frames are addressed by mesh name since API 0.12; any name resolving to a
-  // packed mesh or an on-disk .glb (with optional YAML propeller sidecar) works.
+  // any name resolving to a packed mesh or an on-disk .glb works
   static const std::vector<std::string>& KnownNames() {
     static const std::vector<std::string> names = {"x500", "t650", "a300", "robofly", "wing", "wing_2", "gimbal", "empty", "drone10", "drone20"};
     return names;
   }
 };
 
-struct GraphicsSettings
-{
-  static const std::map<std::string, int>& Name2Id() {
-    static const std::map<std::string, int> map = {{"low", 0}, {"medium", 1}, {"high", 2}, {"epic", 3}, {"cinematic", 4}, {"custom", 5}};
-    return map;
-  }
-};
-
 struct WorldName
 {
-  // Since API 0.12 worlds are addressed by level name (or a full package path,
-  // which additionally goes through the fast-switch loading screen). This maps
-  // the legacy friendly names onto the actual level names.
+  // legacy friendly names onto level names; a full package path also works
   static const std::map<std::string, std::string>& Name2Level() {
     static const std::map<std::string, std::string> map = {
         {"valley", "Valley"},
@@ -102,401 +359,6 @@ struct WorldName
   }
 };
 
-struct WeatherType
-{
-  static const std::map<std::string, int>& Type2Id() {
-    static const std::map<std::string, int> map = {{"sunny", 0},           {"cloudy", 1},          {"foggy", 2},     {"rain", 3},
-                                                   {"rain_light", 4},      {"rain_thunderstorm", 5}, {"sand_dust_calm", 6}, {"sand_dust_storm", 7},
-                                                   {"snow", 8},            {"snow_blizzards", 9},  {"overcast", 10}};
-    return map;
-  }
-};
-
-//}
-
-/* Coordinates / Rotation //{ */
-
-struct Coordinates
-{
-  Coordinates() = default;
-  Coordinates(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {
-  }
-
-  double x;
-  double y;
-  double z;
-
-  std::string toString() const {
-    return "(x: " + std::to_string(x) + ", y: " + std::to_string(y) + ", z: " + std::to_string(z) + ")";
-  }
-};
-
-struct Rotation
-{
-  Rotation() = default;
-  Rotation(double _pitch, double _yaw, double _roll) : pitch(_pitch), yaw(_yaw), roll(_roll) {
-  }
-
-  double pitch;
-  double yaw;
-  double roll;
-
-  std::string toString() const {
-    return "(pitch: " + std::to_string(pitch) + ", yaw: " + std::to_string(yaw) + ", roll: " + std::to_string(roll) + ")";
-  }
-};
-
-//}
-
-/* lidar data //{ */
-
-struct LidarData
-{
-  LidarData() = default;
-
-  double distance;
-  double directionX;
-  double directionY;
-  double directionZ;
-
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ")";
-  }
-};
-
-// one lidar scan with the channels asked for; label/intensity vectors are empty unless requested, else parallel to points
-struct LidarScan
-{
-  Coordinates            start;
-  double                 stamp = 0.0;
-  std::vector<LidarData> points;
-  std::vector<int>       intensity;    // material class per point, -1 without a return
-  std::vector<int>       class_id;     // segmentation stencil, landscape 1, -1 without a return
-  std::vector<uint32_t>  instance_id;  // the instance camera's id space, 0 background
-};
-
-struct LidarSegData
-{
-  LidarSegData() = default;
-
-  double      distance;
-  double      directionX;
-  double      directionY;
-  double      directionZ;
-  int         segmentation;
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ", segmentation: " + std::to_string(segmentation) + ")";
-  }
-};
-
-struct LidarIntData
-{
-  LidarIntData() = default;
-
-  double      distance;
-  double      directionX;
-  double      directionY;
-  double      directionZ;
-  int         intensity;
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ", intensity: " + std::to_string(intensity) + ")";
-  }
-};
-
-struct LidarConfig
-{
-  LidarConfig() = default;
-
-  bool        Enable;
-  bool        showBeams;
-  double      beamLength;
-  double      BeamHorRays;
-  double      BeamVertRays;
-  double      Frequency;
-  Coordinates offset;
-  Rotation    orientation;
-  double      FOVHorLeft;
-  double      FOVHorRight;
-  double      FOVVertUp;
-  double      FOVVertDown;
-  bool        Livox;
-
-  // Which non-repetitive scan pattern to replay when Livox is set ("avia",
-  // "mid360"); matches the simulator's Content/Lidar/<name>.ffpat stem.
-  std::string LivoxSensor = "mid360";
-
-  // Draws the sensor housing at its mount point and lets the beams see the airframe,
-  // the way the real hardware occludes itself. Off by default: a sensor left at the
-  // frame's origin sits inside the body and would find nothing but itself.
-  bool showSensorBody = false;
-
-  std::string toString() const {
-    return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +
-           ", orientation: " + orientation.toString() + ")";
-  }
-};
-
-//}
-
-/* CameraCaptureModeEnum //{ */
-
-enum CameraCaptureModeEnum : unsigned short
-{
-  CAPTURE_ALL_FRAMES  = 0x0,
-  CAPTURE_ON_MOVEMENT = 0x1,
-  CAPTURE_ON_DEMAND   = 0x2,
-};
-
-//}
-
-/* camera configs //{ */
-
-// Physically-based exposure: when manual_ is set, auto-exposure is replaced by
-// the EV100 model driven by shutter time, ISO and the lens f-stop.
-struct CameraExposure
-{
-  bool   manual_          = false;
-  double shutter_time_    = 1.0 / 120.0;  // seconds
-  double iso_             = 100.0;
-  double ev_compensation_ = 0.0;
-};
-
-struct CameraLensEffects
-{
-  double fstop_                = 4.0;
-  double focal_distance_       = 0.0;  // meters; <= 0 disables depth of field
-  double sensor_width_mm_      = 23.76;
-  double vignette_intensity_   = 0.0;
-  double chromatic_aberration_ = 0.0;
-  double bloom_intensity_      = 0.675;
-  double lens_flare_intensity_ = 0.0;
-  double white_temp_           = 0.0;  // Kelvin; <= 0 keeps engine default
-  double white_tint_           = 0.0;
-
-  // derive the motion blur length from shutter_time_/frame time instead of
-  // the free-standing motion_blur_amount_
-  bool motion_blur_from_shutter_ = false;
-};
-
-// Pinhole intrinsics in pixels, image origin top-left. Leave use_custom_ unset to
-// drive the projection from fov_; Get always returns the effective values, derived
-// from fov_ and the resolution when not custom.
-struct CameraIntrinsics
-{
-  bool   use_custom_ = false;
-  double fx_         = 0.0;
-  double fy_         = 0.0;
-  double cx_         = 0.0;
-  double cy_         = 0.0;
-};
-
-// Brown-Conrady lens distortion (OpenCV convention). The simulator renders an
-// automatically-sized overscan frustum and warps: bilinear for RGB, nearest for
-// segmentation. K (camera_intrinsics) is unchanged by distortion - together they
-// are the calibration.
-struct CameraDistortion
-{
-  bool   enable_ = false;
-  double k1_     = 0.0;
-  double k2_     = 0.0;
-  double k3_     = 0.0;
-  double p1_     = 0.0;
-  double p2_     = 0.0;
-};
-
-// Sensor noise applied server-side in the linearized domain:
-// sigma = sqrt(shot_scale * signal + read_sigma^2) per channel (signal in [0,1]),
-// plus optional per-row offsets (CMOS banding). Deterministic per frame stamp.
-struct CameraNoise
-{
-  bool   enable_     = false;
-  double shot_scale_ = 2.0e-4;
-  double read_sigma_ = 3.0e-3;
-  double row_sigma_  = 0.0;
-};
-
-// First-order rolling shutter: rows shifted by the rotational image flow over
-// their readout delay, from the camera's measured angular velocity. Rotation
-// only (the standard gyro approximation) - translation parallax is ignored.
-struct CameraRollingShutter
-{
-  bool   enable_       = false;
-  double readout_time_ = 0.03;  // seconds, top-to-bottom
-};
-
-// Wire encoding of served frames. JPEG by default for imagery; the label cameras
-// (segmentation, instance segmentation) ignore this and always send lossless.
-struct CameraCompression
-{
-  enum Format : int
-  {
-    PNG  = 0,
-    JPEG = 1,
-  };
-
-  int format_  = JPEG;
-  int quality_ = 90;  // 1-100, JPEG only
-};
-
-struct RgbCameraConfig
-{
-  RgbCameraConfig() = default;
-
-  // defaults mirror the plugin's FRgbCameraConfig, so a config sent untouched is a no-op
-  bool show_debug_camera_ = false;
-
-  Coordinates offset_;
-  Rotation    orientation_;
-
-  double fov_ = 90.0;
-
-  int width_  = 640;
-  int height_ = 480;
-
-  bool enable_temporal_aa_ = true;
-  bool enable_raytracing_  = true;
-  bool enable_hdr_         = true;
-
-  bool   enable_motion_blur_     = true;
-  double motion_blur_amount_     = 1.0;
-  double motion_blur_distortion_ = 50.0;
-
-  CameraExposure       exposure_;
-  CameraLensEffects    lens_;
-  CameraIntrinsics     intrinsics_;
-  CameraDistortion     distortion_;
-  CameraNoise          noise_;
-  CameraRollingShutter rolling_shutter_;
-  CameraCompression    compression_;
-
-  double capture_rate_ = 0.0;  // Hz in simulated time, 0 = every tick
-};
-
-struct EventCameraConfig
-{
-  EventCameraConfig() = default;
-
-  bool show_debug_camera_ = false;
-
-  Coordinates offset_;
-  Rotation    orientation_;
-
-  double fov_    = 90.0;
-  int    width_  = 640;
-  int    height_ = 480;
-
-  // log-intensity contrast thresholds; an event fires each time a pixel's log
-  // intensity moves by one threshold since its last event
-  double contrast_threshold_pos_ = 0.2;
-  double contrast_threshold_neg_ = 0.2;
-
-  // stamp events with simulation time instead of wall clock; pair with a
-  // fixed engine timestep for an exact-rate stream regardless of GPU load
-  bool use_sim_time_ = true;
-
-  double threshold_sigma_     = 0.03;  // per-pixel threshold mismatch, log units
-  double refractory_period_   = 1e-4;  // seconds a pixel is blind after its event
-  double cutoff_hz_           = 300.0; // photoreceptor bandwidth at full scale
-  double leak_rate_hz_        = 0.1;
-  double shot_noise_rate_hz_  = 0.1;   // up to 4x in the dark
-  double hot_pixel_fraction_  = 1e-4;  // pixels with 100x the noise rate
-  double max_event_rate_hz_   = 0.0;   // readout ceiling, 0 = unlimited
-  int    max_events_per_frame_ = 1 << 20;
-  bool   use_gpu_             = true;
-  unsigned seed_              = 12345;
-};
-
-struct CameraEvent
-{
-  unsigned short x;
-  unsigned short y;
-  signed char    polarity;  // +1 brighter, -1 darker
-  double         stamp;
-};
-
-// a drained batch as it travels: xyp = x | y << 16 | brighter << 31, t_us after base_stamp, time-sorted
-struct CameraEvents
-{
-  std::vector<uint32_t> xyp;
-  std::vector<uint32_t> t_us;
-
-  double base_stamp = 0.0;
-  double stamp      = 0.0;  // the batch is complete up to here
-
-  uint32_t dropped = 0;  // lost to the readout cap or a full buffer since the last drain
-
-  int width  = 0;
-  int height = 0;
-
-  size_t size() const {
-    return xyp.size();
-  }
-
-  CameraEvent at(size_t i) const {
-    return CameraEvent{static_cast<unsigned short>(xyp[i] & 0xFFFFu), static_cast<unsigned short>((xyp[i] >> 16) & 0x7FFFu),
-                       static_cast<signed char>((xyp[i] & 0x80000000u) ? 1 : -1), base_stamp + t_us[i] * 1e-6};
-  }
-
-  std::vector<CameraEvent> unpack() const {
-    std::vector<CameraEvent> events(xyp.size());
-    for (size_t i = 0; i < xyp.size(); ++i) {
-      events[i] = at(i);
-    }
-    return events;
-  }
-};
-
-struct PoseSample
-{
-  double      t = 0.0;
-  Coordinates position;
-  Rotation    orientation;
-};
-
-enum FisheyeLensModelEnum : int
-{
-  FISHEYE_EQUIDISTANT   = 0,  // r = f * theta
-  FISHEYE_EQUISOLID     = 1,  // r = 2f * sin(theta/2)
-  FISHEYE_STEREOGRAPHIC = 2,  // r = 2f * tan(theta/2)
-  FISHEYE_KANNALA_BRANDT = 3,  // r = f * theta * (1 + k1 theta^2 + k2 theta^4 + k3 theta^6 + k4 theta^8), OpenCV fisheye / Kalibr
-};
-
-struct FisheyeCameraConfig
-{
-  FisheyeCameraConfig() = default;
-
-  bool show_debug_camera_ = false;
-
-  Coordinates offset_;
-  Rotation    orientation_;
-
-  // full field of view in degrees, up to 220
-  double fov_ = 180.0;
-
-  int width_  = 640;
-  int height_ = 640;
-
-  int lens_model_ = FISHEYE_EQUIDISTANT;
-
-  // image circle fitted to the frame corner (fov_ is then the diagonal) instead of the short side
-  bool full_frame_ = false;
-
-  // with use_custom_, fx/fy (pixels per radian) and cx/cy replace the fov-fitted focal so a
-  // Kalibr/OpenVINS calibration renders as is; fov_ then only caps the rendered angle. OpenCV pixel convention.
-  CameraIntrinsics intrinsics_;
-
-  // Kannala-Brandt coefficients, FISHEYE_KANNALA_BRANDT only
-  double kb_k1_ = 0.0;
-  double kb_k2_ = 0.0;
-  double kb_k3_ = 0.0;
-  double kb_k4_ = 0.0;
-
-  double capture_rate_ = 0.0;  // Hz in simulated time, 0 = every tick
-};
-
-//}
+/* //} */
 
 }  // namespace flightforge

@@ -1,1208 +1,430 @@
 #include <flight_forge_connector/robot_client.h>
 
-#include <sstream>
+#include <flight_forge_connector/wire_convert.h>
 
-using kissnet::socket_status;
-using flightforge::Coordinates;
-using flightforge::LidarConfig;
-using flightforge::LidarData;
-using flightforge::LidarIntData;
-using flightforge::LidarSegData;
-using flightforge::RgbCameraConfig;
-using flightforge::Rotation;
-using flightforge::CameraEvent;
-using flightforge::CameraEvents;
-using flightforge::PoseSample;
-using flightforge::DeviceInfo;
-using flightforge::EventCameraConfig;
-using flightforge::FisheyeCameraConfig;
-using flightforge::SensorInfo;
-using flightforge::RobotClient;
+#include "reply_helpers.h"
 
-/* getLocation() //{ */
-
-std::pair<bool, Coordinates> RobotClient::GetLocation() {
-
-  Serializable::Drone::GetLocation::Request request{};
-
-  Serializable::Drone::GetLocation::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  Coordinates coordinates{};
-
-  if (success) {
-    coordinates.x = response.x;
-    coordinates.y = response.y;
-    coordinates.z = response.z;
-  }
-
-  return std::make_pair(success, coordinates);
-}
-
-//}
-
-/* getCrashState() //{ */
-
-std::pair<bool, bool> RobotClient::GetCrashState() {
-
-  Serializable::Drone::GetCrashState::Request request{};
-
-  Serializable::Drone::GetCrashState::Response response{};
-  const auto                                   status  = Request(request, response);
-  const auto                                   success = status && response.status;
-
-  bool crashed = response.crashed;
-
-  return std::make_pair(success, crashed);
-}
-
-//}
-
-/* setLocation() //{ */
-
-std::tuple<bool, Coordinates, bool, Coordinates> RobotClient::SetLocation(const Coordinates& coordinate, bool checkCollisions) {
-
-  Serializable::Drone::SetLocation::Request request{};
-
-  request.x               = coordinate.x;
-  request.y               = coordinate.y;
-  request.z               = coordinate.z;
-  request.checkCollisions = checkCollisions;
-
-  Serializable::Drone::SetLocation::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  Coordinates teleportedTo{};
-  Coordinates impactPoint{};
-  if (success) {
-    teleportedTo.x = response.teleportedToX;
-    teleportedTo.y = response.teleportedToY;
-    teleportedTo.z = response.teleportedToZ;
-    impactPoint.x  = response.impactPointX;
-    impactPoint.y  = response.impactPointY;
-    impactPoint.z  = response.impactPointZ;
-  }
-
-  return std::make_tuple(success, teleportedTo, response.isHit, impactPoint);
-}
-
-//}
-
-/* GetRgbCameraData() //{ */
-
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetRgbCameraData(int sensorId) {
-
-  Serializable::Drone::GetRgbCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetRgbCameraData::Response response{};
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0,
-                         success ? response.image_.size() : 0);
-}
-
-//}
-
-/* GetStereoCameraData() //{ */
-
-std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> RobotClient::GetStereoCameraData(int sensorId) {
-
-  Serializable::Drone::GetStereoCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetStereoCameraData::Response response{};
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  return std::make_tuple(success, success ? response.image_left_ : std::vector<unsigned char>(), success ? response.image_right_ : std::vector<unsigned char>(),
-                         success ? response.stamp_ : 0.0);
-}
-
-//}
-
-/* GetRgbSegmented() //{ */
-
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetRgbSegmented(int sensorId) {
-
-  Serializable::Drone::GetRgbSegCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetRgbSegCameraData::Response response{};
-  const auto                                         status  = Request(request, response);
-  const auto                                         success = status && response.status;
-
-  return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0,
-                         success ? response.image_.size() : 0);
-}
-
-//}
-
-/* getRotation() //{ */
-
-std::pair<bool, Rotation> RobotClient::GetRotation() {
-
-  Serializable::Drone::GetRotation::Request request{};
-
-  Serializable::Drone::GetRotation::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  Rotation rotation{};
-  if (success) {
-    rotation.pitch = response.pitch;
-    rotation.yaw   = response.yaw;
-    rotation.roll  = response.roll;
-  }
-
-  return std::make_pair(success, rotation);
-}
-
-//}
-
-/* setRotation() //{ */
-
-std::tuple<bool, Rotation, bool, Coordinates> RobotClient::SetRotation(const Rotation& rotation) {
-
-  Serializable::Drone::SetRotation::Request request{};
-  request.pitch = rotation.pitch;
-  request.yaw   = rotation.yaw;
-  request.roll  = rotation.roll;
-
-  Serializable::Drone::SetRotation::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  Rotation    rotatedTo{};
-  Coordinates impactPoint{};
-  bool        isHit = false;
-  if (success) {
-    rotatedTo.pitch = response.rotatedToPitch;
-    rotatedTo.yaw   = response.rotatedToYaw;
-    rotatedTo.roll  = response.rotatedToRoll;
-    isHit           = response.isHit;
-    impactPoint.x   = response.impactPointX;
-    impactPoint.y   = response.impactPointY;
-    impactPoint.z   = response.impactPointZ;
-  }
-
-  return std::make_tuple(success, rotatedTo, isHit, impactPoint);
-}
-
-//}
-
-/* setLocationAndRotation() //{ */
-
-std::tuple<bool, Coordinates, Rotation, bool, Coordinates> RobotClient::SetLocationAndRotation(const Coordinates& coordinate, const Rotation& rotation,
-                                                                                                 const bool should_collide) {
-
-  Serializable::Drone::SetLocationAndRotation::Request request{};
-
-  request.x = coordinate.x;
-  request.y = coordinate.y;
-  request.z = coordinate.z;
-
-  request.pitch = rotation.pitch;
-  request.yaw   = rotation.yaw;
-  request.roll  = rotation.roll;
-
-  request.should_collide = should_collide;
-
-  Serializable::Drone::SetLocationAndRotation::Response response{};
-  const auto                                            status  = Request(request, response);
-  const auto                                            success = status && response.status;
-
-  Coordinates teleportedTo{};
-  Rotation    rotatedTo{};
-  Coordinates impactPoint{};
-  bool        isHit = false;
-
-  if (success) {
-    teleportedTo.x  = response.teleportedToX;
-    teleportedTo.y  = response.teleportedToY;
-    teleportedTo.z  = response.teleportedToZ;
-    rotatedTo.pitch = response.rotatedToPitch;
-    rotatedTo.yaw   = response.rotatedToYaw;
-    rotatedTo.roll  = response.rotatedToRoll;
-    isHit           = response.isHit;
-    impactPoint.x   = response.impactPointX;
-    impactPoint.y   = response.impactPointY;
-    impactPoint.z   = response.impactPointZ;
-  }
-
-  return std::make_tuple(success, teleportedTo, rotatedTo, isHit, impactPoint);
-}
-
-//}
-
-/* setLocationAndRotationAsync() //{ */
-
-std::tuple<bool> RobotClient::SetLocationAndRotationAsync(const Coordinates& coordinate, const Rotation& rotation, const bool should_collide) {
-
-  Serializable::Drone::SetLocationAndRotationAsync::Request request{};
-
-  request.x = coordinate.x;
-  request.y = coordinate.y;
-  request.z = coordinate.z;
-
-  request.pitch = rotation.pitch;
-  request.yaw   = rotation.yaw;
-  request.roll  = rotation.roll;
-
-  request.should_collide = should_collide;
-
-  Serializable::Drone::SetLocationAndRotationAsync::Response response{};
-  const auto                                                 status  = Request(request, response);
-  const auto                                                 success = status && response.status;
-
-  return std::make_tuple(success);
-}
-
-//}
-
-/* SetPoseTrajectory() //{ */
-
-bool RobotClient::SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count) {
-
-  Serializable::Drone::SetPropellerSpeeds::Request request{};
-  request.speeds = speeds;
-
-  Serializable::Drone::SetPropellerSpeeds::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  if (success) {
-    out_count = response.propeller_count;
-  }
-
-  return success;
-}
-
-bool RobotClient::SetPoseTrajectory(const std::vector<PoseSample>& samples) {
-
-  Serializable::Drone::SetPoseTrajectory::Request request{};
-  request.samples.reserve(samples.size());
-
-  for (const auto& s : samples) {
-    request.samples.push_back({s.t, s.position.x, s.position.y, s.position.z, s.orientation.pitch, s.orientation.yaw, s.orientation.roll});
-  }
-
-  Serializable::Drone::SetPoseTrajectory::Response response{};
-  const auto                                       status = Request(request, response);
-
-  return status && response.status;
-}
-
-//}
-
-/* getLidarData() //{ */
-
-std::tuple<bool, std::vector<LidarData>, Coordinates, double> RobotClient::GetLidarData(int sensorId) {
-
-  /* std::cout << "GetLidarData()" << std::endl; */
-  Serializable::Drone::GetLidarData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetLidarData::Response response{};
-  const auto                                  status  = Request(request, response);
-  const auto                                  success = status && response.status;
-  std::vector<LidarData>                      lidarData;
-  Coordinates                                 start{};
-  double stamp;
-
-  if (success) {
-
-    const auto arrSize = response.lidarData.size();
-    lidarData.resize(arrSize);
-
-    for (size_t i = 0; i < arrSize; i++) {
-      lidarData[i]            = LidarData{};
-      lidarData[i].distance   = response.lidarData[i].distance;
-      lidarData[i].directionX = response.lidarData[i].directionX;
-      lidarData[i].directionY = response.lidarData[i].directionY;
-      lidarData[i].directionZ = response.lidarData[i].directionZ;
-    }
-
-    start.x = response.startX;
-    start.y = response.startY;
-    start.z = response.startZ;
-
-    stamp = response.stamp_;
-  }
-
-  // std::cout << "Get lidar data drone controller: " << success << std::endl;
-  return std::make_tuple(success, lidarData, start, stamp);
-}
-
-std::tuple<bool, double> flightforge::RobotClient::GetRangefinderData(int sensorId)
+namespace flightforge
 {
-  Serializable::Drone::GetRangefinderData::Request request{};
-  request.sensor_id_ = sensorId;
 
-  Serializable::Drone::GetRangefinderData::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
+using FBB = flatbuffers::FlatBufferBuilder;
 
-  return std::make_pair(success, success ? response.range : -1);
-} //}
+namespace
+{
 
-/* getLidarSegData() //{ */
-
-std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> RobotClient::GetLidarSegData(int sensorId) {
-  Serializable::Drone::GetLidarSegData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetLidarSegData::Response response{};
-  const auto                                     status  = Request(request, response);
-  const auto                                     success = status && response.status;
-  std::vector<LidarSegData>                      lidarSegData;
-  Coordinates                                    start{};
-  double stamp;
-
-  if (success) {
-
-    const auto arrSize = response.lidarSegData.size();
-    lidarSegData.resize(arrSize);
-
-    for (size_t i = 0; i < arrSize; i++) {
-      lidarSegData[i]              = LidarSegData{};
-      lidarSegData[i].distance     = response.lidarSegData[i].distance;
-      lidarSegData[i].directionX   = response.lidarSegData[i].directionX;
-      lidarSegData[i].directionY   = response.lidarSegData[i].directionY;
-      lidarSegData[i].directionZ   = response.lidarSegData[i].directionZ;
-      lidarSegData[i].segmentation = response.lidarSegData[i].segmentation;
+std::vector<SensorInfo> ReadSensors(const flatbuffers::Vector<flatbuffers::Offset<wire::SensorInfo>>* sensors) {
+  std::vector<SensorInfo> out;
+  if (sensors) {
+    for (const wire::SensorInfo* sensor : *sensors) {
+      out.push_back(SensorInfo{sensor->id(), sensor->type(), sensor->link() ? sensor->link()->str() : std::string()});
     }
-
-    start.x = response.startX;
-    start.y = response.startY;
-    start.z = response.startZ;
-    stamp = response.stamp_;
   }
-
-  // std::cout << "Get lidar data drone controller: " << success << std::endl;
-  return std::make_tuple(success, lidarSegData, start, stamp);
+  return out;
 }
-//}
 
-/* getLidarIntData() //{ */
+}  // namespace
 
-std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> RobotClient::GetLidarIntData(int sensorId) {
+RobotClient::RobotClient(std::shared_ptr<Connection> connection, const int robot_id) : connection_(std::move(connection)), robot_id_(robot_id) {
+}
 
-  /* std::cout << "GetLidarIntData()" << std::endl; */
+RobotClient::RobotClient(const std::string& address, const uint16_t port, const int robot_id)
+    : connection_(std::make_shared<Connection>(address, port)), robot_id_(robot_id) {
+}
 
-  Serializable::Drone::GetLidarIntData::Request request{};
-  request.sensor_id_ = sensorId;
+std::optional<int32_t> RobotClient::Sensor(const int sensor_id) const {
+  return sensor_id >= 0 ? std::optional<int32_t>(sensor_id) : std::nullopt;
+}
 
-  Serializable::Drone::GetLidarIntData::Response response{};
-  const auto                                     status  = Request(request, response);
-  const auto                                     success = status && response.status;
-  std::vector<LidarIntData>                      lidarIntData;
-  Coordinates                                    start{};
-  double stamp;
+/* state //{ */
 
-  if (success) {
+Expected<StampedState> RobotClient::GetState() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetStateRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::GetStateResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return StampedState{body->stamp(), ReadState(body->state())};
+}
 
-    const auto arrSize = response.lidarIntData.size();
-    lidarIntData.resize(arrSize);
+Expected<SetStateResult> RobotClient::SetState(const RobotState& state, const bool collide) {
+  FBB        b;
+  const auto wire_state = BuildState(b, state);
+  const auto reply      = connection_->Call(b, wire::CreateSetStateRequest(b, wire_state, collide, true), robot_id_);
+  Status     status;
+  const auto body = Body<wire::SetStateResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadStateResult(body);
+}
 
-    for (size_t i = 0; i < arrSize; i++) {
-      lidarIntData[i]            = LidarIntData{};
-      lidarIntData[i].distance   = response.lidarIntData[i].distance;
-      lidarIntData[i].directionX = response.lidarIntData[i].directionX;
-      lidarIntData[i].directionY = response.lidarIntData[i].directionY;
-      lidarIntData[i].directionZ = response.lidarIntData[i].directionZ;
-      lidarIntData[i].intensity  = response.lidarIntData[i].intensity;
+Status RobotClient::SetStateAsync(const RobotState& state, const bool collide) {
+  FBB        b;
+  const auto wire_state = BuildState(b, state);
+  return AsStatus(connection_->Call(b, wire::CreateSetStateRequest(b, wire_state, collide, false), robot_id_));
+}
+
+Expected<SetStateResult> RobotClient::SetPose(const Pose& pose, const bool collide) {
+  RobotState state;
+  state.base = pose;
+  return SetState(state, collide);
+}
+
+Status RobotClient::SetPoseAsync(const Pose& pose, const bool collide) {
+  RobotState state;
+  state.base = pose;
+  return SetStateAsync(state, collide);
+}
+
+Status RobotClient::SetJointVelocities(const std::vector<double>& velocities) {
+  FBB        b;
+  const auto speeds = b.CreateVector(velocities);
+  const auto state  = wire::CreateRobotState(b, nullptr, 0, speeds);
+  return AsStatus(connection_->Call(b, wire::CreateSetStateRequest(b, state, false, true), robot_id_));
+}
+
+Status RobotClient::SetTrajectory(const std::vector<TrajectorySample>& samples) {
+  FBB                                                       b;
+  std::vector<flatbuffers::Offset<wire::TrajectorySample>> entries;
+  for (const TrajectorySample& sample : samples) {
+    const wire::Pose base  = ToWire(sample.base);
+    const auto       state = wire::CreateRobotState(b, &base);
+    entries.push_back(wire::CreateTrajectorySample(b, sample.t, state));
+  }
+  const auto list = b.CreateVector(entries);
+  return AsStatus(connection_->Call(b, wire::CreateSetTrajectoryRequest(b, list), robot_id_));
+}
+
+Expected<wire::GetDescriptionResponseT> RobotClient::GetDescription() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetDescriptionRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::GetDescriptionResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  wire::GetDescriptionResponseT out;
+  body->UnPackTo(&out);
+  return out;
+}
+
+Expected<CollisionState> RobotClient::GetCollision() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetCollisionRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::GetCollisionResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return CollisionState{body->collided(), body->impact_point() ? FromWire(*body->impact_point()) : Vec3{}};
+}
+
+Expected<bool> RobotClient::GetMoveLineVisible() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetMoveLineVisibleRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::GetMoveLineVisibleResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->visible();
+}
+
+Status RobotClient::SetMoveLineVisible(const bool visible) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateSetMoveLineVisibleRequest(b, visible), robot_id_));
+}
+
+/* //} */
+
+/* sensors and devices //{ */
+
+Expected<int> RobotClient::AddSensor(const wire::SensorType type, const std::optional<Pose>& pose, const std::string& link, const std::string& mount) {
+  FBB                             b;
+  const auto                      link_name  = b.CreateString(link);
+  const auto                      mount_name = b.CreateString(mount);
+  const std::optional<wire::Pose> p          = pose ? std::optional<wire::Pose>(ToWire(*pose)) : std::nullopt;
+  const auto reply = connection_->Call(b, wire::CreateAddSensorRequest(b, type, link_name, mount_name, p ? &*p : nullptr), robot_id_);
+  Status     status;
+  const auto body = Body<wire::AddSensorResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return body->sensor_id();
+}
+
+Status RobotClient::RemoveSensor(const int sensor_id) {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateRemoveSensorRequest(b), robot_id_, sensor_id));
+}
+
+Expected<std::vector<SensorInfo>> RobotClient::ListSensors() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateListSensorsRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::ListSensorsResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadSensors(body->sensors());
+}
+
+Expected<std::vector<SensorInfo>> RobotClient::AddDevice(const std::string& device_name, const std::optional<Pose>& pose, const bool show_mesh,
+                                                         const std::string& link, const std::string& mount) {
+  FBB                             b;
+  const auto                      name       = b.CreateString(device_name);
+  const auto                      link_name  = b.CreateString(link);
+  const auto                      mount_name = b.CreateString(mount);
+  const std::optional<wire::Pose> p          = pose ? std::optional<wire::Pose>(ToWire(*pose)) : std::nullopt;
+  const auto reply = connection_->Call(b, wire::CreateAddDeviceRequest(b, name, link_name, mount_name, p ? &*p : nullptr, show_mesh), robot_id_);
+  Status     status;
+  const auto body = Body<wire::AddDeviceResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadSensors(body->sensors());
+}
+
+Expected<std::vector<DeviceInfo>> RobotClient::ListDevices() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateListDevicesRequest(b), robot_id_);
+  Status     status;
+  const auto body = Body<wire::ListDevicesResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<DeviceInfo> devices;
+  if (body->devices()) {
+    for (const wire::DeviceInfo* device : *body->devices()) {
+      devices.push_back(DeviceInfo{device->name() ? device->name()->str() : std::string(), device->description() ? device->description()->str() : std::string()});
     }
+  }
+  return devices;
+}
 
-    start.x = response.startX;
-    start.y = response.startY;
-    start.z = response.startZ;
-    stamp = response.stamp_;
+Expected<std::vector<wire::CameraInfoT>> RobotClient::GetCameraInfo(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetCameraInfoRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::GetCameraInfoResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<wire::CameraInfoT> cameras;
+  if (body->cameras()) {
+    for (const wire::CameraInfo* camera : *body->cameras()) {
+      cameras.emplace_back();
+      camera->UnPackTo(&cameras.back());
+    }
+  }
+  return cameras;
+}
+
+/* //} */
+
+/* configs //{ */
+
+#define FF_CONFIG_OPS(Kind)                                                                                                   \
+  Expected<wire::Kind##ConfigT> RobotClient::Get##Kind##Config(const int sensor_id) {                                         \
+    FBB        b;                                                                                                             \
+    const auto reply = connection_->Call(b, wire::CreateGet##Kind##ConfigRequest(b), robot_id_, Sensor(sensor_id));           \
+    Status     status;                                                                                                        \
+    const auto body = Body<wire::Get##Kind##ConfigResponse>(reply, status);                                                   \
+    if (!body) {                                                                                                              \
+      return status;                                                                                                          \
+    }                                                                                                                         \
+    if (!body->config()) {                                                                                                    \
+      return Status::Fail("the reply carries no config");                                                                     \
+    }                                                                                                                         \
+    wire::Kind##ConfigT config;                                                                                               \
+    body->config()->UnPackTo(&config);                                                                                        \
+    return config;                                                                                                            \
+  }                                                                                                                           \
+                                                                                                                              \
+  Status RobotClient::Set##Kind##Config(const wire::Kind##ConfigT& config, const int sensor_id) {                             \
+    FBB        b;                                                                                                             \
+    const auto table = wire::Create##Kind##Config(b, &config);                                                                \
+    return AsStatus(connection_->Call(b, wire::CreateSet##Kind##ConfigRequest(b, table), robot_id_, Sensor(sensor_id)));      \
   }
 
-  return std::make_tuple(success, lidarIntData, start, stamp);
+FF_CONFIG_OPS(RgbCamera)
+FF_CONFIG_OPS(StereoCamera)
+FF_CONFIG_OPS(FisheyeCamera)
+FF_CONFIG_OPS(EventCamera)
+FF_CONFIG_OPS(Lidar)
+
+#undef FF_CONFIG_OPS
+
+/* //} */
+
+/* data //{ */
+
+Expected<Image> RobotClient::GetRgbCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetRgbCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::RgbCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadImage(body->image(), body->stamp());
 }
-//}
 
-/* getLidarConfig() //{ */
+Expected<StereoImage> RobotClient::GetStereoCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetStereoCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::StereoCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return StereoImage{body->stamp(), ReadImage(body->left(), body->stamp()), ReadImage(body->right(), body->stamp())};
+}
 
-std::pair<bool, LidarConfig> RobotClient::GetLidarConfig(int sensorId) {
+Expected<Image> RobotClient::GetFisheyeCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetFisheyeCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::FisheyeCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadImage(body->image(), body->stamp());
+}
 
-  Serializable::Drone::GetLidarConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetLidarConfig::Response response{};
-  const auto                                    status  = Request(request, response);
-  const auto                                    success = status && response.status;
-
-  /* bool success = true; */
-  LidarConfig config{};
-
-  if (success) {
-
-    config.Enable       = response.config.Enable;
-    config.showBeams    = response.config.ShowBeams;
-    config.BeamHorRays  = response.config.BeamHorRays;
-    config.BeamVertRays = response.config.BeamVertRays;
-    config.beamLength   = response.config.BeamLength;
-    config.Frequency    = response.config.Frequency;
-    config.offset       = Coordinates{response.config.OffsetX, response.config.OffsetY, response.config.OffsetZ};
-
-    config.orientation = Rotation{response.config.OrientationPitch, response.config.OrientationYaw, response.config.OrientationRoll};
-
-    config.FOVHorLeft = response.config.FOVHorLeft;
-    config.FOVHorRight = response.config.FOVHorRight;
-    config.FOVVertUp = response.config.FOVVertUp;
-    config.FOVVertDown    = response.config.FOVVertDown;
-    config.Livox          = response.config.Livox;
-    config.LivoxSensor    = response.config.LivoxSensor;
-    config.showSensorBody = response.config.ShowSensorBody;
+Expected<DepthImage> RobotClient::GetDepthCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetDepthCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::DepthCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
   }
 
-  return std::make_pair(success, config);
-}
-
-//}
-
-/* setLidarConfig() //{ */
-
-bool RobotClient::SetLidarConfig(const LidarConfig& config, int sensorId) {
-
-  Serializable::Drone::SetLidarConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  request.config              = Serializable::Drone::LidarConfig{};
-  request.config.Enable       = config.Enable;
-  request.config.ShowBeams    = config.showBeams;
-  request.config.BeamHorRays  = config.BeamHorRays;
-  request.config.BeamVertRays = config.BeamVertRays;
-  request.config.BeamLength   = config.beamLength;
-  request.config.Frequency    = config.Frequency;
-
-  request.config.OffsetX = config.offset.x;
-  request.config.OffsetY = config.offset.y;
-  request.config.OffsetZ = config.offset.z;
-
-  request.config.OrientationPitch = config.orientation.pitch;
-  request.config.OrientationYaw   = config.orientation.yaw;
-  request.config.OrientationRoll  = config.orientation.roll;
-
-  /* request.config.FOVHor  = config.FOVHor; */
-  /* request.config.FOVVert = config.FOVVert; */
-
-  request.config.FOVHorLeft  = config.FOVHorLeft;
-  request.config.FOVHorRight = config.FOVHorRight;
-  request.config.FOVVertUp   = config.FOVVertUp;
-  request.config.FOVVertDown = config.FOVVertDown;
-  request.config.Livox       = config.Livox;
-  request.config.LivoxSensor    = config.LivoxSensor;
-  request.config.ShowSensorBody = config.showSensorBody;
-
-  Serializable::Drone::SetLidarConfig::Response response{};
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* getRgbCameraConfig() //{ */
-
-std::pair<bool, RgbCameraConfig> RobotClient::GetRgbCameraConfig(int sensorId) {
-
-  Serializable::Drone::GetRgbCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetRgbCameraConfig::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  RgbCameraConfig config{};
-
-  if (success) {
-
-    config.show_debug_camera_ = response.config.show_debug_camera_;
-
-    config.fov_ = response.config.fov_;
-
-    config.offset_ = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
-
-    config.orientation_ = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
-
-    config.width_  = response.config.width_;
-    config.height_ = response.config.height_;
-
-    config.enable_temporal_aa_ = response.config.enable_temporal_aa_;
-    config.enable_hdr_         = response.config.enable_hdr_;
-    config.enable_raytracing_  = response.config.enable_raytracing_;
-
-    config.enable_motion_blur_     = response.config.enable_motion_blur_;
-    config.motion_blur_amount_     = response.config.motion_blur_amount_;
-    config.motion_blur_distortion_ = response.config.motion_blur_distortion_;
-    config.capture_rate_           = response.config.capture_rate_;
-
-    config.exposure_.manual_          = response.config.exposure_.manual_;
-    config.exposure_.shutter_time_    = response.config.exposure_.shutter_time_;
-    config.exposure_.iso_             = response.config.exposure_.iso_;
-    config.exposure_.ev_compensation_ = response.config.exposure_.ev_compensation_;
-
-    config.lens_.fstop_                    = response.config.lens_.fstop_;
-    config.lens_.focal_distance_           = response.config.lens_.focal_distance_;
-    config.lens_.sensor_width_mm_          = response.config.lens_.sensor_width_mm_;
-    config.lens_.vignette_intensity_       = response.config.lens_.vignette_intensity_;
-    config.lens_.chromatic_aberration_     = response.config.lens_.chromatic_aberration_;
-    config.lens_.bloom_intensity_          = response.config.lens_.bloom_intensity_;
-    config.lens_.lens_flare_intensity_     = response.config.lens_.lens_flare_intensity_;
-    config.lens_.white_temp_               = response.config.lens_.white_temp_;
-    config.lens_.white_tint_               = response.config.lens_.white_tint_;
-    config.lens_.motion_blur_from_shutter_ = response.config.lens_.motion_blur_from_shutter_;
-
-    config.intrinsics_.use_custom_ = response.config.intrinsics_.use_custom_;
-    config.intrinsics_.fx_         = response.config.intrinsics_.fx_;
-    config.intrinsics_.fy_         = response.config.intrinsics_.fy_;
-    config.intrinsics_.cx_         = response.config.intrinsics_.cx_;
-    config.intrinsics_.cy_         = response.config.intrinsics_.cy_;
-
-    config.distortion_.enable_ = response.config.distortion_.enable_;
-    config.distortion_.k1_     = response.config.distortion_.k1_;
-    config.distortion_.k2_     = response.config.distortion_.k2_;
-    config.distortion_.k3_     = response.config.distortion_.k3_;
-    config.distortion_.p1_     = response.config.distortion_.p1_;
-    config.distortion_.p2_     = response.config.distortion_.p2_;
-
-    config.noise_.enable_     = response.config.noise_.enable_;
-    config.noise_.shot_scale_ = response.config.noise_.shot_scale_;
-    config.noise_.read_sigma_ = response.config.noise_.read_sigma_;
-    config.noise_.row_sigma_  = response.config.noise_.row_sigma_;
-
-    config.rolling_shutter_.enable_       = response.config.rolling_shutter_.enable_;
-    config.rolling_shutter_.readout_time_ = response.config.rolling_shutter_.readout_time_;
-
-    config.compression_.format_  = response.config.compression_.format_;
-    config.compression_.quality_ = response.config.compression_.quality_;
+  DepthImage depth;
+  depth.stamp = body->stamp();
+  if (const wire::Image* image = body->image()) {
+    depth.width  = image->width();
+    depth.height = image->height();
+    if (image->data()) {
+      depth.mm.resize(image->data()->size() / sizeof(uint16_t));
+      std::memcpy(depth.mm.data(), image->data()->Data(), depth.mm.size() * sizeof(uint16_t));
+    }
   }
-
-  return std::make_pair(success, config);
+  return depth;
 }
 
-//}
-
-/* getStereoCameraConfig() //{ */
-
-std::pair<bool, Serializable::Drone::StereoCameraConfig> RobotClient::GetStereoCameraConfig(int sensorId) {
-
-  Serializable::Drone::GetStereoCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetStereoCameraConfig::Response response{};
-  const auto                                           status  = Request(request, response);
-  const auto                                           success = status && response.status;
-
-  Serializable::Drone::StereoCameraConfig config{};
-
-  if (success) {
-    config = response.config;
-/* 
-    config.show_debug_camera_ = response.config.show_debug_camera_;
-
-    config.fov_ = response.config.fov_;
-
-    config.offset_ = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
-
-    config.orientation_ = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
-
-    config.width_  = response.config.width_;
-    config.height_ = response.config.height_;
-
-    config.baseline_ = response.config.baseline_;
-
-    config.enable_temporal_aa_ = response.config.enable_temporal_aa_;
-    config.enable_hdr_         = response.config.enable_hdr_;
-    config.enable_raytracing_  = response.config.enable_raytracing_; */
+Expected<Image> RobotClient::GetRgbSegCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetRgbSegCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::RgbSegCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
   }
-
-  return std::make_pair(success, config);
+  return ReadImage(body->image(), body->stamp());
 }
 
-//}
-
-/* setRgbCameraConfig() //{ */
-
-bool RobotClient::SetRgbCameraConfig(const RgbCameraConfig& config, int sensorId) {
-
-  Serializable::Drone::SetRgbCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  request.config                    = Serializable::Drone::RgbCameraConfig{};
-  request.config.show_debug_camera_ = config.show_debug_camera_;
-
-  request.config.fov_ = config.fov_;
-
-  request.config.offset_x_ = config.offset_.x;
-  request.config.offset_y_ = config.offset_.y;
-  request.config.offset_z_ = config.offset_.z;
-
-  request.config.rotation_pitch_ = config.orientation_.pitch;
-  request.config.rotation_yaw_   = config.orientation_.yaw;
-  request.config.rotation_roll_  = config.orientation_.roll;
-
-  request.config.width_  = config.width_;
-  request.config.height_ = config.height_;
-
-  request.config.enable_temporal_aa_ = config.enable_temporal_aa_;
-  request.config.enable_hdr_         = config.enable_hdr_;
-  request.config.enable_raytracing_  = config.enable_raytracing_;
-
-  request.config.enable_motion_blur_ = config.enable_motion_blur_;
-  request.config.motion_blur_amount_ = config.motion_blur_amount_;
-  request.config.motion_blur_distortion_ = config.motion_blur_distortion_;
-  request.config.capture_rate_           = config.capture_rate_;
-
-  request.config.exposure_.manual_          = config.exposure_.manual_;
-  request.config.exposure_.shutter_time_    = config.exposure_.shutter_time_;
-  request.config.exposure_.iso_             = config.exposure_.iso_;
-  request.config.exposure_.ev_compensation_ = config.exposure_.ev_compensation_;
-
-  request.config.lens_.fstop_                    = config.lens_.fstop_;
-  request.config.lens_.focal_distance_           = config.lens_.focal_distance_;
-  request.config.lens_.sensor_width_mm_          = config.lens_.sensor_width_mm_;
-  request.config.lens_.vignette_intensity_       = config.lens_.vignette_intensity_;
-  request.config.lens_.chromatic_aberration_     = config.lens_.chromatic_aberration_;
-  request.config.lens_.bloom_intensity_          = config.lens_.bloom_intensity_;
-  request.config.lens_.lens_flare_intensity_     = config.lens_.lens_flare_intensity_;
-  request.config.lens_.white_temp_               = config.lens_.white_temp_;
-  request.config.lens_.white_tint_               = config.lens_.white_tint_;
-  request.config.lens_.motion_blur_from_shutter_ = config.lens_.motion_blur_from_shutter_;
-
-  request.config.intrinsics_.use_custom_ = config.intrinsics_.use_custom_;
-  request.config.intrinsics_.fx_         = config.intrinsics_.fx_;
-  request.config.intrinsics_.fy_         = config.intrinsics_.fy_;
-  request.config.intrinsics_.cx_         = config.intrinsics_.cx_;
-  request.config.intrinsics_.cy_         = config.intrinsics_.cy_;
-
-  request.config.distortion_.enable_ = config.distortion_.enable_;
-  request.config.distortion_.k1_     = config.distortion_.k1_;
-  request.config.distortion_.k2_     = config.distortion_.k2_;
-  request.config.distortion_.k3_     = config.distortion_.k3_;
-  request.config.distortion_.p1_     = config.distortion_.p1_;
-  request.config.distortion_.p2_     = config.distortion_.p2_;
-
-  request.config.noise_.enable_     = config.noise_.enable_;
-  request.config.noise_.shot_scale_ = config.noise_.shot_scale_;
-  request.config.noise_.read_sigma_ = config.noise_.read_sigma_;
-  request.config.noise_.row_sigma_  = config.noise_.row_sigma_;
-
-  request.config.rolling_shutter_.enable_       = config.rolling_shutter_.enable_;
-  request.config.rolling_shutter_.readout_time_ = config.rolling_shutter_.readout_time_;
-
-  request.config.compression_.format_  = config.compression_.format_;
-  request.config.compression_.quality_ = config.compression_.quality_;
-
-  Serializable::Drone::SetRgbCameraConfig::Response response{};
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  return success;
+Expected<Image> RobotClient::GetInstanceSegData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetInstanceSegDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::InstanceSegDataResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ReadImage(body->image(), body->stamp());
 }
 
-//}
-
-/* setStereoCameraConfig() //{ */
-
-bool RobotClient::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config, int sensorId) {
-
-  Serializable::Drone::SetStereoCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  request.config                    = config;
-/*   request.config.show_debug_camera_ = config.show_debug_camera_;
-
-  request.config.fov_ = config.fov_;
-
-  request.config.offset_x_ = config.offset_.x;
-  request.config.offset_y_ = config.offset_.y;
-  request.config.offset_z_ = config.offset_.z;
-
-  request.config.rotation_pitch_ = config.orientation_.pitch;
-  request.config.rotation_yaw_   = config.orientation_.yaw;
-  request.config.rotation_roll_  = config.orientation_.roll;
-
-  request.config.width_  = config.width_;
-  request.config.height_ = config.height_;
-
-  request.config.baseline_ = config.baseline_;
-
-  request.config.enable_temporal_aa_ = config.enable_temporal_aa_;
-  request.config.enable_hdr_         = config.enable_hdr_;
-  request.config.enable_raytracing_  = config.enable_raytracing_;
- */
-  Serializable::Drone::SetStereoCameraConfig::Response response{};
-
-  const auto status  = Request(request, response);
-  const auto success = status && response.status;
-
-  return success;
+Expected<std::vector<wire::InstanceSegEntryT>> RobotClient::GetInstanceSegMap(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetInstanceSegMapRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::InstanceSegMapResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<wire::InstanceSegEntryT> entries;
+  if (body->entries()) {
+    for (const wire::InstanceSegEntry* entry : *body->entries()) {
+      entries.emplace_back();
+      entry->UnPackTo(&entries.back());
+    }
+  }
+  return entries;
 }
 
-//}
-
-/* getMoveLineVisible() //{ */
-
-std::pair<bool, bool> RobotClient::GetMoveLineVisible() {
-
-  Serializable::Drone::GetMoveLineVisible::Request request{};
-
-  Serializable::Drone::GetMoveLineVisible::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  return std::make_pair(success, success ? response.visible : false);
-}
-
-//}
-
-/* setMoveLineVisible() //{ */
-
-bool RobotClient::SetMoveLineVisible(bool visible) {
-
-  Serializable::Drone::SetMoveLineVisible::Request request{};
-  request.visible = visible;
-
-  Serializable::Drone::SetMoveLineVisible::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  return success;
-}
-
-//}
-
-/* GetEventCameraData() //{ */
-
-std::pair<bool, CameraEvents> RobotClient::GetEventCameraData(int sensorId) {
-
-  Serializable::Drone::GetEventCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetEventCameraData::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
+Expected<CameraEvents> RobotClient::GetEventCameraData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetEventCameraDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::EventCameraDataResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
 
   CameraEvents events;
+  events.base_stamp = body->base_stamp();
+  events.stamp      = body->stamp();
+  events.dropped    = body->dropped();
+  events.width      = body->width();
+  events.height     = body->height();
+  if (body->xyp()) {
+    events.xyp.assign(body->xyp()->begin(), body->xyp()->end());
+  }
+  if (body->t_us()) {
+    events.t_us.assign(body->t_us()->begin(), body->t_us()->end());
+  }
+  return events;
+}
 
-  if (success) {
-    events.xyp        = std::move(response.xyp_);
-    events.t_us       = std::move(response.t_us_);
-    events.base_stamp = response.base_stamp_;
-    events.stamp      = response.stamp_;
-    events.dropped    = response.dropped_;
-    events.width      = response.width_;
-    events.height     = response.height_;
+Expected<LidarScan> RobotClient::GetLidarScan(const bool with_intensity, const bool with_labels, const int sensor_id) {
+  static_assert(sizeof(std::array<float, 3>) == sizeof(wire::Vec3f));
+
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetLidarScanRequest(b, with_intensity, with_labels), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::LidarScanResponse>(reply, status);
+  if (!body) {
+    return status;
   }
 
-  return std::make_pair(success, std::move(events));
-}
-
-//}
-
-/* Get/SetEventCameraConfig() //{ */
-
-std::pair<bool, EventCameraConfig> RobotClient::GetEventCameraConfig(int sensorId) {
-
-  Serializable::Drone::GetEventCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetEventCameraConfig::Response response{};
-  const auto                                          status  = Request(request, response);
-  const auto                                          success = status && response.status;
-
-  EventCameraConfig config{};
-
-  if (success) {
-    config.show_debug_camera_      = response.config.show_debug_camera_;
-    config.offset_                 = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
-    config.orientation_            = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
-    config.fov_                    = response.config.fov_;
-    config.width_                  = response.config.width_;
-    config.height_                 = response.config.height_;
-    config.contrast_threshold_pos_ = response.config.contrast_threshold_pos_;
-    config.contrast_threshold_neg_ = response.config.contrast_threshold_neg_;
-    config.use_sim_time_           = response.config.use_sim_time_;
-    config.threshold_sigma_        = response.config.threshold_sigma_;
-    config.refractory_period_      = response.config.refractory_period_;
-    config.cutoff_hz_              = response.config.cutoff_hz_;
-    config.leak_rate_hz_           = response.config.leak_rate_hz_;
-    config.shot_noise_rate_hz_     = response.config.shot_noise_rate_hz_;
-    config.hot_pixel_fraction_     = response.config.hot_pixel_fraction_;
-    config.max_event_rate_hz_      = response.config.max_event_rate_hz_;
-    config.max_events_per_frame_   = response.config.max_events_per_frame_;
-    config.use_gpu_                = response.config.use_gpu_;
-    config.seed_                   = response.config.seed_;
+  LidarScan scan;
+  scan.stamp = body->stamp();
+  scan.rows  = body->rows();
+  scan.cols  = body->cols();
+  if (body->sensor_pose()) {
+    scan.sensor_pose = FromWire(*body->sensor_pose());
   }
-
-  return std::make_pair(success, config);
-}
-
-/* SetEventCameraConfig() //{ */
-
-bool RobotClient::SetEventCameraConfig(const EventCameraConfig& config, int sensorId) {
-
-  Serializable::Drone::SetEventCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  request.config.show_debug_camera_      = config.show_debug_camera_;
-  request.config.offset_x_               = config.offset_.x;
-  request.config.offset_y_               = config.offset_.y;
-  request.config.offset_z_               = config.offset_.z;
-  request.config.rotation_pitch_         = config.orientation_.pitch;
-  request.config.rotation_yaw_           = config.orientation_.yaw;
-  request.config.rotation_roll_          = config.orientation_.roll;
-  request.config.fov_                    = config.fov_;
-  request.config.width_                  = config.width_;
-  request.config.height_                 = config.height_;
-  request.config.contrast_threshold_pos_ = config.contrast_threshold_pos_;
-  request.config.contrast_threshold_neg_ = config.contrast_threshold_neg_;
-  request.config.use_sim_time_           = config.use_sim_time_;
-  request.config.threshold_sigma_        = config.threshold_sigma_;
-  request.config.refractory_period_      = config.refractory_period_;
-  request.config.cutoff_hz_              = config.cutoff_hz_;
-  request.config.leak_rate_hz_           = config.leak_rate_hz_;
-  request.config.shot_noise_rate_hz_     = config.shot_noise_rate_hz_;
-  request.config.hot_pixel_fraction_     = config.hot_pixel_fraction_;
-  request.config.max_event_rate_hz_      = config.max_event_rate_hz_;
-  request.config.max_events_per_frame_   = config.max_events_per_frame_;
-  request.config.use_gpu_                = config.use_gpu_;
-  request.config.seed_                   = config.seed_;
-
-  Serializable::Drone::SetEventCameraConfig::Response response{};
-  const auto                                          status = Request(request, response);
-
-  return status && response.status;
-}
-
-//}
-
-//}
-
-/* GetFisheyeCameraData() //{ */
-
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetFisheyeCameraData(int sensorId) {
-
-  Serializable::Drone::GetFisheyeCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetFisheyeCameraData::Response response{};
-  const auto                                          status  = Request(request, response);
-  const auto                                          success = status && response.status;
-
-  return std::make_tuple(success, success ? response.image_ : std::vector<unsigned char>(), success ? response.stamp_ : 0.0,
-                         success ? response.image_.size() : 0);
-}
-
-//}
-
-/* Get/SetFisheyeCameraConfig() //{ */
-
-std::pair<bool, FisheyeCameraConfig> RobotClient::GetFisheyeCameraConfig(int sensorId) {
-
-  Serializable::Drone::GetFisheyeCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetFisheyeCameraConfig::Response response{};
-  const auto                                            status  = Request(request, response);
-  const auto                                            success = status && response.status;
-
-  FisheyeCameraConfig config{};
-
-  if (success) {
-    config.show_debug_camera_ = response.config.show_debug_camera_;
-    config.offset_            = Coordinates{response.config.offset_x_, response.config.offset_y_, response.config.offset_z_};
-    config.orientation_       = Rotation{response.config.rotation_pitch_, response.config.rotation_yaw_, response.config.rotation_roll_};
-    config.fov_               = response.config.fov_;
-    config.width_             = response.config.width_;
-    config.height_            = response.config.height_;
-    config.lens_model_        = response.config.lens_model_;
-    config.full_frame_        = response.config.full_frame_;
-    config.capture_rate_      = response.config.capture_rate_;
-
-    config.intrinsics_.use_custom_ = response.config.intrinsics_.use_custom_;
-    config.intrinsics_.fx_         = response.config.intrinsics_.fx_;
-    config.intrinsics_.fy_         = response.config.intrinsics_.fy_;
-    config.intrinsics_.cx_         = response.config.intrinsics_.cx_;
-    config.intrinsics_.cy_         = response.config.intrinsics_.cy_;
-    config.kb_k1_                  = response.config.kb_k1_;
-    config.kb_k2_                  = response.config.kb_k2_;
-    config.kb_k3_                  = response.config.kb_k3_;
-    config.kb_k4_                  = response.config.kb_k4_;
+  if (body->points()) {
+    scan.points.resize(body->points()->size());
+    std::memcpy(scan.points.data(), body->points()->Data(), scan.points.size() * sizeof(wire::Vec3f));
   }
-
-  return std::make_pair(success, config);
-}
-
-/* SetFisheyeCameraConfig() //{ */
-
-bool RobotClient::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId) {
-
-  Serializable::Drone::SetFisheyeCameraConfig::Request request{};
-  request.sensor_id_ = sensorId;
-
-  request.config.show_debug_camera_ = config.show_debug_camera_;
-  request.config.offset_x_          = config.offset_.x;
-  request.config.offset_y_          = config.offset_.y;
-  request.config.offset_z_          = config.offset_.z;
-  request.config.rotation_pitch_    = config.orientation_.pitch;
-  request.config.rotation_yaw_      = config.orientation_.yaw;
-  request.config.rotation_roll_     = config.orientation_.roll;
-  request.config.fov_               = config.fov_;
-  request.config.width_             = config.width_;
-  request.config.height_            = config.height_;
-  request.config.lens_model_        = config.lens_model_;
-  request.config.full_frame_        = config.full_frame_;
-  request.config.capture_rate_      = config.capture_rate_;
-
-  request.config.intrinsics_.use_custom_ = config.intrinsics_.use_custom_;
-  request.config.intrinsics_.fx_         = config.intrinsics_.fx_;
-  request.config.intrinsics_.fy_         = config.intrinsics_.fy_;
-  request.config.intrinsics_.cx_         = config.intrinsics_.cx_;
-  request.config.intrinsics_.cy_         = config.intrinsics_.cy_;
-  request.config.kb_k1_                  = config.kb_k1_;
-  request.config.kb_k2_                  = config.kb_k2_;
-  request.config.kb_k3_                  = config.kb_k3_;
-  request.config.kb_k4_                  = config.kb_k4_;
-
-  Serializable::Drone::SetFisheyeCameraConfig::Response response{};
-  const auto                                            status = Request(request, response);
-
-  return status && response.status;
-}
-
-//}
-
-//}
-
-/* sensor management //{ */
-
-std::pair<bool, int> RobotClient::AddSensor(int sensorType) {
-
-  Serializable::Drone::AddSensor::Request request{};
-  request.sensor_type_ = sensorType;
-
-  Serializable::Drone::AddSensor::Response response{};
-  const auto                               status  = Request(request, response);
-  const auto                               success = status && response.status;
-
-  return std::make_pair(success, success ? response.sensor_id_ : -1);
-}
-
-/* RemoveSensor() //{ */
-
-bool RobotClient::RemoveSensor(int sensorId) {
-
-  Serializable::Drone::RemoveSensor::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::RemoveSensor::Response response{};
-  const auto                                  status = Request(request, response);
-
-  return status && response.status;
-}
-
-//}
-
-/* ListSensors() //{ */
-
-std::pair<bool, std::vector<SensorInfo>> RobotClient::ListSensors() {
-
-  Serializable::Drone::ListSensors::Request request{};
-
-  Serializable::Drone::ListSensors::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  std::vector<SensorInfo> sensors;
-
-  if (success) {
-    for (size_t i = 0; i < response.sensor_ids_.size() && i < response.sensor_types_.size(); i++) {
-      sensors.push_back(SensorInfo{response.sensor_ids_[i], response.sensor_types_[i]});
-    }
+  if (body->intensity()) {
+    scan.intensity.assign(body->intensity()->begin(), body->intensity()->end());
   }
-
-  return std::make_pair(success, sensors);
-}
-
-//}
-
-//}
-
-/* device management //{ */
-
-std::pair<bool, std::vector<SensorInfo>> RobotClient::AddDevice(const std::string& deviceName, const Coordinates& offset, const Rotation& rotation,
-                                                                  bool showMesh) {
-
-  Serializable::Drone::AddDevice::Request request{};
-  request.device_name_    = deviceName;
-  request.offset_x_       = offset.x;
-  request.offset_y_       = offset.y;
-  request.offset_z_       = offset.z;
-  request.rotation_pitch_ = rotation.pitch;
-  request.rotation_yaw_   = rotation.yaw;
-  request.rotation_roll_  = rotation.roll;
-  request.show_mesh_      = showMesh;
-
-  Serializable::Drone::AddDevice::Response response{};
-  const auto                               status  = Request(request, response);
-  const auto                               success = status && response.status;
-
-  std::vector<SensorInfo> sensors;
-
-  if (success) {
-    for (size_t i = 0; i < response.sensor_ids_.size() && i < response.sensor_types_.size(); i++) {
-      sensors.push_back(SensorInfo{response.sensor_ids_[i], response.sensor_types_[i]});
-    }
+  if (body->class_id()) {
+    scan.class_id.assign(body->class_id()->begin(), body->class_id()->end());
   }
-
-  return std::make_pair(success, sensors);
-}
-
-/* ListDevices() //{ */
-
-std::pair<bool, std::vector<DeviceInfo>> RobotClient::ListDevices() {
-
-  Serializable::Drone::ListDevices::Request request{};
-
-  Serializable::Drone::ListDevices::Response response{};
-  const auto                                 status  = Request(request, response);
-  const auto                                 success = status && response.status;
-
-  std::vector<DeviceInfo> devices;
-
-  if (success) {
-    for (size_t i = 0; i < response.names_.size() && i < response.descriptions_.size(); i++) {
-      devices.push_back(DeviceInfo{response.names_[i], response.descriptions_[i]});
-    }
+  if (body->instance_id()) {
+    scan.instance_id.assign(body->instance_id()->begin(), body->instance_id()->end());
   }
-
-  return std::make_pair(success, devices);
+  return scan;
 }
 
-//}
-
-//}
-
-/* getInstanceSegData() //{ */
-
-bool RobotClient::GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId) {
-
-  Serializable::Drone::GetInstanceSegData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetInstanceSegData::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  if (success) {
-    image = response.image_;
-    stamp = response.stamp_;
+Expected<RangefinderReading> RobotClient::GetRangefinderData(const int sensor_id) {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetRangefinderDataRequest(b), robot_id_, Sensor(sensor_id));
+  Status     status;
+  const auto body = Body<wire::RangefinderDataResponse>(reply, status);
+  if (!body) {
+    return status;
   }
-
-  return success;
+  return RangefinderReading{body->stamp(), body->range()};
 }
 
-//}
+/* //} */
 
-/* getInstanceSegMap() //{ */
-
-std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> RobotClient::GetInstanceSegMap(int sensorId) {
-
-  Serializable::Drone::GetInstanceSegMap::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetInstanceSegMap::Response response{};
-  const auto                                       status  = Request(request, response);
-  const auto                                       success = status && response.status;
-
-  return std::make_pair(success, success ? response.entries_ : std::vector<Serializable::Drone::InstanceSegMapEntry>());
-}
-
-//}
-
-/* getLidarScan() //{ */
-
-std::pair<bool, flightforge::LidarScan> RobotClient::GetLidarScan(bool withLabels, bool withIntensity, int sensorId) {
-
-  Serializable::Drone::GetLidarScan::Request request{};
-  request.sensor_id_      = sensorId;
-  request.with_labels_    = withLabels;
-  request.with_intensity_ = withIntensity;
-
-  Serializable::Drone::GetLidarScan::Response response{};
-  const auto                                  status  = Request(request, response);
-  const auto                                  success = status && response.status;
-
-  flightforge::LidarScan scan;
-  if (success) {
-    scan.start = Coordinates{response.startX, response.startY, response.startZ};
-    scan.stamp = response.stamp_;
-    scan.points.resize(response.points_.size());
-    for (size_t i = 0; i < response.points_.size(); ++i) {
-      scan.points[i].distance   = response.points_[i].distance;
-      scan.points[i].directionX = response.points_[i].directionX;
-      scan.points[i].directionY = response.points_[i].directionY;
-      scan.points[i].directionZ = response.points_[i].directionZ;
-    }
-    scan.intensity   = std::move(response.intensity_);
-    scan.class_id    = std::move(response.class_id_);
-    scan.instance_id = std::move(response.instance_id_);
-  }
-
-  return std::make_pair(success, std::move(scan));
-}
-
-//}
-
-/* getCameraInfo() //{ */
-
-std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> RobotClient::GetCameraInfo(int sensorId) {
-
-  Serializable::Drone::GetCameraInfo::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetCameraInfo::Response response{};
-  const auto                                   status  = Request(request, response);
-  const auto                                   success = status && response.status;
-
-  return std::make_pair(success, success ? response.cameras_ : std::vector<Serializable::Drone::CameraInfo>());
-}
-
-//}
-
-/* getDepthCameraData() //{ */
-
-bool RobotClient::GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId) {
-
-  Serializable::Drone::GetDepthCameraData::Request request{};
-  request.sensor_id_ = sensorId;
-
-  Serializable::Drone::GetDepthCameraData::Response response{};
-  const auto                                        status  = Request(request, response);
-  const auto                                        success = status && response.status;
-
-  if (success) {
-    image  = response.image_;
-    width  = response.width_;
-    height = response.height_;
-    stamp  = response.stamp_;
-  }
-
-  return success;
-}
-
-//}
+}  // namespace flightforge

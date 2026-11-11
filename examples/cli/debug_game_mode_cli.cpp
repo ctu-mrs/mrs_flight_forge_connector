@@ -1,459 +1,158 @@
-#include <chrono>
-#include <csignal>
+// Interactive simulator ops.
+//   debug_game_mode_cli            (FLIGHTFORGE_ADDRESS and FLIGHTFORGE_PORT override 127.0.0.1:8600)
+
 #include <fstream>
-#include <future>
 #include <iostream>
 #include <iterator>
-#include <memory>
-#include <optional>
+#include <sstream>
+#include <string>
 
-#include "flight_forge_connector/simulator_client.h"
-#include "flight_forge_connector/data_types.h"
+#include <flight_forge_connector/simulator_client.h>
 
-bool parseInt(std::string choice, int& _int) {
-  int x;
-  auto delimiter_position = choice.find(' ');
-  if (delimiter_position == std::string::npos) {
-    return false;
-  }
-  // trim '2 '
-  choice.erase(0, delimiter_position + 1);
+#include "common.h"
 
-  x = std::stoi(choice);
-  _int = x;
+using namespace flightforge;
 
-  return true;
+namespace
+{
+
+void Menu() {
+  std::cout << "x exit\n"
+            << "0 ping\n"
+            << "1 list robots\n"
+            << "2 spawn robot [NAME] [X Y Z] [LABEL]\n"
+            << "3 remove robot [ID]\n"
+            << "4 get capture mode\n"
+            << "5 set capture mode [0 all frames, 1 on movement, 2 on demand]\n"
+            << "6 fps and time\n"
+            << "7 set weather [ID]\n"
+            << "8 set daytime [HOUR] [MINUTE]\n"
+            << "9 switch world [LEVEL or friendly name]\n"
+            << "a set graphics [0 low .. 4 cinematic]\n"
+            << "b mutual visibility [0|1]\n"
+            << "c spawn objects from yaml [PATH]\n"
+            << "d remove spawned object [ID] (negative removes all)\n"
+            << "e world origin\n"
+            << "----------------" << std::endl;
 }
 
-bool parseString(std::string &choice) {
-  auto delimiter_position = choice.find(' ');
-  if (delimiter_position == std::string::npos) {
-    return false;
-  }
-  // trim '2 '
-  choice.erase(0, delimiter_position + 1);
-
-  return true;
+void Report(const Status& status) {
+  std::cout << (status.ok ? "ok" : "error: " + status.error) << std::endl;
 }
 
-bool parseInts(std::string choice, int& a, int& b) {
-  int x, y;
-  auto delimiter_position = choice.find(' ');
-  if (delimiter_position == std::string::npos) {
-    return false;
-  }
-  // trim '2 '
-  choice.erase(0, delimiter_position + 1);
+}  // namespace
 
-  delimiter_position = choice.find(' ');
-  if (delimiter_position == std::string::npos) {
-    return false;
-  }
-  x = std::stoi(choice.substr(0, delimiter_position));
-  choice.erase(0, delimiter_position + 1);
-
-  y = std::stoi(choice);
-
-  a = x;
-  b = y;
-  return true;
-}
-
-std::unique_ptr<flightforge::SimulatorClient> gameModeController;
-
-void interruptHandler(int s) {
-  std::cout << "Got exit signal " << s << std::endl;
-  if (gameModeController != nullptr) {
-    // release drone controller ptr and destruct (disconnect)
-    gameModeController.reset();
-  }
-  exit(1);
-}
-
-int main(int argc, char* argv[]) {
-  // Optional args: [port] [address]
-  // Port defaults to 8551 (FlightForgeGameModePort default).
-  // Address defaults to 127.0.0.1 (FlightForgeBindAddr default).
-  int         port    = 8551;
-  std::string address = LOCALHOST;
-  if (argc >= 2) {
-    port = atoi(argv[1]);
-  }
-  if (argc >= 3) {
-    address = argv[2];
-  }
-  std::cout << "Connecting to game-mode controller at " << address << ":" << port << std::endl;
-
-#ifdef _WIN32
-  signal(SIGINT, interruptHandler);
-  signal(SIGTERM, interruptHandler);
-  signal(SIGABRT, interruptHandler);
-#else
-  struct sigaction sigIntHandler {};
-  sigIntHandler.sa_handler = interruptHandler;
-  sigemptyset(&sigIntHandler.sa_mask);
-  sigIntHandler.sa_flags = 0;
-  sigaction(SIGINT, &sigIntHandler, nullptr);
-#endif
-
-  gameModeController = std::make_unique<flightforge::SimulatorClient>(address, port);
-  bool connect_result = gameModeController->Connect();
-  if (connect_result != 1) {
-    std::cout << "Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
+int main() {
+  SimulatorClient sim(ffcli::Address(), ffcli::Port());
+  std::cout << "connecting to " << ffcli::Address() << ":" << ffcli::Port() << std::endl;
+  if (!sim.Connect(5)) {
+    std::cerr << "no simulator there" << std::endl;
     return 1;
   }
 
-  auto [res, version] = gameModeController->GetApiVersion();
-  auto [api_version_major, api_version_minor] = version;
-
-  if (!res || api_version_major != API_VERSION_MAJOR || api_version_minor != API_VERSION_MINOR) {
-
-    std::cout << "[FlighForge]: the API versions don't match! (CONNECTOR side 'v" << API_VERSION_MAJOR << "." << API_VERSION_MINOR << "' != UNREAL side 'v" << api_version_major << "." << api_version_minor << "')" << std::endl;
-    std::cout << "[FlighForge]:" << std::endl;
-    std::cout << "[FlighForge]: Solution:"<< std::endl;
-    std::cout << "[FlighForge]:           1. make sure the mrs_flight_forge_connector package is up to date"<< std::endl;
-    std::cout << "[FlighForge]:              git pull"<< std::endl;
-    std::cout << "[FlighForge]:"<< std::endl;
-    std::cout << "[FlighForge]:           2. make sure you have the right version of the FlighForge Simulator 'game'"<< std::endl;
-    std::cout << "[FlighForge]:              download at: https://github.com/ctu-mrs/mrs_uav_unreal_simulation"<< std::endl;
-    std::cout << "[FlighForge]:"<< std::endl;
-
-    exit(2);
+  const auto info = sim.GetInfo();
+  if (!info.ok || info->major != SimulatorClient::kApiMajor) {
+    std::cerr << "the simulator speaks API " << info->major << "." << info->minor << ", this client " << SimulatorClient::kApiMajor << "."
+              << SimulatorClient::kApiMinor << std::endl;
+    return 1;
   }
 
+  std::string line;
+  for (Menu(); std::cout << ": " && std::getline(std::cin, line); Menu()) {
+    std::istringstream in(line);
+    std::string        command;
+    in >> command;
 
-  std::string s = "medium";
-  gameModeController->SetGraphicsSettings(flightforge::GraphicsSettings::Name2Id().at(s));
-
-  while (true) {
-    std::cout << "Exit: x" << std::endl;
-    std::cout << "Ping: 0" << std::endl;
-    std::cout << "Get drones: 1" << std::endl;
-    std::cout << "Spawn drone: 2 [FRAME NAME]" << std::endl;
-    std::cout << "Remove drone: 3 [PORT]" << std::endl;
-    std::cout << "Get camera capture mode: 4" << std::endl;
-    std::cout << "Set camera capture mode: 5 [MODE] (0 - all frames, 1 - on movement, 2 - on demand)" << std::endl;
-    std::cout << "Get FPS: 6" << std::endl;
-    std::cout << "Set Weather: 7 [WEATHER ID]" << std::endl;
-    std::cout << "Set Time: 8 [HOURS] [MINUTES]" << std::endl;
-    std::cout << "Switch Wordl: 9 [NAME] (0-valley 1-forest 2-infinite_forest 3-warehouse 4-cave)" << std::endl;
-    std::cout << "Set Graphics setting: a [LEVEL] (0-Low 1-Medium 2-High 3-Epic 4-Cinematic)" << std::endl;
-    std::cout << "Set Mutual Visibility: b [0-false 1-true]" << std::endl;
-    std::cout << "Spawn objects from YAML: c [PATH TO CONFIG]" << std::endl;
-    std::cout << "Remove spawned object: d [OBJECT ID] (negative removes all)" << std::endl;
-    std::cout << "----------------" << std::endl;
-
-    std::string choice;
-    std::cout << ": ";
-    std::getline(std::cin, choice);
-
-    const auto start = std::chrono::steady_clock::now();
-
-    const auto choice_char = choice[0];
-    bool err = false;
-
-
-
-    if (choice_char == 'x') {
+    if (command == "x") {
       break;
-    } else if (choice_char == '0') {
-      const auto ping_result = gameModeController->Ping();
-      std::cout << "Ping: " << (ping_result ? "true" : "false") << std::endl;
-    } else if (choice_char == '1') {
-      const auto [res, drones] = gameModeController->GetDrones();
-      if (!res) {
-        std::cout << "Error getting drones" << std::endl;
+    } else if (command == "0") {
+      Report(sim.Ping());
+    } else if (command == "1") {
+      const auto robots = sim.ListRobots();
+      Report(robots);
+      for (const auto& robot : robots.value) {
+        std::cout << "  " << robot.id << " " << robot.name << " '" << robot.label << "' " << wire::EnumNameRobotKind(robot.kind) << std::endl;
+      }
+    } else if (command == "2") {
+      std::string name = "x500", label;
+      double      x = 0, y = 0, z = 2;
+      in >> name >> x >> y >> z >> label;
+      const auto id = sim.SpawnRobot(name, Pose::At(x, y, z), label);
+      Report(id);
+      if (id.ok) {
+        std::cout << "  robot " << *id << std::endl;
+      }
+    } else if (command == "3") {
+      int id = -1;
+      in >> id;
+      Report(sim.RemoveRobot(id));
+    } else if (command == "4") {
+      const auto mode = sim.GetCaptureMode();
+      Report(mode);
+      if (mode.ok) {
+        std::cout << "  " << wire::EnumNameCaptureMode(*mode) << std::endl;
+      }
+    } else if (command == "5") {
+      int mode = 0;
+      in >> mode;
+      Report(sim.SetCaptureMode(static_cast<wire::CaptureMode>(mode)));
+    } else if (command == "6") {
+      const auto fps  = sim.GetFps();
+      const auto time = sim.GetTime();
+      if (fps.ok && time.ok) {
+        std::cout << "  " << *fps << " fps, sim " << time->sim_time << " s, dilation " << time->time_dilation << std::endl;
       } else {
-        std::cout << "Drones: ";
-        for (const auto& port : drones) {
-          std::cout << port << " ";
-        }
-        std::cout << std::endl;
+        Report(fps.ok ? Status(time) : Status(fps));
       }
-    } else if (choice_char == '2') {
-      flightforge::Coordinates spawn_coord = flightforge::Coordinates(0.0,0.0,2.0);
-      auto [res,origin] = gameModeController->GetWorldOrigin();
-      if (res) {
-        std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
-        spawn_coord = origin;
-      } else {
-        std::cout << "GetWorldOrigin error" << std::endl;
-      }
- 
-
-      bool parse_res = parseString(choice);
-
-      if(!parse_res){
-        std::cout << "Parse error!!!" << std::endl;
-      }else{
-
-
-      const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, choice);
-
-      if (res) {
-        std::cout << "SpawnDrone successful, port: " << port << std::endl;
-      } else {
-        std::cout << "SpawnDrone error, maybe invalid coordinates or UAV type " << choice << std::endl;
-      }
-
-      }
-    } else if (choice_char == '3') {
-      int port;
-      const auto parseRes = parseInt(choice, port);
-      if (parseRes) {
-        const auto success = gameModeController->RemoveDrone(4000);
-
-        if (success) {
-          std::cout << "RemoveDrone successful" << std::endl;
-        } else {
-          std::cout << "RemoveDrone error" << std::endl;
-        }
-      } else {
-        std::cout << "RemoveDrone parse error" << std::endl;
-      }
-    } else if (choice_char == '4') {
-      const auto [res, cameraCaptureMode] = gameModeController->GetCameraCaptureMode();
-
-      if (res) {
-        std::cout << "GetCameraCaptureMode successful. Camera capture mode: " << cameraCaptureMode
-                  << " (0 - all frames, 1 - on movement, 2 - on demand)" << std::endl;
-      } else {
-        std::cout << "RemoveDrone error" << std::endl;
-      }
-    } else if (choice_char == '5') {
-      int mode;
-      const auto parseRes = parseInt(choice, mode);
-      if (parseRes && mode >= 0 && mode <= 2) {
-        flightforge::CameraCaptureModeEnum captureMode;
-        if (mode == 0)
-          captureMode = flightforge::CAPTURE_ALL_FRAMES;
-        else if (mode == 1)
-          captureMode = flightforge::CAPTURE_ON_MOVEMENT;
-        else
-          captureMode = flightforge::CAPTURE_ON_DEMAND;
-
-        const auto success = gameModeController->SetCameraCaptureMode(captureMode);
-
-        if (success) {
-          std::cout << "SetCameraCaptureMode successful" << std::endl;
-        } else {
-          std::cout << "SetCameraCaptureMode error" << std::endl;
-        }
-      } else {
-        std::cout << "SetCameraCaptureMode parse error" << std::endl;
-      }
-    } else if (choice_char == '6') {
-      const auto [res, fps] = gameModeController->GetFps();
-
-      if (res) {
-        std::cout << "GetFps successful, FPS: " << fps << std::endl;
-      } else {
-        std::cout << "GetFps error" << std::endl;
-      }
-    } 
-    else if (choice_char == '7') {
-      int weather_id;
-      bool parse_res = parseInt(choice, weather_id);
-
-      if(!parse_res){
-        std::cout << "Parse error!!!" << std::endl;
-      }else{
-
-      bool res = gameModeController->SetWeather(weather_id);
-      if (res) {
-        std::cout << "SetWeather successful." << std::endl;
-      } else {
-        std::cout << "SetWeather error !!!" << std::endl;
-      }
-
-      }
-    }
-    else if (choice_char == '8') {
-      int hour, minute;
-      bool parse_res = parseInts(choice, hour, minute);
-
-      if(!parse_res){
-        std::cout << "Parse error!!!" << std::endl;
-      }else{
-
-      bool res = gameModeController->SetDatetime(hour, minute);
-      if (res) {
-        std::cout << "SetDatetime successful." << std::endl;
-      } else {
-        std::cout << "SetDatetime error !!!" << std::endl;
-      }
-
-      }
-    }
-    else if( choice_char == '9'){
-      
-      //std::string w = "race_2";
-      //gameModeController->SwitchWorldLevel(flightforge::WorldName::Name2Id().at(w));
-
-      int id_world;
-      bool parse_res = parseString(choice);
-      
-      gameModeController->SwitchWorldLevel(choice);
-
-      connect_result = gameModeController->Disconnect();
-      if (!connect_result) {
-        std::cout << "[FlightForge] Disconect was not Disconnected succesfully." << connect_result << std::endl;
-      }
-
-      std::this_thread::sleep_for(std::chrono::seconds(1));
-
-      while (true) {
-        connect_result = gameModeController->Connect();
-        if (connect_result != 1) {
-          std::cout << "[FlightForge] Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
-        } else {
-          break;
-        }
-        // ros::Duration(1.0).sleep();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-      }
-    
-    }
-
-    else if (choice_char == 'a') {
-      
-      //std::string s = "high";
-      // res = gameModeController->SetGraphicsSettings(flightforge::GraphicsSettings::Name2Id().at(s));
-      
-      int id;
-      bool parse_res = parseInt(choice, id);
-
-      res = gameModeController->SetGraphicsSettings(id);
-      if (res) {
-        std::cout << "SetGraphicsSettings successful." << std::endl;
-      } else {
-        std::cout << "SetGraphicsSettings error !!!" << std::endl;
-      }
-    }
-
-    else if (choice_char == 'b') {
-  
-      int enabled;
-      bool parse_res = parseInt(choice, enabled);
-
-      res = gameModeController->SetMutualDroneVisibility(enabled);
-      if (res) {
-        std::cout << "SetMutualVisibility successful." << std::endl;
-      } else {
-        std::cout << "SetMutualVisibility error !!!" << std::endl;
-      }
-    }
-    else if (choice_char == 'c') {
-
-      // The config is read here and sent as a document, so the file only has to exist on
-      // this machine; any models it names are resolved on the simulator side.
-      std::ifstream config_file(choice);
-      if (!config_file.is_open()) {
-        std::cout << "Could not open '" << choice << "'" << std::endl;
+    } else if (command == "7") {
+      int weather = 0;
+      in >> weather;
+      Report(sim.SetWeather(static_cast<wire::Weather>(weather)));
+    } else if (command == "8") {
+      int hour = 12, minute = 0;
+      in >> hour >> minute;
+      Report(sim.SetDaytime(hour, minute));
+    } else if (command == "9") {
+      std::string level;
+      in >> level;
+      const auto& names = WorldName::Name2Level();
+      Report(sim.SwitchWorld(names.count(level) ? names.at(level) : level));
+    } else if (command == "a") {
+      int quality = 2;
+      in >> quality;
+      Report(sim.SetGraphicsSettings(static_cast<wire::GraphicsQuality>(quality)));
+    } else if (command == "b") {
+      int enabled = 1;
+      in >> enabled;
+      Report(sim.SetMutualVisibility(enabled != 0));
+    } else if (command == "c") {
+      std::string path;
+      in >> path;
+      std::ifstream file(path);
+      if (!file) {
+        std::cout << "cannot read " << path << std::endl;
         continue;
       }
-
-      const std::string yaml((std::istreambuf_iterator<char>(config_file)), std::istreambuf_iterator<char>());
-
-      std::string error;
-      const auto [spawn_res, object_ids] = gameModeController->SpawnObjectsFromYaml(yaml, error);
-
-      if (spawn_res) {
-        std::cout << "SpawnObjectsFromYaml successful, " << object_ids.size() << " object(s) placed. Ids: ";
-        for (const auto& object_id : object_ids) {
-          std::cout << object_id << " ";
-        }
-        std::cout << std::endl;
-      } else {
-        std::cout << "SpawnObjectsFromYaml error: " << error << std::endl;
+      const auto ids = sim.SpawnObjectsFromYaml(std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()));
+      Report(ids);
+      for (const int id : ids.value) {
+        std::cout << "  object " << id << std::endl;
+      }
+    } else if (command == "d") {
+      int id = -1;
+      in >> id;
+      const auto removed = sim.RemoveSpawnedObject(id);
+      Report(removed);
+      if (removed.ok) {
+        std::cout << "  removed " << *removed << std::endl;
+      }
+    } else if (command == "e") {
+      const auto origin = sim.GetWorldOrigin();
+      Report(origin);
+      if (origin.ok) {
+        std::cout << "  ground frame origin at Unreal (" << origin->x << ", " << origin->y << ", " << origin->z << ") cm" << std::endl;
       }
     }
-    else if (choice_char == 'd') {
-
-      int object_id;
-      if (!parseInt(choice, object_id)) {
-        std::cout << "Parse error!!!" << std::endl;
-        continue;
-      }
-
-      const auto [remove_res, removed_count] = gameModeController->RemoveSpawnedObject(object_id);
-
-      if (remove_res) {
-        std::cout << "RemoveSpawnedObject successful, removed " << removed_count << " object(s)." << std::endl;
-      } else {
-        std::cout << "RemoveSpawnedObject error, no such object?" << std::endl;
-      }
-    }
-    else if (choice_char == 'f') {
-      flightforge::Coordinates spawn_coord = flightforge::Coordinates(0.0,0.0,2.0);
-      auto [res,origin] = gameModeController->GetWorldOrigin();
-      if (res) {
-        std::cout << "GetWorldOrigin successful. World origin: " << origin.toString() << std::endl;
-        spawn_coord = origin;
-      } else {
-        std::cout << "GetWorldOrigin error" << std::endl;
-      }
-
-      
-
-      const std::vector<std::string>& uav_types = flightforge::UavFrameType::KnownNames();
-
-      for(size_t i = 0; i < uav_types.size(); i++){
-        std::string uav_type = uav_types[i];
-        std::cout << "UAV type: " << i << " - " << uav_type << std::endl;
-        spawn_coord.z += i*100;
-        const auto [res, port] = gameModeController->SpawnDroneAtLocation(spawn_coord, uav_type);
-
-        if (res) {
-          std::cout << "SpawnDrone successful, port: " << port << std::endl;
-        } else {
-          std::cout << "SpawnDrone error, maybe invalid coordinates or UAV type " << uav_type << std::endl;
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-      }
-    }else if(choice_char == 'w'){
-      const std::map<std::string, std::string>& maps = flightforge::WorldName::Name2Level();
-
-      for(size_t i = 0; i < maps.size(); i++){
-        const auto& entry = *std::next(maps.begin(), i);
-        std::cout << "World: " << i << " - " << entry.first << " (level " << entry.second << ")" << std::endl;
-
-        gameModeController->SwitchWorldLevel(entry.second);
-
-      connect_result = gameModeController->Disconnect();
-      if (!connect_result) {
-        std::cout << "[FlightForge] Disconect was not Disconnected succesfully." << connect_result << std::endl;
-      }
-
-      std::this_thread::sleep_for(std::chrono::seconds(1));
-
-      while (true) {
-        connect_result = gameModeController->Connect();
-        if (connect_result != 1) {
-          std::cout << "[FlightForge] Error connecting to game mode controller. connect_result was " << connect_result << std::endl;
-        } else {
-          break;
-        }
-        // ros::Duration(1.0).sleep();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-      }
-       
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-      }
-    }
-    else {
-      err = true;
-    }
-
-    if (err) {
-      std::cout << "Unknown choice: " << choice << std::endl;
-    }
-    std::cout << "Elapsed(ms): "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
-              << std::endl;
-    std::cout << "----------------" << std::endl;
   }
 
   return 0;

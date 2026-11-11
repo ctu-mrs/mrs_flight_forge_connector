@@ -665,7 +665,6 @@ def test_conventions(sim, robot):
         assert seen == pytest.approx(4.5 - mount.position[0], abs=0.1)
         robot.remove_sensor(camera)
 
-        # the scene queries share the frame
         sim.clear_objects()
         sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [0.0, 2.0, 3.0]\n")
         vertices, _, _, _ = sim.world_mesh(center=(0.0, 2.0, 3.0), extent=(0.6, 0.6, 0.6))

@@ -18,8 +18,7 @@ import time
 
 from flightforge import Pose, Simulator
 
-# a hand-written datasheet: a 640x480 module with a slightly off-centre principal point,
-# a mild barrel lens, a 5 ms shutter and a 25 ms readout
+# a 640x480 module: off-centre principal point, mild barrel lens, 5 ms shutter, 25 ms readout
 CALIBRATION = {
     "K": dict(fx=460.0, fy=460.0, cx=316.2, cy=243.8),
     "dist": dict(k1=-0.21, k2=0.05, k3=0.0, p1=0.0004, p2=-0.0002),

@@ -36,7 +36,6 @@ def main():
     ids = sim.spawn_objects(ring_yaml(RING_RADIUS, NUM_CUBES))
     print(f"spawned {len(ids)} cubes in a ring")
 
-    # every second cube up a storey
     objects = sim.objects()
     for index, object_id in enumerate(ids):
         if index % 2:
@@ -47,7 +46,6 @@ def main():
     for object_id, info in sim.objects().items():
         print(f"  {object_id}: {info['asset']} at {info['position'].round(2)}, yaw {math.degrees(info['pose'].yaw):.0f} deg, stencil {info['stencil']}")
 
-    # the export includes the moves and the stencils: it is the scene
     scene_yaml = sim.export_scene()
     with open("scene.yaml", "w") as f:
         f.write(scene_yaml)

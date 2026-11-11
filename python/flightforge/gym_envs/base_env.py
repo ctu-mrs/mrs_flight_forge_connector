@@ -59,8 +59,6 @@ class FlightForgeNavEnvBase(gymnasium.Env):
         # dx, dy, dz, dyaw in [-1, 1], scaled by action_step (m) and yaw_step (rad)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
 
-    # subclasses provide observation_space and _observe()
-
     def _observe(self):
         raise NotImplementedError
 

@@ -86,7 +86,7 @@ class Connection:
     def __repr__(self):
         return f"Connection({self.address}:{self.port})"
 
-    # --- lifetime ---
+    # lifetime //{
 
     def connect(self, attempts=1, retry_delay=0.5):
         """Tries ``attempts`` times, ``retry_delay`` seconds apart; raises FlightForgeConnectionError."""
@@ -132,7 +132,9 @@ class Connection:
         self._body = None
         self._body_got = 0
 
-    # --- calls ---
+    # //}
+
+    # calls //{
 
     def call(self, body_type, build_body=None, robot_id=None, sensor_id=None, timeout=None):
         """Sends one request and returns its Reply; raises FlightForgeError with the server's message on failure.
@@ -226,3 +228,5 @@ class Connection:
             self._close()
             raise FlightForgeConnectionError("the simulator closed the connection")
         return got
+
+    # //}

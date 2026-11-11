@@ -35,8 +35,7 @@ def main():
     sim.set_lockstep(True)
     print(f"fixed timestep {applied * 1e3:.3f} ms, lockstep on")
 
-    # sweep 20 deg of yaw over the window, sampled at 100 Hz; the robot interpolates between samples,
-    # so the 1 kHz sensor sees smooth motion
+    # 20 deg of yaw sampled at 100 Hz; the robot interpolates, so the 1 kHz sensor sees smooth motion
     t0, _ = sim.sim_time()
     start = robot.get_pose()
     ts = t0 + np.linspace(0.0, TICKS * DT, 21)

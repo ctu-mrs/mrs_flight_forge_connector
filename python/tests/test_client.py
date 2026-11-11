@@ -409,3 +409,65 @@ def test_events_come_back_as_arrays(fake):
 
 
 # //}
+
+
+# coverage //{
+
+
+def _default_reply(call):
+    """An empty reply of the type the request expects, enough for the client to read it."""
+    import importlib
+    import re
+
+    name = call.name
+    candidates = [name.replace("Request", "Response"), re.sub(r"^Get(\w+)Request$", r"\1Response", name)]
+    for candidate in candidates:
+        if not candidate.endswith("Response"):
+            continue
+        try:
+            module = importlib.import_module(f"flightforge.wire.{candidate}")
+        except ImportError:
+            continue
+        return getattr(module, f"{candidate}T")()
+    return None
+
+
+def test_every_request_in_the_schema_has_a_method(fake):
+    from flightforge.wire.RequestBody import RequestBody
+
+    server = fake(lambda call: None if call.name == "GetInfoRequest" else _default_reply(call))
+    sim = connect(server, timeout=2.0)
+    robot = sim.robot(1)
+    ops = [
+        sim.ping, sim.time, sim.fps, lambda: sim.set_time_dilation(1.0), lambda: sim.set_fixed_timestep(0.0),
+        sim.set_lockstep, sim.step, lambda: sim.switch_world("warehouse"), lambda: sim.set_weather("RAIN"),
+        lambda: sim.set_daytime(12, 30), lambda: sim.set_graphics_settings("EPIC"), lambda: sim.set_forest_density(2),
+        lambda: sim.set_forest_hilly_level(1), lambda: sim.set_mutual_visibility(False), sim.capture_mode,
+        lambda: sim.set_capture_mode("ON_DEMAND"), sim.world_origin, sim.class_map, lambda: sim.spawn_objects("objects: []"),
+        lambda: sim.remove_object(3), sim.clear_objects, lambda: sim.move_object(3, Pose()), sim.objects, sim.export_scene,
+        sim.assets, lambda: sim.load_library("/tmp"), sim.library, sim.world_mesh, lambda: sim.distance_batch([[0, 0, 0]]),
+        sim.spawn_robot, sim.robots, lambda: sim.remove_robot(1), lambda: sim.set_states({1: Pose()}),
+        robot.description, robot.get_state, lambda: robot.set_pose(Pose()), lambda: robot.set_trajectory([]),
+        robot.collision, robot.move_line_visible, lambda: robot.set_move_line_visible(True),
+        lambda: robot.add_sensor(flightforge.SensorType.LIDAR), lambda: robot.remove_sensor(2), robot.sensors,
+        lambda: robot.add_device("realsense_d435i"), robot.devices, robot.camera_info,
+        robot.rgb_camera_config, lambda: robot.set_rgb_camera_config(flightforge.message("RgbCameraConfig")),
+        robot.stereo_camera_config, lambda: robot.set_stereo_camera_config(flightforge.message("StereoCameraConfig")),
+        robot.fisheye_camera_config, lambda: robot.set_fisheye_camera_config(flightforge.message("FisheyeCameraConfig")),
+        robot.event_camera_config, lambda: robot.set_event_camera_config(flightforge.message("EventCameraConfig")),
+        robot.lidar_config, lambda: robot.set_lidar_config(flightforge.message("LidarConfig")),
+        robot.rgb, robot.stereo, robot.fisheye, robot.depth, robot.segmentation, robot.panoptic, robot.instance_map,
+        robot.event_batch, robot.lidar_scan, robot.rangefinder,
+    ]
+    for op in ops:
+        try:
+            op()
+        except FlightForgeError:
+            pass  # empty replies carry no image or config; the request was still sent
+
+    sent = {call.name for call in server.calls}
+    expected = {name for name, value in vars(RequestBody).items() if not name.startswith("_") and name != "NONE"}
+    assert not expected - sent, f"no method sends {sorted(expected - sent)}"
+
+
+# //}

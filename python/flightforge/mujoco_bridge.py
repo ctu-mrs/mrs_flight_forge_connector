@@ -1,79 +1,40 @@
 """MuJoCo owns the dynamics, FlightForge renders.
 
-The bridge steps a MuJoCo model in-process and pushes the tracked body's pose
-into the simulator with the fire-and-forget pose call each step, so FlightForge
-acts as a photorealistic renderer + sensor suite over MuJoCo physics — no
-dynamics code in the simulator, any MJCF quadrotor (or JAX/MJX rollout that
-fills qpos) works.
+The bridge steps a MuJoCo model in-process and pushes the tracked body's pose to the simulator with the
+fire-and-forget pose call each step. MuJoCo's world frame is right-handed, z up and in metres like the ground
+frame, so the only conversion is the quaternion order and where MuJoCo's origin sits in the ground frame.
 
-Frames: MuJoCo is right-handed, Z-up, meters; Unreal is left-handed, Z-up,
-centimeters. The conversion flips Y and the yaw sense and scales to cm.
-
-    import mujoco
-    from flightforge import Simulator, MujocoBridge
+    from flightforge import MujocoBridge, Simulator
 
     sim = Simulator()
-    drone = sim.spawn_robot((0, 0, 200), "x500")
+    robot = sim.spawn_robot((0.0, 0.0, 2.0), "x500")
 
-    bridge = MujocoBridge(drone, "quadrotor.xml", body="drone",
-                          world_origin_uu=sim.world_origin())
+    bridge = MujocoBridge(robot, "quadrotor.xml", body="drone")
     for _ in range(10_000):
         bridge.data.ctrl[:] = controller(bridge.data)
-        bridge.step()                      # mj_step + pose push
-        image, stamp = drone.rgb()         # rendered by FlightForge
+        bridge.step()
+        image, stamp = robot.rgb()
 """
-
-import math
 
 import numpy as np
 
-M_TO_UU = 100.0  # meters -> Unreal units (cm)
+from .geometry import Pose
 
 
-def mujoco_to_unreal_position(pos_m, world_origin_uu=(0.0, 0.0, 0.0)):
-    """Right-handed meters -> left-handed Unreal centimeters (Y flipped)."""
-    return np.array(
-        [
-            world_origin_uu[0] + pos_m[0] * M_TO_UU,
-            world_origin_uu[1] - pos_m[1] * M_TO_UU,
-            world_origin_uu[2] + pos_m[2] * M_TO_UU,
-        ]
-    )
-
-
-def quat_wxyz_to_unreal_euler(quat):
-    """MuJoCo body quaternion (w, x, y, z) -> Unreal (pitch, yaw, roll) degrees.
-
-    Extrinsic ZYX decomposition with the handedness flip folded into the yaw
-    and roll signs.
-    """
+def quat_wxyz_to_xyzw(quat):
     w, x, y, z = quat
+    return np.array([x, y, z, w], dtype=np.float64)
 
-    sinr_cosp = 2.0 * (w * x + y * z)
-    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(sinr_cosp, cosr_cosp)
 
-    sinp = 2.0 * (w * y - z * x)
-    pitch = math.copysign(math.pi / 2.0, sinp) if abs(sinp) >= 1.0 else math.asin(sinp)
-
-    siny_cosp = 2.0 * (w * z + x * y)
-    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(siny_cosp, cosy_cosp)
-
-    deg = 180.0 / math.pi
-    return np.array([pitch * deg, -yaw * deg, roll * deg])
+def mujoco_pose(xpos, xquat, origin=(0.0, 0.0, 0.0)):
+    """A MuJoCo body's world position and (w, x, y, z) quaternion as a ground-frame Pose; origin is MuJoCo's origin in m."""
+    return Pose(np.asarray(xpos, dtype=np.float64) + np.asarray(origin, dtype=np.float64), quat_wxyz_to_xyzw(xquat))
 
 
 class MujocoBridge:
-
-    def __init__(self, drone, model, body=None, world_origin_uu=(0.0, 0.0, 0.0), substeps=1):
-        """
-        drone: a connected :class:`flightforge.Robot`
-        model: MJCF path or an existing ``mujoco.MjModel``
-        body:  name of the body to mirror (default: the model's first free-joint body)
-        world_origin_uu: Unreal-units offset added to every pushed position
-                         (e.g. ``Simulator.world_origin()``)
-        substeps: physics steps per :meth:`step` call
+    def __init__(self, robot, model, body=None, origin=(0.0, 0.0, 0.0), substeps=1):
+        """robot: a flightforge.Robot; model: an MJCF path or a mujoco.MjModel; body: the body to mirror, default the
+        first free-joint body; origin: where MuJoCo's origin sits in the ground frame, m; substeps: physics steps per step().
         """
         import mujoco
 
@@ -93,16 +54,19 @@ class MujocoBridge:
                 raise ValueError(f"body {body!r} not found in the model")
 
         self._body_id = body_id
-        self._drone = drone
-        self._world_origin_uu = np.asarray(world_origin_uu, dtype=np.float64)
+        self._robot = robot
+        self._origin = np.asarray(origin, dtype=np.float64)
         self._substeps = int(substeps)
 
     @property
     def sim_time(self):
         return self.data.time
 
+    def pose(self):
+        return mujoco_pose(self.data.xpos[self._body_id], self.data.xquat[self._body_id], self._origin)
+
     def step(self, push_pose=True):
-        """Advances physics by ``substeps`` and mirrors the pose to FlightForge."""
+        """Advances physics by substeps and mirrors the pose to FlightForge."""
         for _ in range(self._substeps):
             self._mujoco.mj_step(self.model, self.data)
 
@@ -110,9 +74,7 @@ class MujocoBridge:
             self.push_pose()
 
     def push_pose(self):
-        position = mujoco_to_unreal_position(self.data.xpos[self._body_id], self._world_origin_uu)
-        orientation = quat_wxyz_to_unreal_euler(self.data.xquat[self._body_id])
-        self._drone.set_pose_async(position, orientation)
+        self._robot.set_pose_async(self.pose())
 
     def reset(self, keyframe=None):
         if keyframe is None:

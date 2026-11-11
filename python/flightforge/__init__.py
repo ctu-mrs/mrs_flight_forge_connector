@@ -1,70 +1,71 @@
-"""FlightForge Python API (simulator API 0.14).
+"""FlightForge Python client, API 1.0: pure Python over the FlatBuffers wire.
 
-Layers:
-  - the raw pybind bindings (re-exported here): ``RobotClient``,
-    ``SimulatorClient`` and the config/data types
-  - :class:`flightforge.Simulator` / :class:`flightforge.Robot` — a thin
-    pythonic wrapper with numpy image decoding
-  - ``flightforge.gym_envs`` — Gymnasium environments (``pip install
-    flightforge[gym]``), registered under the ``FlightForge/`` namespace
-  - :class:`flightforge.MujocoBridge` — MuJoCo owns the dynamics, FlightForge
-    renders (``pip install flightforge[mujoco]``)
+Everything is in the ground frame (x forward, y left, z up, origin on the floor under the level's UAV PlayerStart),
+metres, unit quaternions (x, y, z, w) and rad/s.
 """
 
-from ._native import drone as _drone_module
-from ._native import game_mode as _game_mode_module
+from .client import API_MAJOR, ROBOT_NAMES, WORLD_LEVELS, Robot, Simulator
+from .data import Collision, EventBatch, Frame, LidarScan, RobotInfo, RobotState, SensorInfo, StateResult, TimeInfo, decode_image
+from .geometry import Pose, quat_conjugate, quat_from_rpy, quat_multiply, quat_rotate, rpy_from_quat
+from .messages import Message, message
+from .transport import DEFAULT_PORT, Connection, FlightForgeConnectionError, FlightForgeError
+from .wire.CaptureMode import CaptureMode
+from .wire.Compression import Compression
+from .wire.Eye import Eye
+from .wire.FisheyeLens import FisheyeLens
+from .wire.GraphicsQuality import GraphicsQuality
+from .wire.JointType import JointType
+from .wire.PixelFormat import PixelFormat
+from .wire.Projection import Projection
+from .wire.RobotKind import RobotKind
+from .wire.SensorType import SensorType
+from .wire.Weather import Weather
 
-# raw binding re-exports
-CameraCaptureModeEnum = _game_mode_module.CameraCaptureModeEnum
-SimulatorClient = _game_mode_module.SimulatorClient
-
-CameraEvent = _drone_module.CameraEvent
-CameraExposure = _drone_module.CameraExposure
-CameraLensEffects = _drone_module.CameraLensEffects
-Coordinates = _drone_module.Coordinates
-DeviceInfo = _drone_module.DeviceInfo
-RobotClient = _drone_module.RobotClient
-EventCameraConfig = _drone_module.EventCameraConfig
-FisheyeCameraConfig = _drone_module.FisheyeCameraConfig
-LidarConfig = _drone_module.LidarConfig
-LidarData = _drone_module.LidarData
-LidarIntData = _drone_module.LidarIntData
-LidarSegData = _drone_module.LidarSegData
-RgbCameraConfig = _drone_module.RgbCameraConfig
-Rotation = _drone_module.Rotation
-SensorInfo = _drone_module.SensorInfo
-SensorType = _drone_module.SensorType
-StereoCameraConfig = _drone_module.StereoCameraConfig
-
-from .client import Robot, EventBatch, Simulator  # noqa: E402
-
-try:  # optional: mujoco
-    from .mujoco_bridge import MujocoBridge  # noqa: E402
-except ImportError:  # pragma: no cover - mujoco not installed
+try:
+    from .mujoco_bridge import MujocoBridge
+except ImportError:
     MujocoBridge = None
 
+__version__ = "1.0.0"
+
 __all__ = [
-    "CameraCaptureModeEnum",
-    "CameraEvent",
-    "CameraExposure",
-    "CameraLensEffects",
-    "Coordinates",
-    "DeviceInfo",
-    "Robot",
-    "RobotClient",
+    "API_MAJOR",
+    "CaptureMode",
+    "Collision",
+    "Compression",
+    "Connection",
+    "DEFAULT_PORT",
     "EventBatch",
-    "EventCameraConfig",
-    "FisheyeCameraConfig",
-    "SimulatorClient",
-    "LidarConfig",
-    "LidarData",
-    "LidarIntData",
-    "LidarSegData",
+    "Eye",
+    "FisheyeLens",
+    "FlightForgeConnectionError",
+    "FlightForgeError",
+    "Frame",
+    "GraphicsQuality",
+    "JointType",
+    "LidarScan",
+    "Message",
     "MujocoBridge",
-    "RgbCameraConfig",
-    "Rotation",
+    "PixelFormat",
+    "Pose",
+    "Projection",
+    "ROBOT_NAMES",
+    "Robot",
+    "RobotInfo",
+    "RobotKind",
+    "RobotState",
     "SensorInfo",
     "SensorType",
     "Simulator",
-    "StereoCameraConfig",
+    "StateResult",
+    "TimeInfo",
+    "WORLD_LEVELS",
+    "Weather",
+    "decode_image",
+    "message",
+    "quat_conjugate",
+    "quat_from_rpy",
+    "quat_multiply",
+    "quat_rotate",
+    "rpy_from_quat",
 ]

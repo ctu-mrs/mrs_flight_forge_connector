@@ -1,50 +1,70 @@
-# flightforge — Python API
+# flightforge: Python client for FlightForge, API 1.0
 
-Pythonic client, [Gymnasium](https://gymnasium.farama.org) environments and a
-MuJoCo dynamics bridge for the FlightForge simulator (API 0.14).
+A pure-Python client for the FlightForge simulator, plus [Gymnasium](https://gymnasium.farama.org)
+environments and a MuJoCo dynamics bridge. It speaks the FlatBuffers wire over one TCP port and needs
+only `numpy` and `flatbuffers`; nothing is compiled.
 
 ## Install
 
-Build the native bindings once, then install the package:
-
 ```bash
-# in the connector checkout
-cmake -S . -B build -DBUILD_PYTHON_LIB=ON && cmake --build build -j
-pip install -e python[all]        # or [gym], [mujoco], [vision] selectively
+pip install ./python               # the client
+pip install "./python[all]"        # plus gymnasium, mujoco and opencv-python; or [gym], [mujoco], [vision]
 ```
 
-The package finds the compiled modules in `build/` automatically; override
-with `FLIGHTFORGE_NATIVE_PATH` if they live elsewhere.
+JPEG and PNG frames decode with `opencv-python` (or Pillow). Without either, set a camera's encoding to
+`Compression.NONE` and frames arrive raw.
 
-## Layers
+## Frame and units
 
-**Raw bindings** — everything the wire protocol offers, 1:1:
+- One frame, the **ground frame**: right-handed, x forward, y left, z up, origin on the floor under the level's `UAV` PlayerStart.
+- Metres, seconds, rad/s; orientations are unit quaternions `(x, y, z, w)`, built with `quat_from_rpy` or `Pose.at(x, y, z, yaw)`.
+- Depth images are uint16 millimetres; field-of-view angles stay in degrees.
+
+## Example
 
 ```python
-from flightforge import RobotClient, SimulatorClient
+import math
+from flightforge import Pose, SensorType, Simulator
+
+sim = Simulator()                                   # 127.0.0.1, FLIGHTFORGE_PORT or 8600
+robot = sim.spawn_robot(Pose.at(0.0, 0.0, 2.0, yaw=math.pi / 2), "x500", label="uav1")
+
+image, stamp = robot.rgb()                          # (H, W, 3) uint8 RGB
+depth, stamp = robot.depth()                        # (H, W) uint16 mm
+scan = robot.lidar_scan(labels=True)                # scan.points: (N, 3) float32 m, sensor frame, NaN no return
+points = scan.in_ground()                           # the same points in the ground frame
+robot.set_pose(Pose.at(5.0, 0.0, 2.0), collide=True)
+
+camera = robot.add_sensor(SensorType.DEPTH_CAMERA, Pose.at(0.1, 0.0, -0.05))
+robot.set_rgb_camera_config(sensor_id=camera, width=640, height=480)
+
+sim.set_fixed_timestep(1e-3)
+sim.set_lockstep(True)
+sim.step(200)                                       # returns once every camera has its frames
+sim.remove_robot(robot)
 ```
 
-**Pythonic client** — raises on failure, numpy in and out:
+Every call raises `FlightForgeError` with the simulator's message when a request fails. Lidar points and raw
+frames are numpy views into the received message, not copies.
+
+`Simulator` owns one connection, which its robots share and which is safe to use from several threads.
+`sim.spawn_robot(..., own_connection=True)` or `Robot(sim, robot_id, own_connection=True)` gives a robot its
+own, so its requests run alongside the others'; the simulator serves each connection on its own thread.
+
+Configs are wire tables with the schema's field names:
 
 ```python
-from flightforge import Simulator
-
-sim = Simulator()                              # game mode on :8551
-drone = sim.spawn_robot((0, 0, 200), "x500")
-
-image, stamp = drone.rgb()                     # HxWx3 uint8
-points, origin, stamp = drone.lidar()          # (N,4) distances + directions
-events, stamp = drone.events()                 # (N,4) event camera batch
-batch = drone.event_batch()                    # the same as packed x/y/polarity/t arrays
-sim.set_fixed_timestep(1e-3)                   # every tick advances sim time by exactly 1 ms
-sim.set_lockstep(True); sim.step(200)          # client-clocked: 200 ticks, sensors complete on return
-drone.set_pose_trajectory(rows)                # (N,7) [t, x, y, z, pitch, yaw, roll] the pawn follows
-drone.add_device("realsense_d435i", offset=(12, 0, -2))
-ids = sim.spawn_objects(open("scene.yaml").read())
+config = robot.lidar_config()
+config.range_m = 40.0
+config.mount = Pose.at(0.0, 0.0, 0.1)
+robot.set_lidar_config(config)
+robot.set_rgb_camera_config(intrinsics={"use_custom": True, "fx": 500.0, "fy": 500.0, "cx": 319.5, "cy": 239.5})
 ```
 
-**Gymnasium** — `FlightForge/CameraNav-v0`, `FlightForge/LidarNav-v0`
-(auto-registered via the `gymnasium.envs` entry point):
+## Gymnasium
+
+`FlightForge/CameraNav-v0` and `FlightForge/LidarNav-v0`, registered through the `gymnasium.envs` entry point.
+Both teleport with collision checks, so they need no dynamics model.
 
 ```python
 import gymnasium
@@ -53,81 +73,27 @@ observation, info = env.reset()
 observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
 ```
 
-Both environments teleport-with-collision-check, so they need no dynamics
-model; wrap your own dynamics for realism, or:
+## MuJoCo
 
-**MuJoCo bridge** — MuJoCo integrates, FlightForge renders:
+MuJoCo integrates, FlightForge renders. MuJoCo's world is right-handed, z up and in metres, so `origin` is all
+that relates it to the ground frame.
 
 ```python
-from flightforge import Simulator, MujocoBridge
+from flightforge import MujocoBridge
 
-sim = Simulator()
-drone = sim.spawn_robot((0, 0, 200), "x500")
-bridge = MujocoBridge(drone, "quadrotor.xml", world_origin_uu=sim.world_origin())
-
+bridge = MujocoBridge(robot, "quadrotor.xml", body="drone", origin=(0.0, 0.0, 0.0))
 bridge.data.ctrl[:] = thrusts
-bridge.step()                # mj_step + pose push
-image, stamp = drone.rgb()   # photorealistic render of the MuJoCo state
+bridge.step()                                       # mj_step, then a fire-and-forget pose push
 ```
 
-Any consumer of the MuJoCo state works the same way — MJX/JAX rollouts,
-MATLAB-exported trajectories — as long as something fills `qpos`.
-
-**Parallel multi-robot** — N drones in one world, mutually invisible, each
-stepped and polled from its own thread (the bindings release the GIL during
-network I/O, so sensor requests genuinely overlap):
-
-```python
-sim.set_mutual_visibility(False)   # every drone sees the world as if alone
-```
-
-**Scene editing** — build, rearrange, save and reload a scene over the wire
-(poses in ROS metres/degrees relative to the world origin):
-
-```python
-ids = sim.spawn_objects(yaml_text)     # returns handles
-sim.move_object(ids[0], (8, 2, 1.5), (0, 0, 90))
-sim.objects()                          # {id: {asset, stencil, position, ...}}
-yaml_text = sim.export_scene()         # round-trippable, stencils included
-sim.assets(name_filter="cube")         # what the simulator can spawn
-```
-
-**Depth** — `drone.depth()` returns an (H, W) uint16 array in millimetres
-(0 invalid, 65535 clamp - the Kinect/RealSense convention). Ground-truth
-depth: use it standalone for datasets, or via the `azure_kinect_dk` ToF
-preset; the `realsense_d435i` preset deliberately has no depth stream -
-its real depth is stereo matching, so match its stereo pair instead.
-
-See `python/examples/` for runnable versions of all of the above
-(`parallel_drones.py` for the multi-robot demo, `scene_editor.py` for the
-scene-editing loop).
+`python/examples/` has runnable scripts: calibrated cameras, an event camera in lockstep, instance
+segmentation, a reprojection check, MuJoCo hover, parallel robots and the scene-editor loop.
 
 ## Tests
 
-The primary suite is C++ (`tests/`, the interface mrs_uav_unreal_simulation
-consumes):
-
 ```bash
-cmake -B build -DBUILD_TESTS=ON && cmake --build build
-ctest --test-dir build
+cd python && python3 -m pytest -q
 ```
 
-- `serialization_roundtrip` - every high-churn wire struct through cereal,
-  field-compared (catches fields missing from serialize() lists)
-- `unit_tests` - catalogs, defaults, id-encoding conventions
-- `sim_integration` - the full API against a live simulator on localhost:
-  cameras + calibration round-trips, the scene-editor round-trip, mutual
-  visibility, sensor/device lifecycle, instance segmentation. Reported
-  SKIPPED (exit 77) when no simulator is reachable, so plain `ctest` is safe
-  anywhere; run it with the sim up for the real validation pass.
-- `header_mirror_*` - the vendored serializable_shared.h and
-  serializable_schema.h must be byte-identical to the plugin's (active when
-  the plugin repo sits next to this checkout)
-
-The python layer keeps a thin pytest suite for the bindings themselves
-(`pytest python/tests`; `-m sim` for the live subset). Engine-side math
-(frame conversions, distortion LUT inverse, noise determinism) is covered by
-the plugin's automation tests - editor: Tools > Test Automation, filter
-"FlightForge", or headless:
-
-    UnrealEditor-Cmd <project.uproject> -ExecCmds="Automation RunTests FlightForge" -unattended -nopause
+The offline tests run a fake simulator on a local port. The live tests (`-m sim`) need a simulator on
+`FLIGHTFORGE_PORT` and skip without one; `FF_ALLOW_WORLD_SWITCH=1` adds the one that switches the map.

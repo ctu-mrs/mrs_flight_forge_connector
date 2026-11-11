@@ -1,56 +1,40 @@
-"""Reprojection check for the camera intrinsics and distortion (Phases 2 + 3).
+"""Reprojection check for the camera intrinsics and distortion.
 
-Spawns a grid of small cubes at known scene positions, reads the instance
-segmentation, and compares each cube's pixel centroid against where the pinhole
-model says it should land. Runs three times: FOV-derived projection, custom
-off-centre intrinsics, and Brown-Conrady distortion. Each pass should stay at
-about a pixel; the centroid of a rendered cube is not exactly its centre's
-projection, so expect around 1 px rather than zero.
-
-Two frames meet here and the example converts explicitly: scene objects live in
-metres relative to the "UAV" PlayerStart (right-handed, x forward, y left, z up),
-the drone in absolute Unreal centimetres. Cubes are told apart by instance id,
-not colour: the ids that appear after spawning are the cubes, and the drone's
-own airframe, which the pawn-mounted camera partly sees, is never mistaken for
-one.
+Spawns a grid of small cubes at known ground-frame positions, reads the instance segmentation, and compares each
+cube's pixel centroid with where the pinhole model says it should land. Runs three times: FOV-derived projection,
+custom off-centre intrinsics, and Brown-Conrady distortion. Each pass should stay at about a pixel; a rendered
+cube's centroid is not exactly its centre's projection. Cubes are told apart by instance id, so the robot's own
+airframe, which the camera partly sees, is never mistaken for one.
 
 Requires a running simulator and opencv:
     pip install -e python[vision]
-    python3 python/examples/intrinsics_check.py [game-mode-port]
+    python3 python/examples/intrinsics_check.py
 """
 
-import sys
 import time
 
 import numpy as np
 
-from flightforge import SensorType, Simulator
+from flightforge import Pose, SensorType, Simulator
 
-CAMERA_SCENE = np.array([0.0, 0.0, 1.5])
+ROBOT = Pose.at(0.0, 0.0, 1.5)
 # heights vary with both axes so no cube hides behind a nearer one on the same ray
-GRID = [(x, y, CAMERA_SCENE[2] + 0.25 * y + 0.15 * (x - 6.0)) for x in (4.0, 6.0, 8.0) for y in (-2.0, 0.0, 2.0)]
+GRID = [(x, y, ROBOT.position[2] + 0.25 * y + 0.15 * (x - 6.0)) for x in (4.0, 6.0, 8.0) for y in (-2.0, 0.0, 2.0)]
 CUBE_SCALE = 0.25
 
 
 def spawn_grid_yaml():
     lines = ["objects:"]
     for x, y, z in GRID:
-        lines += [
-            "  - asset: /Engine/BasicShapes/Cube",
-            f"    position: [{x}, {y}, {z}]",
-            f"    scale: {CUBE_SCALE}",
-        ]
+        lines += ["  - asset: /Engine/BasicShapes/Cube", f"    position: [{x}, {y}, {z}]", f"    scale: {CUBE_SCALE}"]
     return "\n".join(lines)
 
 
-def expected_pixel(K, point_scene, camera_scene, dist=None):
-    """Scene point (m) -> pixel for a camera at camera_scene looking along +x with
-    zero rotation. Camera frame: z forward = scene x, x right = scene -y,
-    y down = scene -z. With dist = [k1 k2 k3 p1 p2] the forward Brown-Conrady
-    model is applied before K."""
-    px, py, pz = np.asarray(point_scene) - camera_scene
-    x, y, z = -py, -pz, px
-    xn, yn = x / z, y / z
+def expected_pixel(K, point, camera, dist=None):
+    """Ground point -> pixel for a camera at the Pose camera; optical frame z = mount x, x = -mount y, y = -mount z.
+    With dist = [k1 k2 k3 p1 p2] the forward Brown-Conrady model is applied before K."""
+    px, py, pz = camera.inverse().transform(point)
+    xn, yn = -py / px, -pz / px
 
     if dist is not None:
         k1, k2, k3, p1, p2 = dist
@@ -63,17 +47,15 @@ def expected_pixel(K, point_scene, camera_scene, dist=None):
     return np.array([K[0, 0] * xn + K[0, 2], K[1, 1] * yn + K[1, 2]])
 
 
-def settle(drone, sensor_id):
-    """A projection change reaches the served image a few frames late: the target is
-    resized and the warp LUT rebuilt on the game thread while frames already in
-    flight carry the old calibration; spawned meshes load asynchronously."""
+def settle(robot, sensor_id):
+    """A projection change reaches the served image a few frames late, and spawned meshes load asynchronously."""
     time.sleep(1.5)
     for _ in range(3):
-        drone.instance_segmentation(sensor_id)
+        robot.instance_segmentation(sensor_id)
 
 
-def cube_centroids(drone, sensor_id, cube_ids):
-    ids, _ = drone.instance_segmentation(sensor_id)
+def cube_centroids(robot, sensor_id, cube_ids):
+    ids, _ = robot.instance_segmentation(sensor_id)
     centroids = {}
     for cube in cube_ids:
         ys, xs = np.nonzero(ids == cube)
@@ -82,17 +64,16 @@ def cube_centroids(drone, sensor_id, cube_ids):
     return centroids
 
 
-def run_check(drone, sensor_id, cube_ids, label, dist=None):
-    K, (width, height) = drone.camera_intrinsics(sensor_id)
+def run_check(robot, sensor_id, cube_ids, label, dist=None):
+    K, (width, height) = robot.camera_intrinsics(sensor_id)
     print(f"\n[{label}] K =\n{K.round(2)}  ({width}x{height})")
 
-    # the camera sits at its mount offset from the drone (scene axes are world axes in metres)
-    (info,) = drone.camera_info(sensor_id)
-    camera_scene = CAMERA_SCENE + np.asarray(info["offset"]) / 100.0
+    (info,) = robot.camera_info(sensor_id)
+    camera = robot.get_pose() * info["mount"]
 
-    settle(drone, sensor_id)
-    observed = cube_centroids(drone, sensor_id, cube_ids)
-    predictions = [expected_pixel(K, point, camera_scene, dist) for point in GRID]
+    settle(robot, sensor_id)
+    observed = cube_centroids(robot, sensor_id, cube_ids)
+    predictions = [expected_pixel(K, point, camera, dist) for point in GRID]
 
     # every cube is a distinct instance, so each blob claims its nearest prediction unambiguously
     errors = []
@@ -103,44 +84,39 @@ def run_check(drone, sensor_id, cube_ids, label, dist=None):
         print(f"  instance {cube} at {centroid.round(1)} -> cube {index} predicted {predictions[index].round(1)}, error {distances[index]:.2f} px")
 
     if errors:
-        print(f"[{label}] mean reprojection error: {np.mean(errors):.2f} px, max {np.max(errors):.2f} px over {len(errors)} cubes "
+        print(f"[{label}] mean reprojection error {np.mean(errors):.2f} px, max {np.max(errors):.2f} px over {len(errors)} cubes "
               f"({len(GRID) - len(errors)} not visible)")
     else:
-        print(f"[{label}] no cube instances visible - check the camera pose")
+        print(f"[{label}] no cube instances visible; check the camera pose")
     return errors
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8551
-    sim = Simulator(port=port)
+    sim = Simulator()
     sim.clear_objects()
 
-    camera_world = sim.scene_to_world(CAMERA_SCENE)
-    drone = sim.spawn_robot(camera_world, "x500")
-    drone.set_pose(camera_world, (0.0, 0.0, 0.0))
-
-    sensor_id = drone.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
-    settle(drone, sensor_id)
-    before = set(np.unique(drone.instance_segmentation(sensor_id)[0]))
+    robot = sim.spawn_robot(ROBOT, "x500")
+    sensor_id = robot.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
+    settle(robot, sensor_id)
+    before = set(np.unique(robot.instance_segmentation(sensor_id)[0]).tolist())
 
     sim.spawn_objects(spawn_grid_yaml())
-    settle(drone, sensor_id)
-    cube_ids = sorted(set(np.unique(drone.instance_segmentation(sensor_id)[0])) - before - {0})
+    settle(robot, sensor_id)
+    cube_ids = sorted(set(np.unique(robot.instance_segmentation(sensor_id)[0]).tolist()) - before - {0})
     print(f"{len(cube_ids)} cube instances in view of {len(GRID)} spawned")
 
-    run_check(drone, sensor_id, cube_ids, "fov-derived intrinsics")
+    run_check(robot, sensor_id, cube_ids, "fov-derived intrinsics")
 
-    K, (width, height) = drone.camera_intrinsics(sensor_id)
-    drone.set_camera_intrinsics(fx=K[0, 0] * 1.1, fy=K[1, 1] * 1.1, cx=width * 0.45, cy=height * 0.55, sensor_id=sensor_id)
-    run_check(drone, sensor_id, cube_ids, "custom off-center intrinsics")
+    K, (width, height) = robot.camera_intrinsics(sensor_id)
+    robot.set_camera_intrinsics(fx=K[0, 0] * 1.1, fy=K[1, 1] * 1.1, cx=width * 0.45, cy=height * 0.55, sensor_id=sensor_id)
+    run_check(robot, sensor_id, cube_ids, "custom off-centre intrinsics")
 
     dist = [-0.28, 0.07, 0.0, 0.001, -0.0005]
-    drone.set_camera_distortion(*dist, sensor_id=sensor_id)
-    run_check(drone, sensor_id, cube_ids, "brown-conrady distorted", dist=dist)
+    robot.set_camera_distortion(*dist, sensor_id=sensor_id)
+    run_check(robot, sensor_id, cube_ids, "brown-conrady distorted", dist=dist)
 
     sim.clear_objects()
-    sim.remove_robot(drone)
-    drone.close()
+    sim.remove_robot(robot)
     sim.close()
 
 

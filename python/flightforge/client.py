@@ -143,8 +143,12 @@ def _state_from_wire(state):
     )
 
 
+def _point(value):
+    return np.zeros(3) if value is None else value
+
+
 def _state_result(result):
-    return StateResult(result.robot_id, result.base, result.hit, result.impact_point)
+    return StateResult(result.robot_id, result.base, result.hit, _point(result.impact_point))
 
 
 def _sensors(entries):
@@ -543,7 +547,7 @@ class Robot:
 
     def collision(self):
         body = _body(self._call("GetCollisionRequest"), "GetCollisionResponse")
-        return Collision(body.collided, body.impact_point)
+        return Collision(body.collided, _point(body.impact_point))
 
     def crashed(self):
         return self.collision().collided

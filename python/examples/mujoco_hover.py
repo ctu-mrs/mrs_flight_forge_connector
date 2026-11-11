@@ -1,8 +1,8 @@
 """MuJoCo dynamics driving the FlightForge renderer.
 
-A minimal quadrotor (free body + four thrust actuators) hovers under a naive
-altitude PD controller; every physics step is mirrored into FlightForge, which
-renders it and serves the cameras.
+A minimal quadrotor (free body + four thrust actuators) hovers under a naive altitude PD controller; every
+physics step is mirrored into FlightForge, which renders it and serves the cameras. MuJoCo's world is the ground
+frame shifted by origin, so its body at z = 1 starts 1 m above the floor.
 
     pip install -e python[mujoco,vision]
     python3 python/examples/mujoco_hover.py
@@ -39,12 +39,12 @@ def main():
     import mujoco
 
     sim = Simulator()
-    drone = sim.spawn_robot((0.0, 0.0, 200.0), "x500")
+    robot = sim.spawn_robot((0.0, 0.0, 1.0), "x500")
 
     model = mujoco.MjModel.from_xml_string(QUADROTOR_MJCF)
-    bridge = MujocoBridge(drone, model, body="drone", world_origin_uu=sim.world_origin(), substeps=5)
+    bridge = MujocoBridge(robot, model, body="drone", origin=(0.0, 0.0, 0.0), substeps=5)
 
-    target_altitude = 2.0  # meters
+    target_altitude = 2.0  # m
     kp, kd = 8.0, 4.0
 
     for step in range(2000):
@@ -56,11 +56,10 @@ def main():
         bridge.step()
 
         if step % 200 == 0:
-            image, stamp = drone.rgb()
+            image, stamp = robot.rgb()
             print(f"t={bridge.sim_time:6.2f}s  z={z:5.2f} m  frame {image.shape} @ {stamp:.3f}")
 
-    sim.remove_robot(drone)
-    drone.close()
+    sim.remove_robot(robot)
     sim.close()
 
 

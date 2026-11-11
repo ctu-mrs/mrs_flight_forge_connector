@@ -13,7 +13,7 @@ def main():
     env = gymnasium.make("FlightForge/CameraNav-v0", render_mode="rgb_array", max_steps=100)
 
     observation, info = env.reset()
-    print(f"observation {observation.shape}, initial distance {info['distance']:.0f} uu")
+    print(f"observation {observation.shape}, initial distance {info['distance']:.1f} m")
 
     total_reward = 0.0
     for _ in range(100):
@@ -23,7 +23,7 @@ def main():
         if terminated or truncated:
             break
 
-    print(f"episode ended: reward {total_reward:.1f}, distance {info['distance']:.0f} uu, crashed={info['crashed']}")
+    print(f"episode ended: reward {total_reward:.1f}, distance {info['distance']:.1f} m, crashed={info['crashed']}")
     env.close()
 
 

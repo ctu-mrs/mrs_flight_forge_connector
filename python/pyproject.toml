@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flightforge"
-version = "0.14.0"
-description = "Python API for the FlightForge UAV simulator: pythonic client, Gymnasium environments and a MuJoCo dynamics bridge"
+version = "1.0.0"
+description = "Pure-Python client for the FlightForge simulator (API 1.0), with Gymnasium environments and a MuJoCo dynamics bridge"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
@@ -25,10 +25,10 @@ test = ["pytest>=7", "opencv-python", "gymnasium>=0.29", "mujoco>=3.0"]
 flightforge = "flightforge.gym_envs:register_envs"
 
 [tool.setuptools.packages.find]
-include = ["flightforge*"]
+include = ["flightforge", "flightforge.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "sim: needs a running FlightForge simulator on localhost (skips cleanly otherwise)",
+    "sim: needs a running FlightForge simulator on localhost:FLIGHTFORGE_PORT (skips cleanly otherwise)",
 ]

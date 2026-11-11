@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/simulator_client.h>
 
 namespace
 {
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  ueds_connector::GameModeController Controller("127.0.0.1", 8551);
+  flightforge::SimulatorClient Controller("127.0.0.1", 8551);
   if (!Controller.Connect()) {
     std::cerr << "no simulator on 127.0.0.1:8551\n";
     return 1;

@@ -238,7 +238,7 @@ def test_scene_and_drone_frames_are_related_by_world_origin(sim):
     stand_off_m = 6.0
     target = sim.scene_to_world([10.0 - stand_off_m, 0.0, 2.0])
 
-    drone = sim.spawn_drone(tuple(target))
+    drone = sim.spawn_robot(tuple(target))
     try:
         drone.set_pose(tuple(target), (0.0, 0.0, 0.0))
         assert np.allclose(drone.get_position(), target, atol=1.0)
@@ -275,7 +275,7 @@ def test_scene_and_drone_frames_are_related_by_world_origin(sim):
         assert nearest == pytest.approx(stand_off_m - 0.25, abs=0.3)
     finally:
         sim.clear_objects()
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         drone.close()
 
 
@@ -304,8 +304,8 @@ def test_world_switch_keeps_the_server_answering(sim):
 
     after = Simulator()
     assert after.fps() > 0
-    drone = after.spawn_drone(tuple(after.world_origin() + np.array([0.0, 0.0, 300.0])))
-    after.remove_drone(drone)
+    drone = after.spawn_robot(tuple(after.world_origin() + np.array([0.0, 0.0, 300.0])))
+    after.remove_robot(drone)
 
 
 def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
@@ -314,7 +314,7 @@ def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
     import flight_forge_drone as ffd
 
     sim.clear_objects()
-    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 1.5])))
+    drone = sim.spawn_robot(tuple(sim.scene_to_world([0.0, 0.0, 1.5])))
     try:
         drone.set_pose(sim.scene_to_world([0.0, 0.0, 1.5]), (0.0, 0.0, 0.0))
         camera = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
@@ -354,7 +354,7 @@ def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
             assert sim.collapse_classes(np.array([expected_class]), 1)[0] == by_path["prop"]
     finally:
         sim.clear_objects()
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         drone.close()
 
 
@@ -364,7 +364,7 @@ def test_segmentation_covers_rendered_geometry(sim):
     foliage without collision the same way the id pass must."""
     import flight_forge_drone as ffd
 
-    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
+    drone = sim.spawn_robot(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
     try:
         drone.set_pose(sim.scene_to_world([0.0, 0.0, 3.0]), (-20.0, 0.0, 0.0))
         camera = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
@@ -379,7 +379,7 @@ def test_segmentation_covers_rendered_geometry(sim):
         unlabelled = geometry & (ids == 0)
         assert unlabelled.sum() / geometry.sum() < 0.01
     finally:
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         drone.close()
 
 
@@ -392,7 +392,7 @@ def test_instance_segmentation_survives_scene_edits(sim):
     """
     import flight_forge_drone as ffd
 
-    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
+    drone = sim.spawn_robot(tuple(sim.scene_to_world([0.0, 0.0, 3.0])))
     try:
         sensor_id = drone.add_sensor(ffd.INSTANCE_SEG_CAMERA)
         time.sleep(0.5)
@@ -413,7 +413,7 @@ def test_instance_segmentation_survives_scene_edits(sim):
         ids, stamp = drone.instance_segmentation(sensor_id)
         assert ids.shape[0] > 0 and ids.shape[1] > 0
     finally:
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         sim.clear_objects()
 
 
@@ -452,7 +452,7 @@ def test_sensor_body_occludes_the_airframe_but_not_itself(sim):
     """
     import flight_forge_drone as ffd
 
-    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 4.0])))
+    drone = sim.spawn_robot(tuple(sim.scene_to_world([0.0, 0.0, 4.0])))
     try:
         sensor_id = drone.add_sensor(ffd.LIDAR)
 
@@ -489,7 +489,7 @@ def test_sensor_body_occludes_the_airframe_but_not_itself(sim):
         assert on_frame > 0, "with a body the lidar must see the airframe it is mounted on"
         assert off_housing == 0 and on_housing == 0, "a lidar must never return its own housing"
     finally:
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
 
 
 def test_world_mesh_is_ground_truth(sim):
@@ -551,7 +551,7 @@ def test_gltf_model_is_visible_to_the_lidar(sim):
     if not ok or not len(ids):
         pytest.skip(f"could not spawn a glTF model: {error}")
 
-    drone = sim.spawn_drone(tuple(sim.scene_to_world([0.0, 0.0, 2.0])))
+    drone = sim.spawn_robot(tuple(sim.scene_to_world([0.0, 0.0, 2.0])))
     try:
         drone.set_pose(tuple(sim.scene_to_world([0.0, 0.0, 2.0])), (0.0, 0.0, 0.0))
 
@@ -584,5 +584,5 @@ def test_gltf_model_is_visible_to_the_lidar(sim):
         assert len(forward) > 20, "the glTF model returned no lidar hits - collision is missing"
     finally:
         sim.clear_objects()
-        sim.remove_drone(drone)
+        sim.remove_robot(drone)
         drone.close()

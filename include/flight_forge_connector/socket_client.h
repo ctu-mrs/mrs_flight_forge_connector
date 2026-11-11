@@ -24,7 +24,7 @@
 
 #define END_OF_MESSAGE '$'
 
-namespace ueds_connector
+namespace flightforge
 {
 
 class SocketClient {
@@ -194,4 +194,4 @@ protected:
   bool GetMessage(std::string& message);
 };
 
-}  // namespace ueds_connector
+}  // namespace flightforge

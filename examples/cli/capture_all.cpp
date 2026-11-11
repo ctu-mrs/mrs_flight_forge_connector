@@ -22,8 +22,8 @@
 #include <thread>
 #include <vector>
 
-#include <flight_forge_connector/flight_forge_connector.h>
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/robot_client.h>
+#include <flight_forge_connector/simulator_client.h>
 
 #include "fpng.h"
 
@@ -190,27 +190,27 @@ constexpr double kUpCm      = 25.0;
 
 // The event camera is NOT accepted by the rgb config message (ResolveSensorId only lets
 // segmentation, instance segmentation and depth through), so it needs its own.
-bool MoveEventCameraOffBody(ueds_connector::UedsConnector& Drone, const int SensorId)
+bool MoveEventCameraOffBody(flightforge::RobotClient& Drone, const int SensorId)
 {
   auto [Ok, Config] = Drone.GetEventCameraConfig(SensorId);
   if (!Ok) {
     return false;
   }
 
-  Config.offset_ = ueds_connector::Coordinates(kForwardCm, 0.0, kUpCm);
+  Config.offset_ = flightforge::Coordinates(kForwardCm, 0.0, kUpCm);
   return Drone.SetEventCameraConfig(Config, SensorId);
 }
 
 // Works for every sensor that speaks the rgb config message: rgb, segmentation,
 // instance segmentation and depth.
-bool MoveRgbLikeOffBody(ueds_connector::UedsConnector& Drone, const int SensorId)
+bool MoveRgbLikeOffBody(flightforge::RobotClient& Drone, const int SensorId)
 {
   auto [Ok, Config] = Drone.GetRgbCameraConfig(SensorId);
   if (!Ok) {
     return false;
   }
 
-  Config.offset_ = ueds_connector::Coordinates(kForwardCm, 0.0, kUpCm);
+  Config.offset_ = flightforge::Coordinates(kForwardCm, 0.0, kUpCm);
 
   if (!Drone.SetRgbCameraConfig(Config, SensorId)) {
     return false;
@@ -236,7 +236,7 @@ bool MoveRgbLikeOffBody(ueds_connector::UedsConnector& Drone, const int SensorId
 // first-order rolling-shutter model both respond to, and keeping it small (and in place)
 // leaves the scene in frame - a large sweep just moves the camera off the objects and
 // changes every pixel at once, which tells you nothing.
-void SmallSweep(ueds_connector::UedsConnector& Drone, const int Steps, const int StepMs, const double AmplitudeDeg = 6.0)
+void SmallSweep(flightforge::RobotClient& Drone, const int Steps, const int StepMs, const double AmplitudeDeg = 6.0)
 {
   const auto [PoseOk, Where]  = Drone.GetLocation();
   const auto [FacingOk, From] = Drone.GetRotation();
@@ -248,7 +248,7 @@ void SmallSweep(ueds_connector::UedsConnector& Drone, const int Steps, const int
   for (int Step = 0; Step < Steps; ++Step) {
     const double T = static_cast<double>(Step) / std::max(1, Steps - 1);
 
-    ueds_connector::Rotation Facing = From;
+    flightforge::Rotation Facing = From;
     Facing.yaw                      = From.yaw + AmplitudeDeg * std::sin(T * 2.0 * 3.14159265);
 
     Drone.SetLocationAndRotationAsync(Where, Facing, false);
@@ -268,13 +268,13 @@ int main(int argc, char** argv)
 
   fpng::fpng_init();
 
-  ueds_connector::GameModeController GameMode(kAddress, kGameModePort);
+  flightforge::SimulatorClient GameMode(kAddress, kGameModePort);
   if (!GameMode.ConnectSimple()) {
     std::cerr << "no simulator on " << kAddress << ":" << kGameModePort << std::endl;
     return 1;
   }
 
-  ueds_connector::Coordinates SpawnLocation(0.0, 0.0, 150.0);
+  flightforge::Coordinates SpawnLocation(0.0, 0.0, 150.0);
   std::string                 Frame = "x500";
 
   const auto [SpawnOk, Port] = GameMode.SpawnDroneAtLocation(SpawnLocation, Frame);
@@ -283,7 +283,7 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  ueds_connector::UedsConnector Drone(kAddress, Port);
+  flightforge::RobotClient Drone(kAddress, Port);
   if (!Drone.ConnectSimple()) {
     std::cerr << "could not connect to the drone on " << Port << std::endl;
     return 1;
@@ -394,7 +394,7 @@ int main(int argc, char** argv)
     if (Ok) {
       auto [ConfigOk, Config] = Drone.GetFisheyeCameraConfig(Id);
       if (ConfigOk) {
-        Config.offset_ = ueds_connector::Coordinates(kForwardCm, 0.0, kUpCm);
+        Config.offset_ = flightforge::Coordinates(kForwardCm, 0.0, kUpCm);
         Drone.SetFisheyeCameraConfig(Config, Id);
       }
 
@@ -526,7 +526,7 @@ int main(int argc, char** argv)
     // resized and the warp LUT rebuilt on the game thread, so frames already in flight
     // still carry the old settings (and the first frame after a resize can be blank).
     // Wait for one whose dimensions match what was asked for.
-    const auto Apply = [&](const ueds_connector::RgbCameraConfig& Config, const std::string& Name) {
+    const auto Apply = [&](const flightforge::RgbCameraConfig& Config, const std::string& Name) {
       if (!Drone.SetRgbCameraConfig(Config)) {
         std::cerr << "  could not apply " << Name << std::endl;
         return false;
@@ -626,8 +626,8 @@ int main(int argc, char** argv)
       // Park somewhere with geometry actually in view and let the pose settle, then take
       // depth and colour from the same standstill: without the colour reference there is
       // no way to tell "the depth is wrong" from "nothing was in front of the camera".
-      const ueds_connector::Coordinates Viewpoint(-400.0, 0.0, 200.0);
-      const ueds_connector::Rotation    Facing(0.0, 0.0, 0.0);
+      const flightforge::Coordinates Viewpoint(-400.0, 0.0, 200.0);
+      const flightforge::Rotation    Facing(0.0, 0.0, 0.0);
       Drone.SetLocationAndRotationAsync(Viewpoint, Facing, false);
       std::this_thread::sleep_for(std::chrono::milliseconds(700));
 

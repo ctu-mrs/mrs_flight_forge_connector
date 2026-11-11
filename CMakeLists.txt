@@ -50,7 +50,7 @@ if (BUILD_PYTHON_LIB)
 
     pybind11_add_module(
             flight_forge_game_mode
-            src/game_mode_controller.cpp
+            src/simulator_client.cpp
             src/socket_client.cpp
             src/python-modules/game-mode-controller-module.cpp
             )
@@ -58,7 +58,7 @@ if (BUILD_PYTHON_LIB)
 
     pybind11_add_module(
             flight_forge_drone
-            src/flight_forge_connector.cpp
+            src/robot_client.cpp
             src/socket_client.cpp
             src/python-modules/drone-controller-module.cpp
             )

@@ -39,7 +39,7 @@ def main():
     import mujoco
 
     sim = Simulator()
-    drone = sim.spawn_drone((0.0, 0.0, 200.0), "x500")
+    drone = sim.spawn_robot((0.0, 0.0, 200.0), "x500")
 
     model = mujoco.MjModel.from_xml_string(QUADROTOR_MJCF)
     bridge = MujocoBridge(drone, model, body="drone", world_origin_uu=sim.world_origin(), substeps=5)
@@ -59,7 +59,7 @@ def main():
             image, stamp = drone.rgb()
             print(f"t={bridge.sim_time:6.2f}s  z={z:5.2f} m  frame {image.shape} @ {stamp:.3f}")
 
-    sim.remove_drone(drone)
+    sim.remove_robot(drone)
     drone.close()
     sim.close()
 

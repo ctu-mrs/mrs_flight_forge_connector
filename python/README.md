@@ -21,7 +21,7 @@ with `FLIGHTFORGE_NATIVE_PATH` if they live elsewhere.
 **Raw bindings** — everything the wire protocol offers, 1:1:
 
 ```python
-from flightforge import DroneController, GameModeController
+from flightforge import RobotClient, SimulatorClient
 ```
 
 **Pythonic client** — raises on failure, numpy in and out:
@@ -30,7 +30,7 @@ from flightforge import DroneController, GameModeController
 from flightforge import Simulator
 
 sim = Simulator()                              # game mode on :8551
-drone = sim.spawn_drone((0, 0, 200), "x500")
+drone = sim.spawn_robot((0, 0, 200), "x500")
 
 image, stamp = drone.rgb()                     # HxWx3 uint8
 points, origin, stamp = drone.lidar()          # (N,4) distances + directions
@@ -62,7 +62,7 @@ model; wrap your own dynamics for realism, or:
 from flightforge import Simulator, MujocoBridge
 
 sim = Simulator()
-drone = sim.spawn_drone((0, 0, 200), "x500")
+drone = sim.spawn_robot((0, 0, 200), "x500")
 bridge = MujocoBridge(drone, "quadrotor.xml", world_origin_uu=sim.world_origin())
 
 bridge.data.ctrl[:] = thrusts

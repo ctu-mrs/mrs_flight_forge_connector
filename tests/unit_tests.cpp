@@ -12,7 +12,7 @@
 
 #include "test_framework.h"
 
-using namespace ueds_connector;
+using namespace flightforge;
 
 /* frame + world catalogs //{ */
 
@@ -228,7 +228,7 @@ FF_TEST(ClippedExportCompactsVertices)
 
 FF_TEST(CameraEventsUnpack)
 {
-  ueds_connector::CameraEvents Events;
+  flightforge::CameraEvents Events;
   Events.xyp        = {5u | (7u << 16) | 0x80000000u, 345u | (259u << 16)};
   Events.t_us       = {0u, 999u};
   Events.base_stamp = 12.5;

@@ -15,7 +15,7 @@ def sim():
 
 @pytest.fixture()
 def drone(sim):
-    d = sim.spawn_drone((0.0, 0.0, 200.0), "x500")
+    d = sim.spawn_robot((0.0, 0.0, 200.0), "x500")
     yield d
-    sim.remove_drone(d)
+    sim.remove_robot(d)
     d.close()

@@ -6,7 +6,7 @@
 #include <map>
 #include <vector>
 
-namespace ueds_connector
+namespace flightforge
 {
 
 /* Daytime //{ */
@@ -499,4 +499,4 @@ struct FisheyeCameraConfig
 
 //}
 
-}  // namespace ueds_connector
+}  // namespace flightforge

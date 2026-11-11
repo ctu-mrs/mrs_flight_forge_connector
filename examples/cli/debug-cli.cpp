@@ -10,7 +10,7 @@
 #include <fpng.h>
 #include <vector>
 
-#include "flight_forge_connector/flight_forge_connector.h"
+#include "flight_forge_connector/robot_client.h"
 
 bool parseDouble(std::string choice, double &_double) {
   double x;
@@ -59,7 +59,7 @@ bool parseDoubles(std::string choice, double &a, double &b, double &c) {
 }
 
 bool getCoordinates(std::string choice,
-                    ueds_connector::Coordinates &coordinates) {
+                    flightforge::Coordinates &coordinates) {
   double a, b, c;
   const auto parseRes = parseDoubles(std::move(choice), a, b, c);
 
@@ -74,7 +74,7 @@ bool getCoordinates(std::string choice,
   return true;
 }
 
-bool getRotation(std::string choice, ueds_connector::Rotation &rotation) {
+bool getRotation(std::string choice, flightforge::Rotation &rotation) {
   double a, b, c;
   const auto parseRes = parseDoubles(std::move(choice), a, b, c);
 
@@ -89,13 +89,13 @@ bool getRotation(std::string choice, ueds_connector::Rotation &rotation) {
   return true;
 }
 
-std::unique_ptr<ueds_connector::UedsConnector> UedsConnector;
+std::unique_ptr<flightforge::RobotClient> RobotClient;
 
 void interruptHandler(int s) {
   std::cout << "Got exit signal " << s << std::endl;
-  if (UedsConnector != nullptr) {
+  if (RobotClient != nullptr) {
     // release drone controller ptr and destruct (disconnect)
-    UedsConnector.reset();
+    RobotClient.reset();
   }
   exit(1);
 }
@@ -125,9 +125,9 @@ int main(int argc, char *argv[]) {
   sigaction(SIGINT, &sigIntHandler, nullptr);
 #endif
 
-  UedsConnector =
-      std::make_unique<ueds_connector::UedsConnector>(address, port);
-  auto connect_result = UedsConnector->Connect();
+  RobotClient =
+      std::make_unique<flightforge::RobotClient>(address, port);
+  auto connect_result = RobotClient->Connect();
   if (connect_result != 1) {
     std::cout << "Error connecting to drone controller. connect_result was "
               << connect_result << std::endl;
@@ -167,10 +167,10 @@ int main(int argc, char *argv[]) {
     if (choice_char == 'x') {
       break;
     } else if (choice_char == '0') {
-      const auto ping_result = UedsConnector->Ping();
+      const auto ping_result = RobotClient->Ping();
       std::cout << "Ping: " << (ping_result ? "true" : "false") << std::endl;
     } else if (choice_char == '1') {
-      const auto [res, location] = UedsConnector->GetLocation();
+      const auto [res, location] = RobotClient->GetLocation();
       if (!res) {
         std::cout << "Error getting location" << std::endl;
       } else {
@@ -179,12 +179,12 @@ int main(int argc, char *argv[]) {
                   << " z: " << location.z << std::endl;
       }
     } else if (choice_char == '2') {
-      ueds_connector::Coordinates coordinates{};
+      flightforge::Coordinates coordinates{};
       const auto parseRes = getCoordinates(choice, coordinates);
 
       if (parseRes) {
         const auto [res, teleportedTo, isHit, impactPoint] =
-            UedsConnector->SetLocation(coordinates, true);
+            RobotClient->SetLocation(coordinates, true);
         if (res) {
           std::cout << "SetLocation successful: teleported to: ("
                     << teleportedTo.x << ", " << teleportedTo.y << ", "
@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
       }
     } else if (choice_char == '3') {
       const auto [res, camera_data, stamp, size] =
-          UedsConnector->GetRgbCameraData();
+          RobotClient->GetRgbCameraData();
       if (res) {
         std::cout << "camera_data(ms): "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
         std::cout << "GetCameraData errored, size was 0" << std::endl;
       }
     } else if (choice_char == '4') {
-      const auto [res, rotation] = UedsConnector->GetRotation();
+      const auto [res, rotation] = RobotClient->GetRotation();
       if (!res) {
         std::cout << "Error getting rotation" << std::endl;
       } else {
@@ -234,11 +234,11 @@ int main(int argc, char *argv[]) {
                   << " roll: " << rotation.roll << std::endl;
       }
     } else if (choice_char == '5') {
-      ueds_connector::Rotation rotation{};
+      flightforge::Rotation rotation{};
       auto parseRes = getRotation(choice, rotation);
       if (parseRes) {
         const auto [res, rotatedTo, isHit, impactPoint] =
-            UedsConnector->SetRotation(rotation);
+            RobotClient->SetRotation(rotation);
         if (res) {
           std::cout << "SetRotation successful: rotatedTo"
                     << rotatedTo.toString() << ", isHit: " << isHit
@@ -250,11 +250,11 @@ int main(int argc, char *argv[]) {
         std::cout << "SetRotation parse error" << std::endl;
       }
     } else if (choice_char == '6') {
-      ueds_connector::Coordinates location{4000, -12200, 1000};
-      ueds_connector::Rotation rotation{10, 20, 30};
+      flightforge::Coordinates location{4000, -12200, 1000};
+      flightforge::Rotation rotation{10, 20, 30};
 
       const auto [res, teleportedTo, rotatedTo, isHit, impactPoint] =
-          UedsConnector->SetLocationAndRotation(location, rotation, false);
+          RobotClient->SetLocationAndRotation(location, rotation, false);
       if (res) {
         std::cout << "SetLocationAndRotation successful: teleported to: "
                   << teleportedTo.toString()
@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
         std::cout << "SetLocationAndRotation error" << std::endl;
       }
     } else if (choice_char == '7') {
-      const auto [res, data, start, stamp] = UedsConnector->GetLidarData();
+      const auto [res, data, start, stamp] = RobotClient->GetLidarData();
       if (res) {
         std::cout << "GetLidarData successful. Start: (" << start.x << ", " << start.y << ", " << start.z
                   << "), Stamp: " << stamp << ", Data: " << std::endl;
@@ -278,7 +278,7 @@ int main(int argc, char *argv[]) {
         std::cout << "GetLidarData error" << std::endl;
       }
     } else if (choice_char == '8') {
-      const auto [res, config] = UedsConnector->GetLidarConfig();
+      const auto [res, config] = RobotClient->GetLidarConfig();
       if (res) {
         std::cout << "GetLidarConfig successful: (Enable: " << config.Enable
                   << ", Livox: " << config.Livox
@@ -297,7 +297,7 @@ int main(int argc, char *argv[]) {
         std::cout << "GetLidarConfig error" << std::endl;
       }
     } else if (choice_char == '9') {
-      ueds_connector::LidarConfig config{};
+      flightforge::LidarConfig config{};
       config.Enable = false;
       config.Livox = true;
       config.showBeams = true;
@@ -305,14 +305,14 @@ int main(int argc, char *argv[]) {
       config.BeamVertRays = 20;
       config.beamLength = 300;
       config.Frequency = 10;
-      config.offset = ueds_connector::Coordinates(0, 0, 6);
-      config.orientation = ueds_connector::Rotation(0, 90, 0);
+      config.offset = flightforge::Coordinates(0, 0, 6);
+      config.orientation = flightforge::Rotation(0, 90, 0);
       config.FOVHorLeft = 180;
       config.FOVHorRight = 180;
       config.FOVVertUp = 52;
       config.FOVVertDown = 7;
 
-      const auto res = UedsConnector->SetLidarConfig(config);
+      const auto res = RobotClient->SetLidarConfig(config);
 
       if (res) {
         std::cout << "SetLidarConfig successful" << std::endl;
@@ -320,7 +320,7 @@ int main(int argc, char *argv[]) {
         std::cout << "SetLidarConfig error" << std::endl;
       }
     } else if (choice_char == 'a') {
-      const auto [res, config] = UedsConnector->GetRgbCameraConfig();
+      const auto [res, config] = RobotClient->GetRgbCameraConfig();
       if (res) {
         std::cout << "GetCameraConfig successful: (showDebugCamera: "
                   << config.show_debug_camera_
@@ -332,15 +332,15 @@ int main(int argc, char *argv[]) {
         std::cout << "GetCameraConfig error" << std::endl;
       }
     } else if (choice_char == 'b') {
-      ueds_connector::RgbCameraConfig config{};
+      flightforge::RgbCameraConfig config{};
 
       config.show_debug_camera_ = true;
 
       config.fov_ = 120;
 
-      config.offset_ = ueds_connector::Coordinates(0, 0, 0);
+      config.offset_ = flightforge::Coordinates(0, 0, 0);
 
-      config.orientation_ = ueds_connector::Rotation(0, 0, 0);
+      config.orientation_ = flightforge::Rotation(0, 0, 0);
 
       config.width_ = 999; // 640; <1000
 
@@ -352,7 +352,7 @@ int main(int argc, char *argv[]) {
 
       config.motion_blur_distortion_ = 1.0;
 
-      const auto res = UedsConnector->SetRgbCameraConfig(config);
+      const auto res = RobotClient->SetRgbCameraConfig(config);
 
       if (res) {
         std::cout << "SetCameraConfig successful" << std::endl;
@@ -360,7 +360,7 @@ int main(int argc, char *argv[]) {
         std::cout << "SetCameraConfig error" << std::endl;
       }
     } else if (choice_char == 'c') {
-      const auto [res, range_data] = UedsConnector->GetRangefinderData();
+      const auto [res, range_data] = RobotClient->GetRangefinderData();
       if (res) {
         std::cout << "camera_data(ms): "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -379,7 +379,7 @@ int main(int argc, char *argv[]) {
       }
     } else if (choice_char == 'd') {
       const auto [res, camera_data, stamp, size] =
-          UedsConnector->GetRgbSegmented();
+          RobotClient->GetRgbSegmented();
       if (res) {
         std::cout << "camera_data(ms): "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -393,7 +393,7 @@ int main(int argc, char *argv[]) {
                          .count()
                   << std::endl;
         int width, height;
-        const auto [config_res, config] = UedsConnector->GetRgbCameraConfig();
+        const auto [config_res, config] = RobotClient->GetRgbCameraConfig();
         width = config.width_;
         height = config.height_;
         if (size != width * height * 4) {
@@ -434,7 +434,7 @@ int main(int argc, char *argv[]) {
       }
     }
     else if (choice_char == 'e') {
-      const auto [res, data, start, stamp] = UedsConnector->GetLidarSegData();
+      const auto [res, data, start, stamp] = RobotClient->GetLidarSegData();
       if (res) {
         std::cout << "GetLidarSegData successful. Start: (" << start.x << ", " << start.y << ", " << start.z
                   << "), Stamp: " << stamp << ", Data: " << std::endl;
@@ -467,7 +467,7 @@ int main(int argc, char *argv[]) {
       config.enable_hdr_ = true;
       config.enable_raytracing_ = false;
       config.enable_temporal_aa_ = false;
-      const auto res = UedsConnector->SetStereoCameraConfig(config);
+      const auto res = RobotClient->SetStereoCameraConfig(config);
       if (res) {
         std::cout << "SetStereoCameraConfig successful." << std::endl;
       } else {

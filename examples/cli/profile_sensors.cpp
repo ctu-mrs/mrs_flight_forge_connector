@@ -15,8 +15,8 @@
 #include <thread>
 #include <vector>
 
-#include <flight_forge_connector/flight_forge_connector.h>
-#include <flight_forge_connector/game_mode_controller.h>
+#include <flight_forge_connector/robot_client.h>
+#include <flight_forge_connector/simulator_client.h>
 
 namespace {
 
@@ -67,13 +67,13 @@ FTiming Time(TCall&& Call, const int Repeats = 10)
 
 int main()
 {
-  ueds_connector::GameModeController GameMode(kAddress, kGameModePort);
+  flightforge::SimulatorClient GameMode(kAddress, kGameModePort);
   if (!GameMode.ConnectSimple()) {
     std::printf("no simulator on %s:%d\n", kAddress.c_str(), kGameModePort);
     return 1;
   }
 
-  ueds_connector::Coordinates Where(0.0, 0.0, 300.0);
+  flightforge::Coordinates Where(0.0, 0.0, 300.0);
   std::string                 Frame = "x500";
 
   const auto [SpawnOk, Port] = GameMode.SpawnDroneAtLocation(Where, Frame);
@@ -82,7 +82,7 @@ int main()
     return 1;
   }
 
-  ueds_connector::UedsConnector Drone(kAddress, Port);
+  flightforge::RobotClient Drone(kAddress, Port);
   if (!Drone.ConnectSimple()) {
     std::printf("could not connect to the drone\n");
     return 1;

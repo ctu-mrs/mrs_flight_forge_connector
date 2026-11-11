@@ -4,31 +4,31 @@
 
 #include <cstring>
 
-#include <flight_forge_connector/flight_forge_connector.h>
+#include <flight_forge_connector/robot_client.h>
 
 namespace py = pybind11;
 
-using ueds_connector::CameraEvent;
-using ueds_connector::CameraEvents;
-using ueds_connector::PoseSample;
-using ueds_connector::CameraDistortion;
-using ueds_connector::CameraNoise;
-using ueds_connector::CameraRollingShutter;
-using ueds_connector::CameraExposure;
-using ueds_connector::CameraIntrinsics;
-using ueds_connector::CameraLensEffects;
-using ueds_connector::Coordinates;
-using ueds_connector::DeviceInfo;
-using ueds_connector::EventCameraConfig;
-using ueds_connector::FisheyeCameraConfig;
-using ueds_connector::LidarConfig;
-using ueds_connector::LidarData;
-using ueds_connector::LidarIntData;
-using ueds_connector::LidarSegData;
-using ueds_connector::RgbCameraConfig;
-using ueds_connector::Rotation;
-using ueds_connector::SensorInfo;
-using ueds_connector::UedsConnector;
+using flightforge::CameraEvent;
+using flightforge::CameraEvents;
+using flightforge::PoseSample;
+using flightforge::CameraDistortion;
+using flightforge::CameraNoise;
+using flightforge::CameraRollingShutter;
+using flightforge::CameraExposure;
+using flightforge::CameraIntrinsics;
+using flightforge::CameraLensEffects;
+using flightforge::Coordinates;
+using flightforge::DeviceInfo;
+using flightforge::EventCameraConfig;
+using flightforge::FisheyeCameraConfig;
+using flightforge::LidarConfig;
+using flightforge::LidarData;
+using flightforge::LidarIntData;
+using flightforge::LidarSegData;
+using flightforge::RgbCameraConfig;
+using flightforge::Rotation;
+using flightforge::SensorInfo;
+using flightforge::RobotClient;
 
 using StereoCameraConfig  = Serializable::Drone::StereoCameraConfig;
 using InstanceSegMapEntry = Serializable::Drone::InstanceSegMapEntry;
@@ -95,17 +95,17 @@ PYBIND11_MODULE(flight_forge_drone, m) {
       .def_readwrite("name", &DeviceInfo::name)
       .def_readwrite("description", &DeviceInfo::description);
 
-  py::enum_<ueds_connector::SensorTypeEnum>(m, "SensorType")
-      .value("RGB_CAMERA", ueds_connector::SENSOR_RGB_CAMERA)
-      .value("LIDAR", ueds_connector::SENSOR_LIDAR)
-      .value("RANGEFINDER", ueds_connector::SENSOR_RANGEFINDER)
-      .value("LIDAR_LIVOX", ueds_connector::SENSOR_LIDAR_LIVOX)
-      .value("RGB_SEG_CAMERA", ueds_connector::SENSOR_RGB_SEG_CAMERA)
-      .value("STEREO_CAMERA", ueds_connector::SENSOR_STEREO_CAMERA)
-      .value("EVENT_CAMERA", ueds_connector::SENSOR_EVENT_CAMERA)
-      .value("FISHEYE_CAMERA", ueds_connector::SENSOR_FISHEYE_CAMERA)
-      .value("INSTANCE_SEG_CAMERA", ueds_connector::SENSOR_INSTANCE_SEG_CAMERA)
-      .value("DEPTH_CAMERA", ueds_connector::SENSOR_DEPTH_CAMERA)
+  py::enum_<flightforge::SensorTypeEnum>(m, "SensorType")
+      .value("RGB_CAMERA", flightforge::SENSOR_RGB_CAMERA)
+      .value("LIDAR", flightforge::SENSOR_LIDAR)
+      .value("RANGEFINDER", flightforge::SENSOR_RANGEFINDER)
+      .value("LIDAR_LIVOX", flightforge::SENSOR_LIDAR_LIVOX)
+      .value("RGB_SEG_CAMERA", flightforge::SENSOR_RGB_SEG_CAMERA)
+      .value("STEREO_CAMERA", flightforge::SENSOR_STEREO_CAMERA)
+      .value("EVENT_CAMERA", flightforge::SENSOR_EVENT_CAMERA)
+      .value("FISHEYE_CAMERA", flightforge::SENSOR_FISHEYE_CAMERA)
+      .value("INSTANCE_SEG_CAMERA", flightforge::SENSOR_INSTANCE_SEG_CAMERA)
+      .value("DEPTH_CAMERA", flightforge::SENSOR_DEPTH_CAMERA)
       .export_values();
 
   //}
@@ -344,13 +344,13 @@ PYBIND11_MODULE(flight_forge_drone, m) {
 
   /* connector //{ */
 
-  py::class_<UedsConnector>(m, "DroneController")
+  py::class_<RobotClient>(m, "RobotClient")
       .def(py::init<const std::string&, uint16_t>())
-      .def("ConnectSimple", &UedsConnector::ConnectSimple, py::call_guard<py::gil_scoped_release>())
-      .def("Ping", &UedsConnector::Ping, py::call_guard<py::gil_scoped_release>())
+      .def("ConnectSimple", &RobotClient::ConnectSimple, py::call_guard<py::gil_scoped_release>())
+      .def("Ping", &RobotClient::Ping, py::call_guard<py::gil_scoped_release>())
       .def(
           "GetMeta",
-          [](UedsConnector& client) {
+          [](RobotClient& client) {
             bool                                    ok;
             Serializable::Common::GetMeta::Response meta;
             {
@@ -375,27 +375,27 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             out["catalogue_json"] = meta.catalogue_json_;
             return py::make_tuple(ok, out);
           })
-      .def("CheckCompatibility", &UedsConnector::CheckCompatibility, py::call_guard<py::gil_scoped_release>(), py::arg("op_names") = std::vector<std::string>{})
-      .def("Disconnect", &UedsConnector::Disconnect, py::call_guard<py::gil_scoped_release>())
-      .def("GetLocation", &UedsConnector::GetLocation, py::call_guard<py::gil_scoped_release>())
-      .def("GetCrashState", &UedsConnector::GetCrashState, py::call_guard<py::gil_scoped_release>())
-      .def("SetLocation", &UedsConnector::SetLocation, py::call_guard<py::gil_scoped_release>())
-      .def("GetRotation", &UedsConnector::GetRotation, py::call_guard<py::gil_scoped_release>())
-      .def("SetRotation", &UedsConnector::SetRotation, py::call_guard<py::gil_scoped_release>())
-      .def("SetLocationAndRotation", &UedsConnector::SetLocationAndRotation, py::call_guard<py::gil_scoped_release>())
-      .def("SetLocationAndRotationAsync", &UedsConnector::SetLocationAndRotationAsync, py::call_guard<py::gil_scoped_release>())
-      .def("GetMoveLineVisible", &UedsConnector::GetMoveLineVisible, py::call_guard<py::gil_scoped_release>())
-      .def("SetMoveLineVisible", &UedsConnector::SetMoveLineVisible, py::call_guard<py::gil_scoped_release>())
-      .def("GetRgbCameraData", &UedsConnector::GetRgbCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetStereoCameraData", &UedsConnector::GetStereoCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetRgbSegmented", &UedsConnector::GetRgbSegmented, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetRgbCameraConfig", &UedsConnector::GetRgbCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("SetRgbCameraConfig", &UedsConnector::SetRgbCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
-      .def("GetStereoCameraConfig", &UedsConnector::GetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("SetStereoCameraConfig", &UedsConnector::SetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
+      .def("CheckCompatibility", &RobotClient::CheckCompatibility, py::call_guard<py::gil_scoped_release>(), py::arg("op_names") = std::vector<std::string>{})
+      .def("Disconnect", &RobotClient::Disconnect, py::call_guard<py::gil_scoped_release>())
+      .def("GetLocation", &RobotClient::GetLocation, py::call_guard<py::gil_scoped_release>())
+      .def("GetCrashState", &RobotClient::GetCrashState, py::call_guard<py::gil_scoped_release>())
+      .def("SetLocation", &RobotClient::SetLocation, py::call_guard<py::gil_scoped_release>())
+      .def("GetRotation", &RobotClient::GetRotation, py::call_guard<py::gil_scoped_release>())
+      .def("SetRotation", &RobotClient::SetRotation, py::call_guard<py::gil_scoped_release>())
+      .def("SetLocationAndRotation", &RobotClient::SetLocationAndRotation, py::call_guard<py::gil_scoped_release>())
+      .def("SetLocationAndRotationAsync", &RobotClient::SetLocationAndRotationAsync, py::call_guard<py::gil_scoped_release>())
+      .def("GetMoveLineVisible", &RobotClient::GetMoveLineVisible, py::call_guard<py::gil_scoped_release>())
+      .def("SetMoveLineVisible", &RobotClient::SetMoveLineVisible, py::call_guard<py::gil_scoped_release>())
+      .def("GetRgbCameraData", &RobotClient::GetRgbCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetStereoCameraData", &RobotClient::GetStereoCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetRgbSegmented", &RobotClient::GetRgbSegmented, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetRgbCameraConfig", &RobotClient::GetRgbCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("SetRgbCameraConfig", &RobotClient::SetRgbCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
+      .def("GetStereoCameraConfig", &RobotClient::GetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("SetStereoCameraConfig", &RobotClient::SetStereoCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
       .def(
           "GetEventCameraData",
-          [](UedsConnector& drone, int sensor_id) {
+          [](RobotClient& drone, int sensor_id) {
             bool         ok;
             CameraEvents events;
             {
@@ -411,7 +411,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
           py::arg("sensor_id") = -1)
       .def(
           "SetPropellerSpeeds",
-          [](UedsConnector& drone, const std::vector<double>& speeds) {
+          [](RobotClient& drone, const std::vector<double>& speeds) {
             int32_t count = 0;
             bool    ok;
             {
@@ -423,7 +423,7 @@ PYBIND11_MODULE(flight_forge_drone, m) {
           py::arg("speeds"))
       .def(
           "SetPoseTrajectory",
-          [](UedsConnector& drone, py::array_t<double, py::array::c_style | py::array::forcecast> samples) {
+          [](RobotClient& drone, py::array_t<double, py::array::c_style | py::array::forcecast> samples) {
             if (samples.ndim() != 2 || samples.shape(1) != 7) {
               throw std::invalid_argument("SetPoseTrajectory expects an (N, 7) array of t, x, y, z, pitch, yaw, roll");
             }
@@ -439,18 +439,18 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             return drone.SetPoseTrajectory(out);
           },
           py::arg("samples"))
-      .def("GetEventCameraConfig", &UedsConnector::GetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("SetEventCameraConfig", &UedsConnector::SetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
-      .def("GetFisheyeCameraData", &UedsConnector::GetFisheyeCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetFisheyeCameraConfig", &UedsConnector::GetFisheyeCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("SetFisheyeCameraConfig", &UedsConnector::SetFisheyeCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
-      .def("GetRangefinderData", &UedsConnector::GetRangefinderData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetLidarData", &UedsConnector::GetLidarData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetEventCameraConfig", &RobotClient::GetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("SetEventCameraConfig", &RobotClient::SetEventCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
+      .def("GetFisheyeCameraData", &RobotClient::GetFisheyeCameraData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetFisheyeCameraConfig", &RobotClient::GetFisheyeCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("SetFisheyeCameraConfig", &RobotClient::SetFisheyeCameraConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
+      .def("GetRangefinderData", &RobotClient::GetRangefinderData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetLidarData", &RobotClient::GetLidarData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def(
           "GetLidarScan",
-          [](UedsConnector& drone, bool with_labels, bool with_intensity, int sensor_id) {
+          [](RobotClient& drone, bool with_labels, bool with_intensity, int sensor_id) {
             bool                      ok;
-            ueds_connector::LidarScan scan;
+            flightforge::LidarScan scan;
             {
               py::gil_scoped_release release;
               std::tie(ok, scan) = drone.GetLidarScan(with_labels, with_intensity, sensor_id);
@@ -476,19 +476,19 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             return py::make_tuple(ok, out);
           },
           py::arg("with_labels") = true, py::arg("with_intensity") = false, py::arg("sensor_id") = -1)
-      .def("GetLidarSegData", &UedsConnector::GetLidarSegData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetLidarIntData", &UedsConnector::GetLidarIntData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("GetLidarConfig", &UedsConnector::GetLidarConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("SetLidarConfig", &UedsConnector::SetLidarConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
-      .def("AddSensor", &UedsConnector::AddSensor, py::call_guard<py::gil_scoped_release>())
-      .def("RemoveSensor", &UedsConnector::RemoveSensor, py::call_guard<py::gil_scoped_release>())
-      .def("ListSensors", &UedsConnector::ListSensors, py::call_guard<py::gil_scoped_release>())
-      .def("GetCameraInfo", &UedsConnector::GetCameraInfo, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
-      .def("AddDevice", &UedsConnector::AddDevice, py::call_guard<py::gil_scoped_release>(), py::arg("device_name"), py::arg("offset"), py::arg("rotation"), py::arg("show_mesh") = true)
-      .def("ListDevices", &UedsConnector::ListDevices, py::call_guard<py::gil_scoped_release>())
+      .def("GetLidarSegData", &RobotClient::GetLidarSegData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetLidarIntData", &RobotClient::GetLidarIntData, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetLidarConfig", &RobotClient::GetLidarConfig, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("SetLidarConfig", &RobotClient::SetLidarConfig, py::call_guard<py::gil_scoped_release>(), py::arg("config"), py::arg("sensor_id") = -1)
+      .def("AddSensor", &RobotClient::AddSensor, py::call_guard<py::gil_scoped_release>())
+      .def("RemoveSensor", &RobotClient::RemoveSensor, py::call_guard<py::gil_scoped_release>())
+      .def("ListSensors", &RobotClient::ListSensors, py::call_guard<py::gil_scoped_release>())
+      .def("GetCameraInfo", &RobotClient::GetCameraInfo, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("AddDevice", &RobotClient::AddDevice, py::call_guard<py::gil_scoped_release>(), py::arg("device_name"), py::arg("offset"), py::arg("rotation"), py::arg("show_mesh") = true)
+      .def("ListDevices", &RobotClient::ListDevices, py::call_guard<py::gil_scoped_release>())
       .def(
           "GetInstanceSegData",
-          [](UedsConnector& connector, int sensor_id) {
+          [](RobotClient& connector, int sensor_id) {
             std::vector<unsigned char> image;
             double                     stamp   = 0.0;
             bool                       success = false;
@@ -499,10 +499,10 @@ PYBIND11_MODULE(flight_forge_drone, m) {
             return py::make_tuple(success, py::bytes(reinterpret_cast<const char*>(image.data()), image.size()), stamp);
           },
           py::arg("sensor_id") = -1, "Returns (success, png_bytes, stamp).")
-      .def("GetInstanceSegMap", &UedsConnector::GetInstanceSegMap, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
+      .def("GetInstanceSegMap", &RobotClient::GetInstanceSegMap, py::call_guard<py::gil_scoped_release>(), py::arg("sensor_id") = -1)
       .def(
           "GetDepthCameraData",
-          [](UedsConnector& connector, int sensor_id) {
+          [](RobotClient& connector, int sensor_id) {
             std::vector<uint16_t> image;
             int                   width = 0, height = 0;
             double                stamp   = 0.0;

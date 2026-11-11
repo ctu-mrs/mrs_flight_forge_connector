@@ -1,27 +1,27 @@
-#include <flight_forge_connector/flight_forge_connector.h>
+#include <flight_forge_connector/robot_client.h>
 
 #include <sstream>
 
 using kissnet::socket_status;
-using ueds_connector::Coordinates;
-using ueds_connector::LidarConfig;
-using ueds_connector::LidarData;
-using ueds_connector::LidarIntData;
-using ueds_connector::LidarSegData;
-using ueds_connector::RgbCameraConfig;
-using ueds_connector::Rotation;
-using ueds_connector::CameraEvent;
-using ueds_connector::CameraEvents;
-using ueds_connector::PoseSample;
-using ueds_connector::DeviceInfo;
-using ueds_connector::EventCameraConfig;
-using ueds_connector::FisheyeCameraConfig;
-using ueds_connector::SensorInfo;
-using ueds_connector::UedsConnector;
+using flightforge::Coordinates;
+using flightforge::LidarConfig;
+using flightforge::LidarData;
+using flightforge::LidarIntData;
+using flightforge::LidarSegData;
+using flightforge::RgbCameraConfig;
+using flightforge::Rotation;
+using flightforge::CameraEvent;
+using flightforge::CameraEvents;
+using flightforge::PoseSample;
+using flightforge::DeviceInfo;
+using flightforge::EventCameraConfig;
+using flightforge::FisheyeCameraConfig;
+using flightforge::SensorInfo;
+using flightforge::RobotClient;
 
 /* getLocation() //{ */
 
-std::pair<bool, Coordinates> UedsConnector::GetLocation() {
+std::pair<bool, Coordinates> RobotClient::GetLocation() {
 
   Serializable::Drone::GetLocation::Request request{};
 
@@ -44,7 +44,7 @@ std::pair<bool, Coordinates> UedsConnector::GetLocation() {
 
 /* getCrashState() //{ */
 
-std::pair<bool, bool> UedsConnector::GetCrashState() {
+std::pair<bool, bool> RobotClient::GetCrashState() {
 
   Serializable::Drone::GetCrashState::Request request{};
 
@@ -61,7 +61,7 @@ std::pair<bool, bool> UedsConnector::GetCrashState() {
 
 /* setLocation() //{ */
 
-std::tuple<bool, Coordinates, bool, Coordinates> UedsConnector::SetLocation(const Coordinates& coordinate, bool checkCollisions) {
+std::tuple<bool, Coordinates, bool, Coordinates> RobotClient::SetLocation(const Coordinates& coordinate, bool checkCollisions) {
 
   Serializable::Drone::SetLocation::Request request{};
 
@@ -92,7 +92,7 @@ std::tuple<bool, Coordinates, bool, Coordinates> UedsConnector::SetLocation(cons
 
 /* GetRgbCameraData() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbCameraData(int sensorId) {
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetRgbCameraData(int sensorId) {
 
   Serializable::Drone::GetRgbCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -110,7 +110,7 @@ std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::Ge
 
 /* GetStereoCameraData() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> UedsConnector::GetStereoCameraData(int sensorId) {
+std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double> RobotClient::GetStereoCameraData(int sensorId) {
 
   Serializable::Drone::GetStereoCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -128,7 +128,7 @@ std::tuple<bool, std::vector<unsigned char>, std::vector<unsigned char>, double>
 
 /* GetRgbSegmented() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetRgbSegmented(int sensorId) {
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetRgbSegmented(int sensorId) {
 
   Serializable::Drone::GetRgbSegCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -145,7 +145,7 @@ std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::Ge
 
 /* getRotation() //{ */
 
-std::pair<bool, Rotation> UedsConnector::GetRotation() {
+std::pair<bool, Rotation> RobotClient::GetRotation() {
 
   Serializable::Drone::GetRotation::Request request{};
 
@@ -167,7 +167,7 @@ std::pair<bool, Rotation> UedsConnector::GetRotation() {
 
 /* setRotation() //{ */
 
-std::tuple<bool, Rotation, bool, Coordinates> UedsConnector::SetRotation(const Rotation& rotation) {
+std::tuple<bool, Rotation, bool, Coordinates> RobotClient::SetRotation(const Rotation& rotation) {
 
   Serializable::Drone::SetRotation::Request request{};
   request.pitch = rotation.pitch;
@@ -198,7 +198,7 @@ std::tuple<bool, Rotation, bool, Coordinates> UedsConnector::SetRotation(const R
 
 /* setLocationAndRotation() //{ */
 
-std::tuple<bool, Coordinates, Rotation, bool, Coordinates> UedsConnector::SetLocationAndRotation(const Coordinates& coordinate, const Rotation& rotation,
+std::tuple<bool, Coordinates, Rotation, bool, Coordinates> RobotClient::SetLocationAndRotation(const Coordinates& coordinate, const Rotation& rotation,
                                                                                                  const bool should_collide) {
 
   Serializable::Drone::SetLocationAndRotation::Request request{};
@@ -242,7 +242,7 @@ std::tuple<bool, Coordinates, Rotation, bool, Coordinates> UedsConnector::SetLoc
 
 /* setLocationAndRotationAsync() //{ */
 
-std::tuple<bool> UedsConnector::SetLocationAndRotationAsync(const Coordinates& coordinate, const Rotation& rotation, const bool should_collide) {
+std::tuple<bool> RobotClient::SetLocationAndRotationAsync(const Coordinates& coordinate, const Rotation& rotation, const bool should_collide) {
 
   Serializable::Drone::SetLocationAndRotationAsync::Request request{};
 
@@ -267,7 +267,7 @@ std::tuple<bool> UedsConnector::SetLocationAndRotationAsync(const Coordinates& c
 
 /* SetPoseTrajectory() //{ */
 
-bool UedsConnector::SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count) {
+bool RobotClient::SetPropellerSpeeds(const std::vector<double>& speeds, int32_t& out_count) {
 
   Serializable::Drone::SetPropellerSpeeds::Request request{};
   request.speeds = speeds;
@@ -283,7 +283,7 @@ bool UedsConnector::SetPropellerSpeeds(const std::vector<double>& speeds, int32_
   return success;
 }
 
-bool UedsConnector::SetPoseTrajectory(const std::vector<PoseSample>& samples) {
+bool RobotClient::SetPoseTrajectory(const std::vector<PoseSample>& samples) {
 
   Serializable::Drone::SetPoseTrajectory::Request request{};
   request.samples.reserve(samples.size());
@@ -302,7 +302,7 @@ bool UedsConnector::SetPoseTrajectory(const std::vector<PoseSample>& samples) {
 
 /* getLidarData() //{ */
 
-std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::GetLidarData(int sensorId) {
+std::tuple<bool, std::vector<LidarData>, Coordinates, double> RobotClient::GetLidarData(int sensorId) {
 
   /* std::cout << "GetLidarData()" << std::endl; */
   Serializable::Drone::GetLidarData::Request request{};
@@ -339,7 +339,7 @@ std::tuple<bool, std::vector<LidarData>, Coordinates, double> UedsConnector::Get
   return std::make_tuple(success, lidarData, start, stamp);
 }
 
-std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData(int sensorId)
+std::tuple<bool, double> flightforge::RobotClient::GetRangefinderData(int sensorId)
 {
   Serializable::Drone::GetRangefinderData::Request request{};
   request.sensor_id_ = sensorId;
@@ -353,7 +353,7 @@ std::tuple<bool, double> ueds_connector::UedsConnector::GetRangefinderData(int s
 
 /* getLidarSegData() //{ */
 
-std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::GetLidarSegData(int sensorId) {
+std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> RobotClient::GetLidarSegData(int sensorId) {
   Serializable::Drone::GetLidarSegData::Request request{};
   request.sensor_id_ = sensorId;
 
@@ -391,7 +391,7 @@ std::tuple<bool, std::vector<LidarSegData>, Coordinates, double> UedsConnector::
 
 /* getLidarIntData() //{ */
 
-std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::GetLidarIntData(int sensorId) {
+std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> RobotClient::GetLidarIntData(int sensorId) {
 
   /* std::cout << "GetLidarIntData()" << std::endl; */
 
@@ -431,7 +431,7 @@ std::tuple<bool, std::vector<LidarIntData>, Coordinates, double> UedsConnector::
 
 /* getLidarConfig() //{ */
 
-std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig(int sensorId) {
+std::pair<bool, LidarConfig> RobotClient::GetLidarConfig(int sensorId) {
 
   Serializable::Drone::GetLidarConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -471,7 +471,7 @@ std::pair<bool, LidarConfig> UedsConnector::GetLidarConfig(int sensorId) {
 
 /* setLidarConfig() //{ */
 
-bool UedsConnector::SetLidarConfig(const LidarConfig& config, int sensorId) {
+bool RobotClient::SetLidarConfig(const LidarConfig& config, int sensorId) {
 
   Serializable::Drone::SetLidarConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -515,7 +515,7 @@ bool UedsConnector::SetLidarConfig(const LidarConfig& config, int sensorId) {
 
 /* getRgbCameraConfig() //{ */
 
-std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId) {
+std::pair<bool, RgbCameraConfig> RobotClient::GetRgbCameraConfig(int sensorId) {
 
   Serializable::Drone::GetRgbCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -596,7 +596,7 @@ std::pair<bool, RgbCameraConfig> UedsConnector::GetRgbCameraConfig(int sensorId)
 
 /* getStereoCameraConfig() //{ */
 
-std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStereoCameraConfig(int sensorId) {
+std::pair<bool, Serializable::Drone::StereoCameraConfig> RobotClient::GetStereoCameraConfig(int sensorId) {
 
   Serializable::Drone::GetStereoCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -635,7 +635,7 @@ std::pair<bool, Serializable::Drone::StereoCameraConfig> UedsConnector::GetStere
 
 /* setRgbCameraConfig() //{ */
 
-bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensorId) {
+bool RobotClient::SetRgbCameraConfig(const RgbCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetRgbCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -717,7 +717,7 @@ bool UedsConnector::SetRgbCameraConfig(const RgbCameraConfig& config, int sensor
 
 /* setStereoCameraConfig() //{ */
 
-bool UedsConnector::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config, int sensorId) {
+bool RobotClient::SetStereoCameraConfig(const Serializable::Drone::StereoCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetStereoCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -756,7 +756,7 @@ bool UedsConnector::SetStereoCameraConfig(const Serializable::Drone::StereoCamer
 
 /* getMoveLineVisible() //{ */
 
-std::pair<bool, bool> UedsConnector::GetMoveLineVisible() {
+std::pair<bool, bool> RobotClient::GetMoveLineVisible() {
 
   Serializable::Drone::GetMoveLineVisible::Request request{};
 
@@ -771,7 +771,7 @@ std::pair<bool, bool> UedsConnector::GetMoveLineVisible() {
 
 /* setMoveLineVisible() //{ */
 
-bool UedsConnector::SetMoveLineVisible(bool visible) {
+bool RobotClient::SetMoveLineVisible(bool visible) {
 
   Serializable::Drone::SetMoveLineVisible::Request request{};
   request.visible = visible;
@@ -787,7 +787,7 @@ bool UedsConnector::SetMoveLineVisible(bool visible) {
 
 /* GetEventCameraData() //{ */
 
-std::pair<bool, CameraEvents> UedsConnector::GetEventCameraData(int sensorId) {
+std::pair<bool, CameraEvents> RobotClient::GetEventCameraData(int sensorId) {
 
   Serializable::Drone::GetEventCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -815,7 +815,7 @@ std::pair<bool, CameraEvents> UedsConnector::GetEventCameraData(int sensorId) {
 
 /* Get/SetEventCameraConfig() //{ */
 
-std::pair<bool, EventCameraConfig> UedsConnector::GetEventCameraConfig(int sensorId) {
+std::pair<bool, EventCameraConfig> RobotClient::GetEventCameraConfig(int sensorId) {
 
   Serializable::Drone::GetEventCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -853,7 +853,7 @@ std::pair<bool, EventCameraConfig> UedsConnector::GetEventCameraConfig(int senso
 
 /* SetEventCameraConfig() //{ */
 
-bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int sensorId) {
+bool RobotClient::SetEventCameraConfig(const EventCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetEventCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -894,7 +894,7 @@ bool UedsConnector::SetEventCameraConfig(const EventCameraConfig& config, int se
 
 /* GetFisheyeCameraData() //{ */
 
-std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::GetFisheyeCameraData(int sensorId) {
+std::tuple<bool, std::vector<unsigned char>, double, uint32_t> RobotClient::GetFisheyeCameraData(int sensorId) {
 
   Serializable::Drone::GetFisheyeCameraData::Request request{};
   request.sensor_id_ = sensorId;
@@ -911,7 +911,7 @@ std::tuple<bool, std::vector<unsigned char>, double, uint32_t> UedsConnector::Ge
 
 /* Get/SetFisheyeCameraConfig() //{ */
 
-std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int sensorId) {
+std::pair<bool, FisheyeCameraConfig> RobotClient::GetFisheyeCameraConfig(int sensorId) {
 
   Serializable::Drone::GetFisheyeCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -949,7 +949,7 @@ std::pair<bool, FisheyeCameraConfig> UedsConnector::GetFisheyeCameraConfig(int s
 
 /* SetFisheyeCameraConfig() //{ */
 
-bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId) {
+bool RobotClient::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, int sensorId) {
 
   Serializable::Drone::SetFisheyeCameraConfig::Request request{};
   request.sensor_id_ = sensorId;
@@ -990,7 +990,7 @@ bool UedsConnector::SetFisheyeCameraConfig(const FisheyeCameraConfig& config, in
 
 /* sensor management //{ */
 
-std::pair<bool, int> UedsConnector::AddSensor(int sensorType) {
+std::pair<bool, int> RobotClient::AddSensor(int sensorType) {
 
   Serializable::Drone::AddSensor::Request request{};
   request.sensor_type_ = sensorType;
@@ -1004,7 +1004,7 @@ std::pair<bool, int> UedsConnector::AddSensor(int sensorType) {
 
 /* RemoveSensor() //{ */
 
-bool UedsConnector::RemoveSensor(int sensorId) {
+bool RobotClient::RemoveSensor(int sensorId) {
 
   Serializable::Drone::RemoveSensor::Request request{};
   request.sensor_id_ = sensorId;
@@ -1019,7 +1019,7 @@ bool UedsConnector::RemoveSensor(int sensorId) {
 
 /* ListSensors() //{ */
 
-std::pair<bool, std::vector<SensorInfo>> UedsConnector::ListSensors() {
+std::pair<bool, std::vector<SensorInfo>> RobotClient::ListSensors() {
 
   Serializable::Drone::ListSensors::Request request{};
 
@@ -1044,7 +1044,7 @@ std::pair<bool, std::vector<SensorInfo>> UedsConnector::ListSensors() {
 
 /* device management //{ */
 
-std::pair<bool, std::vector<SensorInfo>> UedsConnector::AddDevice(const std::string& deviceName, const Coordinates& offset, const Rotation& rotation,
+std::pair<bool, std::vector<SensorInfo>> RobotClient::AddDevice(const std::string& deviceName, const Coordinates& offset, const Rotation& rotation,
                                                                   bool showMesh) {
 
   Serializable::Drone::AddDevice::Request request{};
@@ -1074,7 +1074,7 @@ std::pair<bool, std::vector<SensorInfo>> UedsConnector::AddDevice(const std::str
 
 /* ListDevices() //{ */
 
-std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
+std::pair<bool, std::vector<DeviceInfo>> RobotClient::ListDevices() {
 
   Serializable::Drone::ListDevices::Request request{};
 
@@ -1099,7 +1099,7 @@ std::pair<bool, std::vector<DeviceInfo>> UedsConnector::ListDevices() {
 
 /* getInstanceSegData() //{ */
 
-bool UedsConnector::GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId) {
+bool RobotClient::GetInstanceSegData(std::vector<unsigned char>& image, double& stamp, int sensorId) {
 
   Serializable::Drone::GetInstanceSegData::Request request{};
   request.sensor_id_ = sensorId;
@@ -1120,7 +1120,7 @@ bool UedsConnector::GetInstanceSegData(std::vector<unsigned char>& image, double
 
 /* getInstanceSegMap() //{ */
 
-std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConnector::GetInstanceSegMap(int sensorId) {
+std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> RobotClient::GetInstanceSegMap(int sensorId) {
 
   Serializable::Drone::GetInstanceSegMap::Request request{};
   request.sensor_id_ = sensorId;
@@ -1136,7 +1136,7 @@ std::pair<bool, std::vector<Serializable::Drone::InstanceSegMapEntry>> UedsConne
 
 /* getLidarScan() //{ */
 
-std::pair<bool, ueds_connector::LidarScan> UedsConnector::GetLidarScan(bool withLabels, bool withIntensity, int sensorId) {
+std::pair<bool, flightforge::LidarScan> RobotClient::GetLidarScan(bool withLabels, bool withIntensity, int sensorId) {
 
   Serializable::Drone::GetLidarScan::Request request{};
   request.sensor_id_      = sensorId;
@@ -1147,7 +1147,7 @@ std::pair<bool, ueds_connector::LidarScan> UedsConnector::GetLidarScan(bool with
   const auto                                  status  = Request(request, response);
   const auto                                  success = status && response.status;
 
-  ueds_connector::LidarScan scan;
+  flightforge::LidarScan scan;
   if (success) {
     scan.start = Coordinates{response.startX, response.startY, response.startZ};
     scan.stamp = response.stamp_;
@@ -1170,7 +1170,7 @@ std::pair<bool, ueds_connector::LidarScan> UedsConnector::GetLidarScan(bool with
 
 /* getCameraInfo() //{ */
 
-std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> UedsConnector::GetCameraInfo(int sensorId) {
+std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> RobotClient::GetCameraInfo(int sensorId) {
 
   Serializable::Drone::GetCameraInfo::Request request{};
   request.sensor_id_ = sensorId;
@@ -1186,7 +1186,7 @@ std::pair<bool, std::vector<Serializable::Drone::CameraInfo>> UedsConnector::Get
 
 /* getDepthCameraData() //{ */
 
-bool UedsConnector::GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId) {
+bool RobotClient::GetDepthCameraData(std::vector<uint16_t>& image, int& width, int& height, double& stamp, int sensorId) {
 
   Serializable::Drone::GetDepthCameraData::Request request{};
   request.sensor_id_ = sensorId;

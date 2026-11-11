@@ -13,7 +13,7 @@ centimeters. The conversion flips Y and the yaw sense and scales to cm.
     from flightforge import Simulator, MujocoBridge
 
     sim = Simulator()
-    drone = sim.spawn_drone((0, 0, 200), "x500")
+    drone = sim.spawn_robot((0, 0, 200), "x500")
 
     bridge = MujocoBridge(drone, "quadrotor.xml", body="drone",
                           world_origin_uu=sim.world_origin())
@@ -68,7 +68,7 @@ class MujocoBridge:
 
     def __init__(self, drone, model, body=None, world_origin_uu=(0.0, 0.0, 0.0), substeps=1):
         """
-        drone: a connected :class:`flightforge.Drone`
+        drone: a connected :class:`flightforge.Robot`
         model: MJCF path or an existing ``mujoco.MjModel``
         body:  name of the body to mirror (default: the model's first free-joint body)
         world_origin_uu: Unreal-units offset added to every pushed position

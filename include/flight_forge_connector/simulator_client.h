@@ -16,7 +16,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 0;
+  static constexpr uint16_t kApiMinor = 1;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);
@@ -101,6 +101,9 @@ public:
 
   Expected<std::vector<float>> GetDistanceBatch(const std::vector<std::array<float, 3>>& points, double max_radius = 5.0, double tolerance = 0.001,
                                                 bool terrain_only = false);
+
+  // m, of the first surface below each point, NaN where there is none; a NaN z traces from the top of the world
+  Expected<std::vector<double>> GetSurfaceHeight(const std::vector<Vec3>& points, bool ignore_robots = true);
 
   /* //} */
 

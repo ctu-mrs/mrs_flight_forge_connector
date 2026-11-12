@@ -50,7 +50,8 @@ public:
   Status SetTrajectory(const std::vector<TrajectorySample>& samples);
 
   Expected<wire::GetDescriptionResponseT> GetDescription();
-  Expected<CollisionState>                GetCollision();
+  // clear makes the next read report only collisions after this one
+  Expected<CollisionState>                GetCollision(bool clear = false);
 
   Expected<bool> GetMoveLineVisible();
   Status         SetMoveLineVisible(bool visible);

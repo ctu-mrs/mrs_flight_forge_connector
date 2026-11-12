@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <set>
@@ -110,7 +111,7 @@ FF_TEST(ApiVersion)
 {
   const auto info = Sim->GetInfo();
   FF_REQUIRE(info.ok);
-  FF_CHECK(info->major == 1 && info->minor == 0);
+  FF_CHECK(info->major == SimulatorClient::kApiMajor && info->minor == SimulatorClient::kApiMinor);
 }
 
 // the simulator speaks exactly the schema this client was generated from
@@ -1166,6 +1167,69 @@ FF_TEST(SpawnedAtFloorLevelRestsOnIt)
   }
 
   Sim->RemoveRobot(*id);
+}
+
+FF_TEST(ClearedCollisionReportsOnlyLaterContacts)
+{
+  const auto id = Sim->SpawnRobot("x500", Pose::At(0.0, 3.0, 0.0), "touch");
+  FF_REQUIRE(id.ok);
+  RobotClient robot(NewConnection(), *id);
+
+  const auto state = robot.GetState();
+  FF_REQUIRE(state.ok && state->state.base);
+  const double rest = state->state.base->position.z;
+
+  FF_REQUIRE(robot.SetPose(Pose::At(0.0, 3.0, rest - 0.2), true).ok);
+  const auto first = robot.GetCollision(true);
+  FF_CHECK(first.ok && first->collided);
+  const auto after = robot.GetCollision();
+  FF_CHECK(after.ok && !after->collided);
+
+  FF_REQUIRE(robot.SetPose(Pose::At(0.0, 3.0, rest - 0.2), true).ok);
+  const auto again = robot.GetCollision();
+  FF_CHECK(again.ok && again->collided);
+
+  Sim->RemoveRobot(*id);
+}
+
+FF_TEST(SurfaceHeightFindsTheGroundBelowEachPoint)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+
+  Sim->RemoveAllSpawnedObjects();
+  FF_REQUIRE(Sim->SpawnObjectsFromYaml("objects:\n"
+                                       "  - asset: /Engine/BasicShapes/Cube\n"
+                                       "    position: [6.0, -3.0, 0.5]\n"
+                                       "    scale: [2.0, 2.0, 1.0]\n"
+                                       "  - asset: /Engine/BasicShapes/Cube\n"
+                                       "    position: [9.0, -3.0, 2.0]\n"
+                                       "    scale: [2.0, 2.0, 0.2]\n")
+                 .ok);
+
+  const auto state = Drone->GetState();
+  FF_REQUIRE(state.ok && state->state.base);
+  const Vec3 drone = state->state.base->position;
+
+  const auto heights = Sim->GetSurfaceHeight({Vec3{2.0, -3.0, 1.5}, Vec3{6.0, -3.0, 3.0}, Vec3{9.0, -3.0, 1.5}, Vec3{9.0, -3.0, 3.0},
+                                              Vec3{1.0e5, 1.0e5, nan}, Vec3{drone.x, drone.y, drone.z + 3.0}});
+  FF_REQUIRE(heights.ok && heights->size() == 6);
+  std::cout << "    floor " << (*heights)[0] << ", box top " << (*heights)[1] << ", under the slab " << (*heights)[2] << ", on the slab " << (*heights)[3]
+            << ", off the world " << (*heights)[4] << ", under the robot " << (*heights)[5] << std::endl;
+  FF_CHECK(std::fabs((*heights)[0]) < 0.01);
+  FF_CHECK_NEAR((*heights)[1], 1.0, 0.01);
+  FF_CHECK(std::fabs((*heights)[2]) < 0.01);
+  FF_CHECK_NEAR((*heights)[3], 2.1, 0.01);
+  FF_CHECK(std::isnan((*heights)[4]));
+  FF_CHECK(std::fabs((*heights)[5]) < 0.01);
+
+  const auto with_robots = Sim->GetSurfaceHeight({Vec3{drone.x, drone.y, drone.z + 3.0}}, false);
+  FF_REQUIRE(with_robots.ok && with_robots->size() == 1);
+  FF_CHECK((*with_robots)[0] > drone.z && (*with_robots)[0] < drone.z + 0.5);
+
+  const auto none = Sim->GetSurfaceHeight({});
+  FF_CHECK(none.ok && none->empty());
+
+  Sim->RemoveAllSpawnedObjects();
 }
 
 FF_TEST(RobotDescribesItsPropellers)

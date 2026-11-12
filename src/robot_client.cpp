@@ -110,9 +110,9 @@ Expected<wire::GetDescriptionResponseT> RobotClient::GetDescription() {
   return out;
 }
 
-Expected<CollisionState> RobotClient::GetCollision() {
+Expected<CollisionState> RobotClient::GetCollision(const bool clear) {
   FBB        b;
-  const auto reply = connection_->Call(b, wire::CreateGetCollisionRequest(b), robot_id_);
+  const auto reply = connection_->Call(b, wire::CreateGetCollisionRequest(b, clear), robot_id_);
   Status     status;
   const auto body = Body<wire::GetCollisionResponse>(reply, status);
   if (!body) {

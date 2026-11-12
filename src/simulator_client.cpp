@@ -35,7 +35,7 @@ Expected<ApiInfo> SimulatorClient::GetInfo() {
   info.major = body->api_major();
   info.minor = body->api_minor();
   if (body->schema()) {
-    info.schema.assign(body->schema()->begin(), body->schema()->end());
+    CopyScalars(info.schema, body->schema());
   }
   return info;
 }
@@ -202,7 +202,7 @@ Expected<std::vector<int>> SimulatorClient::SpawnObjectsFromYaml(const std::stri
   }
   std::vector<int> ids;
   if (body->object_ids()) {
-    ids.assign(body->object_ids()->begin(), body->object_ids()->end());
+    CopyScalars(ids, body->object_ids());
   }
   return ids;
 }
@@ -344,7 +344,7 @@ Expected<WorldMesh> SimulatorClient::GetWorldMesh(const Vec3& center, const Vec3
     std::memcpy(mesh.vertices.data(), body->vertices()->Data(), mesh.vertices.size() * sizeof(wire::Vec3f));
   }
   if (body->indices()) {
-    mesh.indices.assign(body->indices()->begin(), body->indices()->end());
+    CopyScalars(mesh.indices, body->indices());
   }
   return mesh;
 }
@@ -366,7 +366,7 @@ Expected<std::vector<float>> SimulatorClient::GetDistanceBatch(const std::vector
   }
   std::vector<float> distances;
   if (body->distances()) {
-    distances.assign(body->distances()->begin(), body->distances()->end());
+    CopyScalars(distances, body->distances());
   }
   return distances;
 }

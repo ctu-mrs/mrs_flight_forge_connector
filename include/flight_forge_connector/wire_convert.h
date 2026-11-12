@@ -1,9 +1,22 @@
 #pragma once
 
+#include <cstring>
+#include <vector>
+
 #include <flight_forge_connector/data_types.h>
 
 namespace flightforge
 {
+
+// one memcpy; iterating a FlatBuffers vector element by element costs ~10 ms per megabyte unoptimised
+template <typename T, typename U>
+void CopyScalars(std::vector<T>& out, const flatbuffers::Vector<U>* in) {
+  static_assert(sizeof(T) == sizeof(U) && flatbuffers::is_scalar<U>::value && FLATBUFFERS_LITTLEENDIAN);
+  out.resize(in ? in->size() : 0);
+  if (!out.empty()) {
+    std::memcpy(out.data(), in->Data(), out.size() * sizeof(T));
+  }
+}
 
 inline wire::Vec3 ToWire(const Vec3& v) {
   return wire::Vec3(v.x, v.y, v.z);
@@ -72,9 +85,7 @@ inline Image ReadImage(const wire::Image* image, const double stamp) {
     out.height      = image->height();
     out.format      = image->format();
     out.compression = image->compression();
-    if (image->data()) {
-      out.data.assign(image->data()->begin(), image->data()->end());
-    }
+    CopyScalars(out.data, image->data());
   }
   return out;
 }

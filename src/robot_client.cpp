@@ -372,10 +372,10 @@ Expected<CameraEvents> RobotClient::GetEventCameraData(const int sensor_id) {
   events.width      = body->width();
   events.height     = body->height();
   if (body->xyp()) {
-    events.xyp.assign(body->xyp()->begin(), body->xyp()->end());
+    CopyScalars(events.xyp, body->xyp());
   }
   if (body->t_us()) {
-    events.t_us.assign(body->t_us()->begin(), body->t_us()->end());
+    CopyScalars(events.t_us, body->t_us());
   }
   return events;
 }
@@ -403,13 +403,13 @@ Expected<LidarScan> RobotClient::GetLidarScan(const bool with_intensity, const b
     std::memcpy(scan.points.data(), body->points()->Data(), scan.points.size() * sizeof(wire::Vec3f));
   }
   if (body->intensity()) {
-    scan.intensity.assign(body->intensity()->begin(), body->intensity()->end());
+    CopyScalars(scan.intensity, body->intensity());
   }
   if (body->class_id()) {
-    scan.class_id.assign(body->class_id()->begin(), body->class_id()->end());
+    CopyScalars(scan.class_id, body->class_id());
   }
   if (body->instance_id()) {
-    scan.instance_id.assign(body->instance_id()->begin(), body->instance_id()->end());
+    CopyScalars(scan.instance_id, body->instance_id());
   }
   return scan;
 }

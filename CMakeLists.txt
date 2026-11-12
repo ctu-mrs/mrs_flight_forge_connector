@@ -8,6 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(LIBRARY_NAME flight_forge_connector)
 project(${LIBRARY_NAME} VERSION 1.0)
 
+# an unoptimised client spends longer copying a raw frame than the simulator takes to render it
+if (PROJECT_IS_TOP_LEVEL AND NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 find_package(Threads REQUIRED)
 
 # Add the fpng library from gitman

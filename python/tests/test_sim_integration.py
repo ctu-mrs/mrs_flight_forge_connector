@@ -824,6 +824,79 @@ def test_event_camera_in_lockstep(sim, robot):
 
 # //}
 
+# sky //{
+
+
+def sky_missing(error):
+    """FF_EXPECT_SKY=1 turns "this world has no sky" into a failure, for runs on a world that has one."""
+    return "has no sky system" in str(error) and os.environ.get("FF_EXPECT_SKY") is None
+
+
+@pytest.fixture()
+def fixed_exposure_camera(robot):
+    """Manual exposure at EV100 0, so eye adaptation cannot undo what the sky did."""
+    camera = robot.add_sensor(SensorType.RGB_CAMERA)
+    robot.set_rgb_camera_config(
+        sensor_id=camera,
+        encoding={"compression": Compression.NONE},
+        exposure={"manual": True, "shutter_time": 1.0, "iso": 1600.0, "ev_compensation": 0.0},
+    )
+    yield camera
+    robot.remove_sensor(camera)
+
+
+def settled_frame(robot, camera):
+    time.sleep(3.0)
+    robot.rgb(camera)
+    return robot.rgb(camera)[0].astype(np.float64)
+
+
+def test_noon_is_brighter_than_midnight(sim, robot, fixed_exposure_camera):
+    try:
+        sim.set_daytime(12, 0)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            pytest.skip(str(error))
+        raise
+    noon = settled_frame(robot, fixed_exposure_camera).mean()
+
+    sim.set_daytime(0, 0)
+    midnight = settled_frame(robot, fixed_exposure_camera).mean()
+    sim.set_daytime(12, 0)
+
+    print(f"mean brightness noon {noon:.1f}, midnight {midnight:.1f}")
+    assert noon >= 2.0 * midnight + 10.0
+
+
+def test_fog_and_rain_change_the_image(sim, robot, fixed_exposure_camera):
+    try:
+        sim.set_daytime(12, 0)
+    except FlightForgeError:
+        pass
+
+    try:
+        sim.set_weather("SUNNY")
+    except FlightForgeError as error:
+        assert sky_missing(error), error
+        with pytest.raises(FlightForgeError, match="has no sky system"):
+            sim.set_weather("FOGGY")
+        return
+
+    # a weather left by an earlier test takes longer to clear than one change takes to show
+    settled_frame(robot, fixed_exposure_camera)
+    clear = settled_frame(robot, fixed_exposure_camera)
+    drift = abs(settled_frame(robot, fixed_exposure_camera).mean() - clear.mean())
+
+    for weather in ("FOGGY", "RAIN"):
+        sim.set_weather(weather)
+        frame = settled_frame(robot, fixed_exposure_camera)
+        print(f"{weather}: mean {frame.mean():.1f} against {clear.mean():.1f}, clear drifts {drift:.2f}")
+        assert abs(frame.mean() - clear.mean()) >= max(10.0, 3.0 * drift)
+    sim.set_weather("SUNNY")
+
+
+# //}
+
 # connections //{
 
 

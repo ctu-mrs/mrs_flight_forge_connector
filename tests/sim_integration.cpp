@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -347,7 +348,22 @@ FF_TEST(LibraryPlacesAtItsScaleOnItsBase)
   Sim->RemoveAllSpawnedObjects();
 
   const auto missing = Sim->SpawnObjectsFromYaml("objects:\n  - asset: lib:test/missing\n");
-  FF_CHECK(!missing.ok || missing->empty());
+  FF_CHECK(!missing.ok && missing.error.find("'lib:test/missing'") != std::string::npos);
+}
+
+// an asset that did not resolve used to answer ok with no ids
+FF_TEST(UnresolvableAssetFailsAndSpawnsNothing)
+{
+  Sim->RemoveAllSpawnedObjects();
+
+  const auto ids = Sim->SpawnObjectsFromYaml("objects:\n"
+                                             "  - asset: /Engine/BasicShapes/Cube\n    position: [5.0, 0.0, 1.0]\n"
+                                             "  - asset: NoSuchAssetAnywhere\n    position: [6.0, 0.0, 1.0]\n");
+  FF_CHECK(!ids.ok && ids.error.find("objects[1] 'NoSuchAssetAnywhere'") != std::string::npos);
+
+  const auto left = Sim->ListSpawnedObjects();
+  FF_CHECK(left.ok && left->empty());
+  Sim->RemoveAllSpawnedObjects();
 }
 
 FF_TEST(SceneEditorRoundTrip)
@@ -671,6 +687,24 @@ FF_TEST(LidarDoesNotSeeItsOwnAirframe)
 
   Drone->RemoveSensor(*id);
   Sim->RemoveAllSpawnedObjects();
+  Drone->SetPose(kHome);
+}
+
+// mounted above the base and looking down through the airframe, it used to read the airframe
+FF_TEST(RangefinderDoesNotSeeItsOwnAirframe)
+{
+  FF_REQUIRE(Drone->SetPose(Pose::At(0.0, 0.0, 3.0)).ok);
+
+  const auto id = Drone->AddSensor(wire::SensorType::RANGEFINDER, Pose::At(0.0, 0.0, 0.3));
+  FF_REQUIRE(id.ok);
+
+  const auto reading = Drone->GetRangefinderData(*id);
+  FF_CHECK(reading.ok);
+  if (reading.ok) {
+    FF_CHECK_NEAR(reading->range, 3.3, 0.05);
+  }
+
+  Drone->RemoveSensor(*id);
   Drone->SetPose(kHome);
 }
 
@@ -1014,7 +1048,125 @@ FF_TEST(CaptureRateHoldsInLockstep)
 
 /* //} */
 
+/* stamps //{ */
+
+const std::vector<wire::SensorType> kStampedTypes = {
+    wire::SensorType::RGB_CAMERA,          wire::SensorType::STEREO_CAMERA,  wire::SensorType::DEPTH_CAMERA,
+    wire::SensorType::FISHEYE_CAMERA,      wire::SensorType::RGB_SEG_CAMERA, wire::SensorType::INSTANCE_SEG_CAMERA,
+    wire::SensorType::EVENT_CAMERA,        wire::SensorType::LIDAR,          wire::SensorType::RANGEFINDER,
+};
+
+std::optional<double> ReadStamp(const wire::SensorType type, const int id)
+{
+  const auto stamp = [](const auto& got) { return got.ok ? std::optional<double>(got->stamp) : std::nullopt; };
+
+  switch (type) {
+    case wire::SensorType::STEREO_CAMERA: return stamp(Drone->GetStereoCameraData(id));
+    case wire::SensorType::DEPTH_CAMERA: return stamp(Drone->GetDepthCameraData(id));
+    case wire::SensorType::FISHEYE_CAMERA: return stamp(Drone->GetFisheyeCameraData(id));
+    case wire::SensorType::RGB_SEG_CAMERA: return stamp(Drone->GetRgbSegCameraData(id));
+    case wire::SensorType::INSTANCE_SEG_CAMERA: return stamp(Drone->GetInstanceSegData(id));
+    case wire::SensorType::EVENT_CAMERA: return stamp(Drone->GetEventCameraData(id));
+    case wire::SensorType::LIDAR: return stamp(Drone->GetLidarScan(false, false, id));
+    case wire::SensorType::RANGEFINDER: return stamp(Drone->GetRangefinderData(id));
+    default: return stamp(Drone->GetRgbCameraData(id));
+  }
+}
+
+// one of each, each read once so the first captures are behind us
+std::vector<std::pair<wire::SensorType, int>> AddEverySensor()
+{
+  std::vector<std::pair<wire::SensorType, int>> sensors;
+  for (const wire::SensorType type : kStampedTypes) {
+    const auto id = Drone->AddSensor(type);
+    if (id.ok) {
+      sensors.emplace_back(type, *id);
+      ReadStamp(type, *id);
+    }
+  }
+  return sensors;
+}
+
+void RemoveSensors(const std::vector<std::pair<wire::SensorType, int>>& sensors)
+{
+  for (const auto& [type, id] : sensors) {
+    Drone->RemoveSensor(id);
+  }
+}
+
+// camera frames were once stamped with the simulator's wall clock
+FF_TEST(EverySensorStampsSimulatedTime)
+{
+  const auto sensors = AddEverySensor();
+  FF_CHECK(sensors.size() == kStampedTypes.size());
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+  for (const auto& [type, id] : sensors) {
+    const auto before = Sim->GetTime();
+    const auto stamp  = ReadStamp(type, id);
+    const auto after  = Sim->GetTime();
+    const bool inside = before.ok && after.ok && stamp && *stamp >= before->sim_time - 1.0 && *stamp <= after->sim_time;
+    if (!inside) {
+      std::cout << "    " << wire::EnumNameSensorType(type) << " stamp " << stamp.value_or(-1.0) << " not within 1 s behind sim time "
+                << (after.ok ? after->sim_time : -1.0) << std::endl;
+    }
+    FF_CHECK(inside);
+  }
+
+  RemoveSensors(sensors);
+}
+
+FF_TEST(LockstepReadsCarryTheStepTime)
+{
+  const auto sensors = AddEverySensor();
+  FF_CHECK(Sim->SetLockstep(true).ok);
+
+  for (int i = 0; i < 3; ++i) {
+    const auto step = Sim->Step(1);
+    FF_CHECK(step.ok);
+    for (const auto& [type, id] : sensors) {
+      const auto stamp = ReadStamp(type, id);
+      const bool exact = step.ok && stamp && *stamp == step->sim_time;
+      if (!exact) {
+        std::cout << "    step " << i << ": " << wire::EnumNameSensorType(type) << " stamp " << stamp.value_or(-1.0) << " after a step to "
+                  << (step.ok ? step->sim_time : -1.0) << std::endl;
+      }
+      FF_CHECK(exact);
+    }
+  }
+
+  Sim->SetLockstep(false);
+  RemoveSensors(sensors);
+}
+
+/* //} */
+
 /* robot ops //{ */
+
+// z = 0 is the floor and the base link sits above the landing gear; the robot used to start inside the floor
+FF_TEST(SpawnedAtFloorLevelRestsOnIt)
+{
+  const auto id = Sim->SpawnRobot("x500", Pose::At(0.0, 3.0, 0.0), "floor");
+  FF_REQUIRE(id.ok);
+  RobotClient robot(NewConnection(), *id);
+
+  const auto state = robot.GetState();
+  FF_CHECK(state.ok && state->state.base);
+  const double rest = state.ok && state->state.base ? state->state.base->position.z : -1.0;
+  FF_CHECK(rest > 0.0 && rest < 0.5);
+
+  const auto collision = robot.GetCollision();
+  FF_CHECK(collision.ok && !collision->collided);
+
+  // a sweep down from rest stops at once instead of starting inside the floor
+  const auto swept = robot.SetPose(Pose::At(0.0, 3.0, rest - 0.2), true);
+  FF_CHECK(swept.ok && swept->hit);
+  if (swept.ok) {
+    FF_CHECK_NEAR(swept->base.position.z, rest, 0.02);
+  }
+
+  Sim->RemoveRobot(*id);
+}
 
 FF_TEST(RobotDescribesItsPropellers)
 {
@@ -1284,6 +1436,45 @@ FF_TEST(ManyConnectionsOnOneRobot)
     thread.join();
   }
   FF_CHECK(failures == 0);
+}
+
+// a stereo read that timed out once left the simulator frozen; hold the game thread past the frame timeout, then everything must still work
+FF_TEST(CameraTimeoutLeavesTheSimulatorWorking)
+{
+  const auto id = Drone->AddSensor(wire::SensorType::STEREO_CAMERA);
+  FF_REQUIRE(id.ok);
+
+  std::vector<std::thread> holders;
+  for (int i = 0; i < 3; ++i) {
+    holders.emplace_back([] {
+      auto connection = NewConnection();
+      connection->SetReceiveTimeout(std::chrono::seconds(120));
+      SimulatorClient(connection).GetDistanceBatch(std::vector<std::array<float, 3>>(2000000, std::array<float, 3>{0.0f, 0.0f, 40.0f}), 5.0, 0.001);
+    });
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+  RobotClient reader(NewConnection(), Drone->Id());
+  const auto  starved = reader.GetStereoCameraData(*id);
+  for (auto& holder : holders) {
+    holder.join();
+  }
+  FF_CHECK(!starved.ok);
+
+  const auto before = Sim->GetTime();
+  const auto spawned = Sim->SpawnRobot("x500", Pose::At(4.0, 4.0, 2.0), "after_timeout");
+  FF_CHECK(spawned.ok);
+  if (spawned.ok) {
+    FF_CHECK(Sim->RemoveRobot(*spawned).ok);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  const auto after = Sim->GetTime();
+  FF_CHECK(before.ok && after.ok && after->sim_time > before->sim_time);
+
+  const auto frame = Drone->GetStereoCameraData(*id);
+  FF_CHECK(frame.ok);
+
+  Drone->RemoveSensor(*id);
 }
 
 FF_TEST(RemoveRobotWhileItsSensorsAreRead)

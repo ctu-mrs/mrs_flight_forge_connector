@@ -227,6 +227,22 @@ def test_old_scene_frames_are_refused_by_name(sim):
         sim.spawn_objects("frame: world\nobjects:\n  - asset: /Engine/BasicShapes/Cube\n")
 
 
+def test_an_unresolvable_asset_fails_the_request_and_spawns_nothing(sim):
+    sim.clear_objects()
+    yaml = (
+        "objects:\n"
+        "  - asset: /Engine/BasicShapes/Cube\n    position: [5.0, 0.0, 1.0]\n"
+        "  - asset: NoSuchAssetAnywhere\n    position: [6.0, 0.0, 1.0]\n"
+        "  - asset: lib:nowhere/nothing\n    position: [7.0, 0.0, 1.0]\n"
+    )
+    try:
+        with pytest.raises(FlightForgeError, match=r"objects\[1\] 'NoSuchAssetAnywhere', objects\[2\] 'lib:nowhere/nothing'"):
+            sim.spawn_objects(yaml)
+        assert sim.objects() == {}
+    finally:
+        sim.clear_objects()
+
+
 def test_asset_catalog(sim):
     names, truncated = sim.assets(name_filter="cube")
     assert isinstance(names, list) and all(isinstance(n, str) for n in names)
@@ -301,6 +317,17 @@ def test_depth_capture(robot):
     assert depth.dtype == np.uint16 and depth.ndim == 2 and stamp > 0.0
     # over open ground something must be in range: not all zeros, not all clamp
     assert (depth > 0).any() and (depth < 65535).any()
+
+
+def test_rangefinder_does_not_see_its_own_robot(sim):
+    """Mounted above the base and looking down through the airframe, it reads the floor."""
+    robot = sim.spawn_robot((0.0, 0.0, 3.0))
+    try:
+        sensor_id = robot.add_sensor(SensorType.RANGEFINDER, pose=Pose.at(0.0, 0.0, 0.3))
+        distance, _ = robot.rangefinder(sensor_id)
+        assert distance == pytest.approx(3.3, abs=0.05)
+    finally:
+        sim.remove_robot(robot)
 
 
 def test_instance_segmentation_smoke(sim, robot):
@@ -539,6 +566,23 @@ def test_robot_state_round_trips(sim, robot):
     assert robot.collision().collided in (True, False)
 
 
+def test_a_robot_spawned_at_floor_level_rests_on_it(sim):
+    """z = 0 is the floor and the base link sits above the landing gear: the robot starts resting, not inside the floor,
+    so a sweep down from there stops at once and reports the collision."""
+    robot = sim.spawn_robot((0.0, 0.0, 0.0))
+    try:
+        state, _ = robot.get_state()
+        rest = state.base.position[2]
+        assert 0.0 < rest < 0.5
+        assert not robot.collision().collided
+
+        result = robot.set_state(Pose.at(0.0, 0.0, rest - 0.2), collide=True)
+        assert result.hit and result.base.position[2] == pytest.approx(rest, abs=0.02)
+        assert robot.collision().collided
+    finally:
+        sim.remove_robot(robot)
+
+
 def test_robot_describes_its_propellers(robot):
     description = robot.description()
     assert description.links[0].name == "base_link" and description.links[0].parent == ""
@@ -679,6 +723,51 @@ def test_conventions(sim, robot):
 # //}
 
 # time //{
+
+
+STAMP_READERS = {
+    "rgb": (SensorType.RGB_CAMERA, lambda robot, i: robot.rgb(i)[1]),
+    "stereo": (SensorType.STEREO_CAMERA, lambda robot, i: robot.stereo(i)[2]),
+    "depth": (SensorType.DEPTH_CAMERA, lambda robot, i: robot.depth(i)[1]),
+    "fisheye": (SensorType.FISHEYE_CAMERA, lambda robot, i: robot.fisheye(i)[1]),
+    "instance": (SensorType.INSTANCE_SEG_CAMERA, lambda robot, i: robot.instance_segmentation(i)[1]),
+    "segmentation": (SensorType.RGB_SEG_CAMERA, lambda robot, i: robot.segmentation(i)[1]),
+    "events": (SensorType.EVENT_CAMERA, lambda robot, i: robot.event_batch(i).stamp),
+    "lidar": (SensorType.LIDAR, lambda robot, i: robot.lidar_scan(sensor_id=i).stamp),
+    "rangefinder": (SensorType.RANGEFINDER, lambda robot, i: robot.rangefinder(i)[1]),
+}
+
+
+@pytest.fixture()
+def every_sensor(robot):
+    """{name: (sensor id, reader)} for one sensor of each type, each read once."""
+    sensors = {name: (robot.add_sensor(sensor_type), read) for name, (sensor_type, read) in STAMP_READERS.items()}
+    for sensor_id, read in sensors.values():
+        read(robot, sensor_id)
+    yield sensors
+    for sensor_id, _ in sensors.values():
+        robot.remove_sensor(sensor_id)
+
+
+def test_every_sensor_stamps_simulated_time(sim, robot, every_sensor):
+    """A stamp is the simulated time of the capture: never ahead of get_time().sim_time, at most a few frames behind."""
+    time.sleep(0.5)
+    for name, (sensor_id, read) in every_sensor.items():
+        before = sim.time().sim_time
+        stamp = read(robot, sensor_id)
+        after = sim.time().sim_time
+        assert before - 1.0 <= stamp <= after, f"{name}: stamp {stamp} outside [{before - 1.0}, {after}]"
+
+
+def test_lockstep_reads_carry_the_step_time(sim, robot, every_sensor):
+    sim.set_lockstep(True)
+    try:
+        for _ in range(3):
+            stepped, _ = sim.step(1)
+            for name, (sensor_id, read) in every_sensor.items():
+                assert read(robot, sensor_id) == stepped, name
+    finally:
+        sim.set_lockstep(False)
 
 
 def test_time_dilation_changes_how_fast_the_world_runs(sim):

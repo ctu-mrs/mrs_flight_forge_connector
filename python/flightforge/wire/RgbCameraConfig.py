@@ -187,7 +187,7 @@ class RgbCameraConfig(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(40))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return 30.0
 
 def RgbCameraConfigStart(builder):
     builder.StartObject(19)
@@ -304,7 +304,7 @@ def AddEncoding(builder, encoding):
     RgbCameraConfigAddEncoding(builder, encoding)
 
 def RgbCameraConfigAddCaptureRate(builder, captureRate):
-    builder.PrependFloat64Slot(18, captureRate, 0.0)
+    builder.PrependFloat64Slot(18, captureRate, 30.0)
 
 def AddCaptureRate(builder, captureRate):
     RgbCameraConfigAddCaptureRate(builder, captureRate)
@@ -351,7 +351,7 @@ class RgbCameraConfigT(object):
         noise = None,
         rollingShutter = None,
         encoding = None,
-        captureRate = 0.0,
+        captureRate = 30.0,
     ):
         self.showDebugCamera = showDebugCamera  # type: bool
         self.mount = mount  # type: Optional[flightforge.wire.Pose.PoseT]

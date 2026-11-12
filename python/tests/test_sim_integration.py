@@ -55,7 +55,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 2)
+    assert sim.api_version == (1, 3)
 
 
 def test_schema_matches_this_build(sim):
@@ -797,7 +797,22 @@ def test_every_sensor_stamps_simulated_time(sim, robot, every_sensor):
         assert before - 1.0 <= stamp <= after, f"{name}: stamp {stamp} outside [{before - 1.0}, {after}]"
 
 
+EVERY_STEP = {
+    "rgb": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "depth": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "instance": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "segmentation": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "stereo": lambda robot, i: robot.set_stereo_camera_config(sensor_id=i, capture_rate=0.0),
+    "fisheye": lambda robot, i: robot.set_fisheye_camera_config(sensor_id=i, capture_rate=0.0),
+    "lidar": lambda robot, i: robot.set_lidar_config(sensor_id=i, frequency=0.0),
+}
+
+
 def test_lockstep_reads_carry_the_step_time(sim, robot, every_sensor):
+    """With cameras capturing every tick and the lidar scanning on every read, each read belongs to the step before it."""
+    for name, (sensor_id, _) in every_sensor.items():
+        if name in EVERY_STEP:
+            EVERY_STEP[name](robot, sensor_id)
     sim.set_lockstep(True)
     try:
         for _ in range(3):
@@ -806,6 +821,37 @@ def test_lockstep_reads_carry_the_step_time(sim, robot, every_sensor):
                 assert read(robot, sensor_id) == stepped, name
     finally:
         sim.set_lockstep(False)
+
+
+def test_a_camera_left_unconfigured_captures_at_30_hz(sim, robot):
+    """capture_rate defaults to 30 Hz of simulated time; an explicit 0 still captures every tick."""
+    sensor_id = robot.add_sensor(SensorType.RGB_CAMERA)
+    sim.set_fixed_timestep(0.01)
+    sim.set_lockstep(True)
+    try:
+        assert robot.rgb_camera_config(sensor_id).captureRate == 30.0
+        robot.set_rgb_camera_config(sensor_id=sensor_id, width=320, height=240)
+        assert robot.rgb_camera_config(sensor_id).captureRate == 30.0
+
+        def distinct_stamps(ticks):
+            stamps = set()
+            for _ in range(ticks):
+                sim.step(1)
+                stamps.add(robot.rgb(sensor_id, decode=False).stamp)
+            return len(stamps)
+
+        sim.step(5)
+        robot.rgb(sensor_id, decode=False)
+        assert 29 <= distinct_stamps(100) <= 31
+
+        robot.set_rgb_camera_config(sensor_id=sensor_id, capture_rate=0.0)
+        assert robot.rgb_camera_config(sensor_id).captureRate == 0.0
+        sim.step(5)
+        assert distinct_stamps(10) >= 9
+    finally:
+        sim.set_lockstep(False)
+        sim.set_fixed_timestep(0.0)
+        robot.remove_sensor(sensor_id)
 
 
 def test_time_dilation_changes_how_fast_the_world_runs(sim):

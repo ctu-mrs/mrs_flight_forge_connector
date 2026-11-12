@@ -1047,6 +1047,138 @@ FF_TEST(CaptureRateHoldsInLockstep)
   Drone->RemoveSensor(*a);
 }
 
+FF_TEST(UnsetCaptureRateMeansThirtyHz)
+{
+  const auto stereo  = Drone->AddSensor(wire::SensorType::STEREO_CAMERA);
+  const auto fisheye = Drone->AddSensor(wire::SensorType::FISHEYE_CAMERA);
+  FF_REQUIRE(stereo.ok && fisheye.ok);
+  const auto stereo_config  = Drone->GetStereoCameraConfig(*stereo);
+  const auto fisheye_config = Drone->GetFisheyeCameraConfig(*fisheye);
+  FF_CHECK(stereo_config.ok && stereo_config->capture_rate == 30.0);
+  FF_CHECK(fisheye_config.ok && fisheye_config->capture_rate == 30.0);
+  Drone->RemoveSensor(*stereo);
+  Drone->RemoveSensor(*fisheye);
+
+  FF_REQUIRE(Sim->SetFixedTimestep(0.01).ok);
+  FF_REQUIRE(Sim->SetLockstep(true).ok);
+
+  const auto a = Drone->AddSensor(wire::SensorType::RGB_CAMERA);
+  FF_REQUIRE(a.ok);
+  auto config = Drone->GetRgbCameraConfig(*a);
+  FF_REQUIRE(config.ok);
+  FF_CHECK(config->capture_rate == 30.0);
+  config->width  = 320;
+  config->height = 240;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(*config, *a).ok);
+
+  FF_REQUIRE(Sim->Step(5).ok);
+  Drone->GetRgbCameraData(*a);
+
+  const size_t stamps = StampsOverTicks(*a, 100);
+  std::cout << "    camera with no capture rate over 100 ticks of 10 ms: " << stamps << " distinct stamps" << std::endl;
+  FF_CHECK(stamps >= 29 && stamps <= 31);
+
+  config->capture_rate = 0.0;
+  FF_REQUIRE(Drone->SetRgbCameraConfig(*config, *a).ok);
+  const auto every = Drone->GetRgbCameraConfig(*a);
+  FF_CHECK(every.ok && every->capture_rate == 0.0);
+  Sim->Step(5);
+  const size_t every_tick = StampsOverTicks(*a, 10);
+  std::cout << "    explicit capture rate 0 over 10 ticks: " << every_tick << " distinct stamps" << std::endl;
+  FF_CHECK(every_tick >= 9);
+
+  Sim->SetLockstep(false);
+  Sim->SetFixedTimestep(0.0);
+  Drone->RemoveSensor(*a);
+}
+
+// distinct scan stamps and how many reads were fresh, i.e. stamped with their own tick; starts a period after the last scan
+std::pair<size_t, size_t> LidarStampsOverTicks(const int sensor, const int ticks, const int read_every)
+{
+  std::set<double> stamps;
+  size_t           fresh = 0;
+  if (!Sim->Step(10).ok) {
+    return {0, 0};
+  }
+  for (int i = 0; i < ticks; i++) {
+    const auto step = Sim->Step(1);
+    if (!step.ok) {
+      return {0, 0};
+    }
+    if (i % read_every) {
+      continue;
+    }
+    const auto scan = Drone->GetLidarScan(false, false, sensor);
+    if (scan.ok) {
+      stamps.insert(scan->stamp);
+      fresh += scan->stamp == step->sim_time;
+    }
+  }
+  return {stamps.size(), fresh};
+}
+
+FF_TEST(RasterLidarRescansNoFasterThanItsFrequency)
+{
+  FF_REQUIRE(Sim->SetFixedTimestep(0.01).ok);
+  FF_REQUIRE(Sim->SetLockstep(true).ok);
+
+  const auto id = Drone->AddSensor(wire::SensorType::LIDAR);
+  FF_REQUIRE(id.ok);
+  auto config = Drone->GetLidarConfig(*id);
+  FF_REQUIRE(config.ok);
+  config->livox           = false;
+  config->horizontal_rays = 64;
+  config->vertical_rays   = 16;
+  config->frequency       = 10.0;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+
+  Sim->Step(1);
+  Drone->GetLidarScan(false, false, *id);
+
+  const auto [every_tick, every_tick_fresh] = LidarStampsOverTicks(*id, 100, 1);
+  std::cout << "    10 Hz lidar read every 10 ms tick for 1 s: " << every_tick << " scans" << std::endl;
+  FF_CHECK(every_tick >= 12 && every_tick <= 14);
+  FF_CHECK(every_tick_fresh == every_tick);
+
+  const auto [at_rate, at_rate_fresh] = LidarStampsOverTicks(*id, 100, 10);
+  std::cout << "    read at 10 Hz: " << at_rate << " scans, " << at_rate_fresh << " fresh of 10" << std::endl;
+  FF_CHECK(at_rate == 10 && at_rate_fresh == 10);
+
+  const auto plain = Drone->GetLidarScan(false, false, *id);
+  const auto label = Drone->GetLidarScan(false, true, *id);
+  FF_CHECK(plain.ok && label.ok && plain->instance_id.empty() && label->instance_id.size() == label->points.size());
+
+  config->frequency = 0.0;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+  const auto [unpaced, unpaced_fresh] = LidarStampsOverTicks(*id, 10, 1);
+  std::cout << "    frequency 0 read every tick: " << unpaced << " scans of 10 reads" << std::endl;
+  FF_CHECK(unpaced == 10 && unpaced_fresh == 10);
+
+  // a 30 Hz lockstep grid does not divide the 10 Hz period, so reads land 0.09 and 0.12 s apart, as the ROS node's scheduler places them
+  FF_REQUIRE(Sim->SetFixedTimestep(1.0 / 30.0).ok);
+  config->frequency = 10.0;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+  double next_due = -1.0;
+  size_t reads = 0, fresh = 0;
+  for (int i = 0; i < 60; i++) {
+    const auto step = Sim->Step(1);
+    FF_REQUIRE(step.ok);
+    if (next_due >= 0.0 && step->sim_time + 1e-9 < next_due) {
+      continue;
+    }
+    next_due = next_due < 0.0 ? step->sim_time + 0.1 : next_due + 0.1;
+    const auto scan = Drone->GetLidarScan(false, false, *id);
+    reads++;
+    fresh += scan.ok && scan->stamp == step->sim_time;
+  }
+  std::cout << "    10 Hz reads on a 30 Hz grid: " << fresh << " fresh of " << reads << std::endl;
+  FF_CHECK(reads >= 19 && fresh == reads);
+
+  Sim->SetLockstep(false);
+  Sim->SetFixedTimestep(0.0);
+  Drone->RemoveSensor(*id);
+}
+
 /* //} */
 
 /* stamps //{ */
@@ -1095,6 +1227,36 @@ void RemoveSensors(const std::vector<std::pair<wire::SensorType, int>>& sensors)
   }
 }
 
+// cameras capture every tick and the lidar scans on every read, so each read belongs to the step before it
+void ReadEveryStep(const wire::SensorType type, const int id)
+{
+  const auto every_tick = [id](auto get, auto set) {
+    auto config = (Drone.get()->*get)(id);
+    if (config.ok) {
+      config->capture_rate = 0.0;
+      (Drone.get()->*set)(*config, id);
+    }
+  };
+
+  switch (type) {
+    case wire::SensorType::STEREO_CAMERA: every_tick(&RobotClient::GetStereoCameraConfig, &RobotClient::SetStereoCameraConfig); break;
+    case wire::SensorType::FISHEYE_CAMERA: every_tick(&RobotClient::GetFisheyeCameraConfig, &RobotClient::SetFisheyeCameraConfig); break;
+    case wire::SensorType::RGB_CAMERA:
+    case wire::SensorType::DEPTH_CAMERA:
+    case wire::SensorType::RGB_SEG_CAMERA:
+    case wire::SensorType::INSTANCE_SEG_CAMERA: every_tick(&RobotClient::GetRgbCameraConfig, &RobotClient::SetRgbCameraConfig); break;
+    case wire::SensorType::LIDAR: {
+      auto config = Drone->GetLidarConfig(id);
+      if (config.ok) {
+        config->frequency = 0.0;
+        Drone->SetLidarConfig(*config, id);
+      }
+      break;
+    }
+    default: break;
+  }
+}
+
 // camera frames were once stamped with the simulator's wall clock
 FF_TEST(EverySensorStampsSimulatedTime)
 {
@@ -1120,6 +1282,9 @@ FF_TEST(EverySensorStampsSimulatedTime)
 FF_TEST(LockstepReadsCarryTheStepTime)
 {
   const auto sensors = AddEverySensor();
+  for (const auto& [type, id] : sensors) {
+    ReadEveryStep(type, id);
+  }
   FF_CHECK(Sim->SetLockstep(true).ok);
 
   for (int i = 0; i < 3; ++i) {

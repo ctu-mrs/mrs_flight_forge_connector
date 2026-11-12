@@ -133,7 +133,7 @@ class StereoCameraConfig(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(28))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return 30.0
 
 def StereoCameraConfigStart(builder):
     builder.StartObject(13)
@@ -214,7 +214,7 @@ def AddEncoding(builder, encoding):
     StereoCameraConfigAddEncoding(builder, encoding)
 
 def StereoCameraConfigAddCaptureRate(builder, captureRate):
-    builder.PrependFloat64Slot(12, captureRate, 0.0)
+    builder.PrependFloat64Slot(12, captureRate, 30.0)
 
 def AddCaptureRate(builder, captureRate):
     StereoCameraConfigAddCaptureRate(builder, captureRate)
@@ -251,7 +251,7 @@ class StereoCameraConfigT(object):
         intrinsics = None,
         distortion = None,
         encoding = None,
-        captureRate = 0.0,
+        captureRate = 30.0,
     ):
         self.showDebugCamera = showDebugCamera  # type: bool
         self.mountLeft = mountLeft  # type: Optional[flightforge.wire.Pose.PoseT]

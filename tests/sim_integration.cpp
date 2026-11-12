@@ -1866,6 +1866,86 @@ FF_TEST(FogAndRainChangeTheImage)
   FF_CHECK(Sim->SetWeather(wire::Weather::SUNNY).ok);
 }
 
+FF_TEST(DaytimeReadsBack)
+{
+  const Status set = Sim->SetDaytime(9, 30);
+  if (SkyMissing(set)) {
+    FF_CHECK(SkyMissing(Status(Sim->GetDaytime())));
+    fftest::Skip(set.error);
+  }
+  FF_REQUIRE(set.ok);
+  const auto daytime = Sim->GetDaytime();
+  FF_REQUIRE(daytime.ok);
+  std::cout << "    " << daytime->sky << ": 9:30 reads " << daytime->hour << " h, animated " << daytime->animated << std::endl;
+  FF_CHECK(daytime->sky == "ultra_dynamic_sky" || daytime->sky == "sun_sky" || daytime->sky == "lights");
+  FF_CHECK(std::abs(daytime->hour - 9.5) < 0.05);
+  Sim->SetDaytime(12, 0);
+}
+
+double DaySeconds()
+{
+  const auto daytime = Sim->GetDaytime();
+  return daytime.ok ? daytime->hour * 3600.0 : std::nan("");
+}
+
+double SimSeconds()
+{
+  const auto time = Sim->GetTime();
+  return time.ok ? time->sim_time : std::nan("");
+}
+
+// day seconds per simulated second over a span of free running
+double FreeRunningDayRate(const std::chrono::milliseconds wall)
+{
+  const double t0 = SimSeconds(), d0 = DaySeconds();
+  std::this_thread::sleep_for(wall);
+  const double t1 = SimSeconds(), d1 = DaySeconds();
+  return (d1 - d0) / (t1 - t0);
+}
+
+FF_TEST(DayClockFollowsSimulatedTime)
+{
+  constexpr double kTolerance = 0.05;
+
+  const Status animate = Sim->SetDaytime(10, 0, true);
+  if (SkyMissing(animate)) {
+    fftest::Skip(animate.error);
+  }
+  if (!animate.ok) {
+    FF_CHECK(animate.error.find("no day cycle") != std::string::npos);
+    const auto daytime = Sim->GetDaytime();
+    FF_CHECK(daytime.ok && !daytime->animated);
+    fftest::Skip(animate.error);
+  }
+
+  FF_CHECK(Sim->SetDaytime(10, 0).ok);
+  const auto running = Sim->GetDaytime();
+  FF_CHECK(running.ok && running->animated);
+
+  const double normal = FreeRunningDayRate(std::chrono::seconds(5));
+  Sim->SetTimeDilation(0.25);
+  const double quarter = FreeRunningDayRate(std::chrono::seconds(5));
+  Sim->SetTimeDilation(1.0);
+
+  FF_CHECK(Sim->SetLockstep(true).ok);
+  const double held_from = DaySeconds();
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  const double paused = DaySeconds() - held_from;
+  const double t0 = SimSeconds(), d0 = DaySeconds();
+  const auto   step    = Sim->Step(120);
+  const double stepped = step.ok ? (DaySeconds() - d0) / (step->sim_time - t0) : std::nan("");
+
+  Sim->SetLockstep(false);
+  Sim->SetDaytime(12, 0, false);
+
+  std::cout << "    day s per sim s: normal " << normal << ", quarter speed " << quarter << ", stepped " << stepped << "; paused 2 s moved " << paused
+            << " day s" << std::endl;
+  FF_CHECK(normal > 0.0);
+  FF_CHECK(paused == 0.0);
+  FF_CHECK(std::abs(quarter - normal) <= kTolerance * normal);
+  FF_CHECK(std::abs(stepped - normal) <= kTolerance * normal);
+}
+
 /* //} */
 
 }  // namespace

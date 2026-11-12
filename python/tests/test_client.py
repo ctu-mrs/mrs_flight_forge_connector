@@ -14,6 +14,7 @@ from flightforge import Compression, FlightForgeConnectionError, FlightForgeErro
 from flightforge.wire.DepthCameraDataResponse import DepthCameraDataResponseT
 from flightforge.wire.EventCameraDataResponse import EventCameraDataResponseT
 from flightforge.wire.GetDistanceBatchResponse import GetDistanceBatchResponseT
+from flightforge.wire.GetDaytimeResponse import GetDaytimeResponseT
 from flightforge.wire.GetSurfaceHeightResponse import GetSurfaceHeightResponseT
 from flightforge.wire.Image import ImageT
 from flightforge.wire.LidarScanResponse import LidarScanResponseT
@@ -305,6 +306,22 @@ def test_surface_height_traces_from_the_top_when_no_z_is_given(fake):
         sim.surface_height(np.zeros((2, 4)))
 
 
+def test_daytime_leaves_the_day_cycle_alone_unless_asked(fake):
+    def handler(call):
+        if call.name == "GetDaytimeRequest":
+            body = GetDaytimeResponseT()
+            body.hour, body.animated, body.sky = 10.25, True, "ultra_dynamic_sky"
+            return body
+
+    server = fake(handler)
+    sim = connect(server)
+    sim.set_daytime(10, 15)
+    assert server.calls[-1].body.animate is None
+    sim.set_daytime(10, 15, animate=True)
+    assert server.calls[-1].body.animate is True
+    assert sim.daytime() == (10.25, True, "ultra_dynamic_sky")
+
+
 # //}
 
 # decoding without copies //{
@@ -465,7 +482,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
         lambda: sim.set_capture_mode("ON_DEMAND"), sim.world_origin, sim.class_map, lambda: sim.spawn_objects("objects: []"),
         lambda: sim.remove_object(3), sim.clear_objects, lambda: sim.move_object(3, Pose()), sim.objects, sim.export_scene,
         sim.assets, lambda: sim.load_library("/tmp"), sim.library, sim.world_mesh, lambda: sim.distance_batch([[0, 0, 0]]),
-        lambda: sim.surface_height([[0, 0]]),
+        lambda: sim.surface_height([[0, 0]]), sim.daytime,
         sim.spawn_robot, sim.robots, lambda: sim.remove_robot(1), lambda: sim.set_states({1: Pose()}),
         robot.description, robot.get_state, lambda: robot.set_pose(Pose()), lambda: robot.set_trajectory([]),
         robot.collision, robot.move_line_visible, lambda: robot.set_move_line_visible(True),

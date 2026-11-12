@@ -255,11 +255,19 @@ class Simulator:
         """A Weather value or its name; on a world without a sky or weather system the error says "has no sky system"."""
         self._call("SetWeatherRequest", weather=_enum(Weather, weather))
 
-    def set_daytime(self, hour, minute=0):
-        """Through the world's sky system, else its own sun and sky lights; with neither the error says "has no sky system"."""
+    def set_daytime(self, hour, minute=0, animate=None):
+        """Through the world's sky system, else its own sun and sky lights; with neither the error says "has no sky system".
+        animate None keeps the level's day cycle; True runs it at the level's day length (Ultra Dynamic Sky only)."""
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError("not a time of day")
-        self._call("SetDaytimeRequest", hour=int(hour), minute=int(minute))
+        fields = {} if animate is None else {"animate": bool(animate)}
+        self._call("SetDaytimeRequest", hour=int(hour), minute=int(minute), **fields)
+
+    def daytime(self):
+        """(hour since midnight, animated, sky). Where the level animates the clock it advances per simulated second and
+        holds while the world is paused; hour is NaN on a world lit by its own lights until set_daytime."""
+        body = _body(self._call("GetDaytimeRequest"), "GetDaytimeResponse")
+        return body.hour, bool(body.animated), body.sky or ""
 
     def set_graphics_settings(self, quality):
         """A GraphicsQuality value or its name."""

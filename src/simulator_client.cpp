@@ -119,12 +119,27 @@ Status SimulatorClient::SetWeather(const wire::Weather weather) {
   return AsStatus(connection_->Call(b, wire::CreateSetWeatherRequest(b, weather)));
 }
 
-Status SimulatorClient::SetDaytime(const int hour, const int minute) {
+Status SimulatorClient::SetDaytime(const int hour, const int minute, const std::optional<bool> animate) {
   if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     return Status::Fail("not a time of day");
   }
-  FBB b;
-  return AsStatus(connection_->Call(b, wire::CreateSetDaytimeRequest(b, static_cast<uint8_t>(hour), static_cast<uint8_t>(minute))));
+  FBB                           b;
+  ::flatbuffers::Optional<bool> wire_animate;
+  if (animate) {
+    wire_animate = *animate;
+  }
+  return AsStatus(connection_->Call(b, wire::CreateSetDaytimeRequest(b, static_cast<uint8_t>(hour), static_cast<uint8_t>(minute), wire_animate)));
+}
+
+Expected<DaytimeInfo> SimulatorClient::GetDaytime() {
+  FBB        b;
+  const auto reply = connection_->Call(b, wire::CreateGetDaytimeRequest(b));
+  Status     status;
+  const auto body = Body<wire::GetDaytimeResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return DaytimeInfo{body->hour(), body->animated(), body->sky() ? body->sky()->str() : std::string()};
 }
 
 Status SimulatorClient::SetGraphicsSettings(const wire::GraphicsQuality quality) {

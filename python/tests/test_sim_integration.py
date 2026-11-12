@@ -55,7 +55,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 1)
+    assert sim.api_version == (1, 2)
 
 
 def test_schema_matches_this_build(sim):
@@ -931,6 +931,79 @@ def test_fog_and_rain_change_the_image(sim, robot, fixed_exposure_camera):
         print(f"{weather}: mean {frame.mean():.1f} against {clear.mean():.1f}, clear drifts {drift:.2f}")
         assert abs(frame.mean() - clear.mean()) >= max(10.0, 3.0 * drift)
     sim.set_weather("SUNNY")
+
+
+DAY_RATE_TOLERANCE = 0.05
+
+
+def day_seconds(sim):
+    return sim.daytime()[0] * 3600.0
+
+
+def free_running_day_rate(sim, wall_s):
+    """Day seconds per simulated second over wall_s of free running."""
+    t0, d0 = sim.time().sim_time, day_seconds(sim)
+    time.sleep(wall_s)
+    t1, d1 = sim.time().sim_time, day_seconds(sim)
+    return (d1 - d0) / (t1 - t0)
+
+
+def test_daytime_reads_back(sim):
+    try:
+        sim.set_daytime(9, 30)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            with pytest.raises(FlightForgeError, match="has no sky system"):
+                sim.daytime()
+            pytest.skip(str(error))
+        raise
+    hour, animated, sky = sim.daytime()
+    print(f"{sky}: 9:30 reads {hour:.4f} h, animated {animated}")
+    assert sky in ("ultra_dynamic_sky", "sun_sky", "lights")
+    assert abs(hour - 9.5) < 0.05
+    sim.set_daytime(12, 0)
+
+
+def test_day_clock_follows_simulated_time(sim):
+    """The level's day cycle advances the same per simulated second at full speed, at quarter speed and per step, and
+    holds while lockstep has the world paused."""
+    try:
+        sim.set_daytime(10, 0, animate=True)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            pytest.skip(str(error))
+        assert "no day cycle" in str(error), error
+        hour, animated, sky = sim.daytime()
+        time.sleep(1.0)
+        assert not animated and sim.daytime()[0] == pytest.approx(hour, nan_ok=True)
+        pytest.skip(f"{sky} has no day cycle")
+
+    try:
+        sim.set_daytime(10, 0)
+        assert sim.daytime()[1], "set_daytime without animate leaves the day cycle running"
+
+        normal = free_running_day_rate(sim, 5.0)
+        sim.set_time_dilation(0.25)
+        quarter = free_running_day_rate(sim, 5.0)
+        sim.set_time_dilation(1.0)
+
+        sim.set_lockstep(True)
+        paused = day_seconds(sim)
+        time.sleep(2.0)
+        paused = day_seconds(sim) - paused
+        t0, d0 = sim.time().sim_time, day_seconds(sim)
+        stepped_to, _ = sim.step(120)
+        stepped = (day_seconds(sim) - d0) / (stepped_to - t0)
+    finally:
+        sim.set_lockstep(False)
+        sim.set_time_dilation(1.0)
+        sim.set_daytime(12, 0, animate=False)
+
+    print(f"day s per sim s: normal {normal:.3f}, quarter speed {quarter:.3f}, stepped {stepped:.3f}; paused 2 s moved {paused:.4f} day s")
+    assert normal > 0.0
+    assert paused == 0.0
+    assert quarter == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
+    assert stepped == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
 
 
 # //}

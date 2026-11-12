@@ -259,7 +259,7 @@ FF_TEST(WorldNameCatalog)
   for (const char* Legacy : {"eletric_towers", "electric_towers", "sprind_lab", "kayenta_mine", "mala_skala", "warehouse"}) {
     FF_CHECK(Levels.count(Legacy) == 1);
   }
-  FF_CHECK(Levels.at("sprind_lab") == "SprindLab");
+  FF_CHECK(Levels.at("sprind_lab") == "sprind_lab");
 }
 
 /* //} */

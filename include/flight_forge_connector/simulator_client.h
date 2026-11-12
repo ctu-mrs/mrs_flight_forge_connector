@@ -63,6 +63,7 @@ public:
   /* world //{ */
 
   Status SwitchWorld(const std::string& level);
+  // a world without a sky or weather system fails with an error containing "has no sky system"
   Status SetWeather(wire::Weather weather);
   Status SetDaytime(int hour, int minute);
   Status SetGraphicsSettings(wire::GraphicsQuality quality);

@@ -251,10 +251,11 @@ class Simulator:
         self._call("SwitchWorldRequest", level=WORLD_LEVELS.get(level, level))
 
     def set_weather(self, weather):
-        """A Weather value or its name."""
+        """A Weather value or its name; on a world without a sky or weather system the error says "has no sky system"."""
         self._call("SetWeatherRequest", weather=_enum(Weather, weather))
 
     def set_daytime(self, hour, minute=0):
+        """Through the world's sky system, else its own sun and sky lights; with neither the error says "has no sky system"."""
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError("not a time of day")
         self._call("SetDaytimeRequest", hour=int(hour), minute=int(minute))

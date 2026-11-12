@@ -1676,6 +1676,134 @@ FF_TEST(MalformedFramesAreRefused)
 
 /* //} */
 
+/* sky //{ */
+
+// FF_EXPECT_SKY=1 turns "this world has no sky" into a failure, for runs on a world that has one
+bool SkyMissing(const Status& status)
+{
+  const bool missing = !status.ok && status.error.find("has no sky system") != std::string::npos;
+  if (missing && std::getenv("FF_EXPECT_SKY")) {
+    std::cout << "    " << status.error << std::endl;
+    return false;
+  }
+  return missing;
+}
+
+struct SensorGuard
+{
+  int id = -1;
+  ~SensorGuard() {
+    if (id >= 0) {
+      Drone->RemoveSensor(id);
+    }
+  }
+};
+
+// manual exposure at EV100 0, so eye adaptation cannot undo what the sky did
+int AddFixedExposureCamera()
+{
+  const auto id = Drone->AddSensor(wire::SensorType::RGB_CAMERA);
+  if (!id.ok) {
+    return -1;
+  }
+  auto config = Drone->GetRgbCameraConfig(*id);
+  if (!config.ok) {
+    return -1;
+  }
+  config->encoding                  = Encoding(wire::Compression::NONE);
+  config->exposure                  = std::make_unique<wire::CameraExposureT>();
+  config->exposure->manual          = true;
+  config->exposure->shutter_time    = 1.0;
+  config->exposure->iso             = 1600.0;
+  config->exposure->ev_compensation = 0.0;
+  return Drone->SetRgbCameraConfig(*config, *id).ok ? *id : -1;
+}
+
+// BGRA after the sky has had 3 s to settle
+std::vector<uint8_t> SettledFrame(const int camera)
+{
+  std::this_thread::sleep_for(std::chrono::seconds(3));
+  Drone->GetRgbCameraData(camera);
+  const auto image = Drone->GetRgbCameraData(camera);
+  return image.ok ? image->data : std::vector<uint8_t>{};
+}
+
+double MeanBrightness(const std::vector<uint8_t>& bgra)
+{
+  double sum = 0.0;
+  for (size_t i = 0; i + 3 < bgra.size(); i += 4) {
+    sum += bgra[i] + bgra[i + 1] + bgra[i + 2];
+  }
+  return bgra.empty() ? 0.0 : sum / (bgra.size() / 4 * 3);
+}
+
+double MeanAbsoluteDifference(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)
+{
+  double sum = 0.0;
+  for (size_t i = 0; i + 3 < a.size() && i + 3 < b.size(); i += 4) {
+    for (size_t c = 0; c < 3; ++c) {
+      sum += std::abs(int(a[i + c]) - int(b[i + c]));
+    }
+  }
+  return a.empty() ? 0.0 : sum / (a.size() / 4 * 3);
+}
+
+FF_TEST(NoonIsBrighterThanMidnight)
+{
+  Drone->SetPose(kHome);
+  const SensorGuard camera{AddFixedExposureCamera()};
+  FF_REQUIRE(camera.id >= 0);
+
+  const Status set_noon = Sim->SetDaytime(12, 0);
+  if (SkyMissing(set_noon)) {
+    fftest::Skip(set_noon.error);
+  }
+  FF_REQUIRE(set_noon.ok);
+  const auto noon = SettledFrame(camera.id);
+
+  FF_REQUIRE(Sim->SetDaytime(0, 0).ok);
+  const auto midnight = SettledFrame(camera.id);
+  FF_CHECK(Sim->SetDaytime(12, 0).ok);
+
+  FF_REQUIRE(!noon.empty() && !midnight.empty());
+  std::cout << "    mean brightness noon " << MeanBrightness(noon) << ", midnight " << MeanBrightness(midnight) << std::endl;
+  FF_CHECK(MeanBrightness(noon) >= 2.0 * MeanBrightness(midnight) + 10.0);
+}
+
+FF_TEST(FogAndRainChangeTheImage)
+{
+  Drone->SetPose(kHome);
+  const SensorGuard camera{AddFixedExposureCamera()};
+  FF_REQUIRE(camera.id >= 0);
+  Sim->SetDaytime(12, 0);
+
+  const Status set_clear = Sim->SetWeather(wire::Weather::SUNNY);
+  if (!set_clear.ok) {
+    std::cout << "    " << set_clear.error << std::endl;
+    FF_CHECK(SkyMissing(set_clear));
+    FF_CHECK(SkyMissing(Sim->SetWeather(wire::Weather::FOGGY)));
+    return;
+  }
+
+  // a weather left by an earlier test takes longer to clear than one change takes to show
+  SettledFrame(camera.id);
+  const auto   clear = SettledFrame(camera.id);
+  const double drift = std::abs(MeanBrightness(SettledFrame(camera.id)) - MeanBrightness(clear));
+  std::cout << "    clear sky mean " << MeanBrightness(clear) << ", drifts " << drift << " in 3 s" << std::endl;
+
+  for (const wire::Weather weather : {wire::Weather::FOGGY, wire::Weather::RAIN}) {
+    FF_REQUIRE(Sim->SetWeather(weather).ok);
+    const auto   frame  = SettledFrame(camera.id);
+    const double change = std::abs(MeanBrightness(frame) - MeanBrightness(clear));
+    std::cout << "    " << wire::EnumNameWeather(weather) << ": mean " << MeanBrightness(frame) << ", mean absolute pixel difference "
+              << MeanAbsoluteDifference(clear, frame) << std::endl;
+    FF_CHECK(change >= std::max(10.0, 3.0 * drift));
+  }
+  FF_CHECK(Sim->SetWeather(wire::Weather::SUNNY).ok);
+}
+
+/* //} */
+
 }  // namespace
 
 int main()

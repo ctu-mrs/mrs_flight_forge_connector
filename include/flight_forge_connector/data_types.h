@@ -282,6 +282,14 @@ struct TimeInfo
   double time_dilation = 1.0;
 };
 
+// where the level animates the clock it advances per simulated second and holds while the world is paused
+struct DaytimeInfo
+{
+  double      hour     = 0.0;  // since midnight, NaN on a world lit by its own lights until SetDaytime
+  bool        animated = false;
+  std::string sky;  // ultra_dynamic_sky, sun_sky or lights
+};
+
 struct StepResult
 {
   double   sim_time   = 0.0;

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,7 +17,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 1;
+  static constexpr uint16_t kApiMinor = 2;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);
@@ -65,7 +66,9 @@ public:
   Status SwitchWorld(const std::string& level);
   // a world without a sky or weather system fails with an error containing "has no sky system"
   Status SetWeather(wire::Weather weather);
-  Status SetDaytime(int hour, int minute);
+  // animate unset keeps the level's day cycle; true runs it at the level's day length (Ultra Dynamic Sky only)
+  Status                SetDaytime(int hour, int minute, std::optional<bool> animate = std::nullopt);
+  Expected<DaytimeInfo> GetDaytime();
   Status SetGraphicsSettings(wire::GraphicsQuality quality);
   Status SetForestDensity(int level);
   Status SetForestHillyLevel(int level);

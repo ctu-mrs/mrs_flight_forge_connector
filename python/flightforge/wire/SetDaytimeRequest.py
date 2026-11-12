@@ -38,8 +38,15 @@ class SetDaytimeRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
+    # SetDaytimeRequest
+    def Animate(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return None
+
 def SetDaytimeRequestStart(builder):
-    builder.StartObject(2)
+    builder.StartObject(3)
 
 def Start(builder):
     SetDaytimeRequestStart(builder)
@@ -56,12 +63,22 @@ def SetDaytimeRequestAddMinute(builder, minute):
 def AddMinute(builder, minute):
     SetDaytimeRequestAddMinute(builder, minute)
 
+def SetDaytimeRequestAddAnimate(builder, animate):
+    builder.PrependBoolSlot(2, animate, None)
+
+def AddAnimate(builder, animate):
+    SetDaytimeRequestAddAnimate(builder, animate)
+
 def SetDaytimeRequestEnd(builder):
     return builder.EndObject()
 
 def End(builder):
     return SetDaytimeRequestEnd(builder)
 
+try:
+    from typing import Optional
+except:
+    pass
 
 class SetDaytimeRequestT(object):
 
@@ -70,9 +87,11 @@ class SetDaytimeRequestT(object):
         self,
         hour = 0,
         minute = 0,
+        animate = None,
     ):
         self.hour = hour  # type: int
         self.minute = minute  # type: int
+        self.animate = animate  # type: Optional[bool]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -97,11 +116,13 @@ class SetDaytimeRequestT(object):
             return
         self.hour = setDaytimeRequest.Hour()
         self.minute = setDaytimeRequest.Minute()
+        self.animate = setDaytimeRequest.Animate()
 
     # SetDaytimeRequestT
     def Pack(self, builder):
         SetDaytimeRequestStart(builder)
         SetDaytimeRequestAddHour(builder, self.hour)
         SetDaytimeRequestAddMinute(builder, self.minute)
+        SetDaytimeRequestAddAnimate(builder, self.animate)
         setDaytimeRequest = SetDaytimeRequestEnd(builder)
         return setDaytimeRequest

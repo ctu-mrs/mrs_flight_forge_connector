@@ -17,7 +17,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 2;
+  static constexpr uint16_t kApiMinor = 3;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);

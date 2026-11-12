@@ -132,7 +132,7 @@ class FisheyeCameraConfig(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(30))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return 30.0
 
 def FisheyeCameraConfigStart(builder):
     builder.StartObject(14)
@@ -219,7 +219,7 @@ def AddKbK4(builder, kbK4):
     FisheyeCameraConfigAddKbK4(builder, kbK4)
 
 def FisheyeCameraConfigAddCaptureRate(builder, captureRate):
-    builder.PrependFloat64Slot(13, captureRate, 0.0)
+    builder.PrependFloat64Slot(13, captureRate, 30.0)
 
 def AddCaptureRate(builder, captureRate):
     FisheyeCameraConfigAddCaptureRate(builder, captureRate)
@@ -256,7 +256,7 @@ class FisheyeCameraConfigT(object):
         kbK2 = 0.0,
         kbK3 = 0.0,
         kbK4 = 0.0,
-        captureRate = 0.0,
+        captureRate = 30.0,
     ):
         self.showDebugCamera = showDebugCamera  # type: bool
         self.mount = mount  # type: Optional[flightforge.wire.Pose.PoseT]

@@ -26,7 +26,8 @@ namespace flightforge
 namespace
 {
 
-constexpr uint32_t kMaxReplyBytes = 1u << 30;
+constexpr uint32_t kMaxReplyBytes     = 1u << 30;
+constexpr size_t   kReceiveChunkBytes = 256 * 1024;
 
 #ifdef _WIN32
 struct FWinsock
@@ -130,7 +131,15 @@ void Connection::CloseLocked() {
     FF_CLOSE(static_cast<int>(socket_));
     socket_ = -1;
   }
-  rx_.clear();
+  ReleaseReceiveBuffer();
+}
+
+void Connection::ReleaseReceiveBuffer() {
+  if (rx_.capacity() > 4 * kReceiveChunkBytes) {
+    std::vector<uint8_t>().swap(rx_);
+  } else {
+    rx_.clear();
+  }
   rx_start_ = 0;
 }
 
@@ -157,6 +166,7 @@ bool Connection::WriteAll(const uint8_t* data, size_t size) {
 bool Connection::ReadFrame(std::vector<uint8_t>& out, const std::chrono::steady_clock::time_point deadline, std::string& error) {
   for (;;) {
     const size_t available = rx_.size() - rx_start_;
+    size_t       missing   = 0;
     if (available >= kFrameHeaderBytes) {
       const uint32_t length = DecodeFrameLength(rx_.data() + rx_start_);
       if (length > kMaxReplyBytes) {
@@ -169,17 +179,15 @@ bool Connection::ReadFrame(std::vector<uint8_t>& out, const std::chrono::steady_
         out.assign(begin, begin + length);
         rx_start_ += kFrameHeaderBytes + length;
         if (rx_start_ == rx_.size()) {
-          rx_.clear();
-          rx_start_ = 0;
+          ReleaseReceiveBuffer();
         }
         return true;
       }
-      rx_.reserve(rx_start_ + kFrameHeaderBytes + length);
+      missing = kFrameHeaderBytes + length - available;
     }
 
     if (rx_start_ > 0 && rx_start_ == rx_.size()) {
-      rx_.clear();
-      rx_start_ = 0;
+      ReleaseReceiveBuffer();
     }
 
     const auto now = std::chrono::steady_clock::now();
@@ -207,7 +215,8 @@ bool Connection::ReadFrame(std::vector<uint8_t>& out, const std::chrono::steady_
     }
 
     const size_t old  = rx_.size();
-    const size_t want = std::max<size_t>(256 * 1024, rx_.capacity() - old);
+    // resize zero-fills, so it covers this frame, never the capacity a past large frame left behind
+    const size_t want = std::max<size_t>(kReceiveChunkBytes, missing);
     rx_.resize(old + want);
 #ifdef _WIN32
     const ssize_t got = ::recv(static_cast<SOCKET>(socket_), reinterpret_cast<char*>(rx_.data() + old), static_cast<int>(want), 0);

@@ -55,9 +55,10 @@ public:
     return port_;
   }
 
-  static void Reply(const int fd, const uint32_t seq, const bool ok, const size_t chunk = 0) {
+  static void Reply(const int fd, const uint32_t seq, const bool ok, const size_t chunk = 0, const size_t padding = 0) {
     flatbuffers::FlatBufferBuilder b;
-    b.Finish(wire::CreateResponse(b, seq, ok));
+    const auto                     error = padding ? b.CreateString(std::string(padding, 'x')) : flatbuffers::Offset<flatbuffers::String>();
+    b.Finish(wire::CreateResponse(b, seq, ok, error));
     std::vector<uint8_t> frame(kFrameHeaderBytes + b.GetSize());
     EncodeFrameHeader(b.GetSize(), frame.data());
     std::copy(b.GetBufferPointer(), b.GetBufferPointer() + b.GetSize(), frame.begin() + kFrameHeaderBytes);
@@ -187,6 +188,26 @@ FF_TEST(NoSimulatorFailsCleanly)
   SimulatorClient sim("127.0.0.1", 1);
   const Status status = sim.Ping();
   FF_CHECK(!status.ok && !status.error.empty());
+}
+
+// the receive buffer once zero-filled all the capacity a large reply left behind, on every later read
+FF_TEST(SmallRepliesStayFastAfterALargeOne)
+{
+  FakeSimulator fake([](const int fd, const uint32_t seq, const int index) { FakeSimulator::Reply(fd, seq, true, 0, index == 0 ? 64u << 20 : 0); });
+
+  auto connection = std::make_shared<Connection>("127.0.0.1", fake.Port());
+  FF_REQUIRE(connection->Connect());
+  SimulatorClient sim(connection);
+  sim.Ping();
+
+  std::vector<double> samples;
+  for (int i = 0; i < 50; ++i) {
+    const auto start = std::chrono::steady_clock::now();
+    FF_CHECK(sim.Ping().ok);
+    samples.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+  }
+  std::sort(samples.begin(), samples.end());
+  FF_CHECK(samples[samples.size() / 2] < 1.0);
 }
 
 /* //} */

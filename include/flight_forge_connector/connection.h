@@ -89,6 +89,7 @@ public:
 private:
   bool OpenLocked();
   void CloseLocked();
+  void ReleaseReceiveBuffer();
   bool WriteAll(const uint8_t* data, size_t size);
   // reads one whole frame; a timeout keeps what arrived so the stream stays in step
   bool ReadFrame(std::vector<uint8_t>& out, std::chrono::steady_clock::time_point deadline, std::string& error);

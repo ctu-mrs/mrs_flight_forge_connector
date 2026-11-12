@@ -70,6 +70,7 @@ class RequestBody(object):
     GetEventCameraDataRequest = 64
     GetLidarScanRequest = 65
     GetRangefinderDataRequest = 66
+    GetSurfaceHeightRequest = 67
 
 def RequestBodyCreator(unionType, table):
     from flatbuffers.table import Table
@@ -273,4 +274,7 @@ def RequestBodyCreator(unionType, table):
     if unionType == RequestBody.GetRangefinderDataRequest:
         import flightforge.wire.GetRangefinderDataRequest
         return flightforge.wire.GetRangefinderDataRequest.GetRangefinderDataRequestT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == RequestBody.GetSurfaceHeightRequest:
+        import flightforge.wire.GetSurfaceHeightRequest
+        return flightforge.wire.GetSurfaceHeightRequest.GetSurfaceHeightRequestT.InitFromBuf(table.Bytes, table.Pos)
     return None

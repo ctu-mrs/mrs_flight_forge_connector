@@ -14,6 +14,7 @@ from flightforge import Compression, FlightForgeConnectionError, FlightForgeErro
 from flightforge.wire.DepthCameraDataResponse import DepthCameraDataResponseT
 from flightforge.wire.EventCameraDataResponse import EventCameraDataResponseT
 from flightforge.wire.GetDistanceBatchResponse import GetDistanceBatchResponseT
+from flightforge.wire.GetSurfaceHeightResponse import GetSurfaceHeightResponseT
 from flightforge.wire.Image import ImageT
 from flightforge.wire.LidarScanResponse import LidarScanResponseT
 from flightforge.wire.RgbCameraDataResponse import RgbCameraDataResponseT
@@ -286,6 +287,24 @@ def test_distance_batch_sends_every_point(fake):
     assert sim.distance_batch(np.zeros((0, 3))).size == 0
 
 
+def test_surface_height_traces_from_the_top_when_no_z_is_given(fake):
+    def handler(call):
+        if call.name == "GetSurfaceHeightRequest":
+            body = GetSurfaceHeightResponseT()
+            body.heights = np.array([-1.0 if math.isnan(p.z) else p.z - 1.0 for p in call.body.points], dtype=np.float64)
+            return body
+
+    server = fake(handler)
+    sim = connect(server)
+    assert np.array_equal(sim.surface_height([(1.0, 2.0), (3.0, 4.0)]), [-1.0, -1.0])
+    assert server.calls[-1].body.ignoreRobots
+    assert np.array_equal(sim.surface_height([1.0, 2.0, 5.0], ignore_robots=False), [4.0])
+    assert not server.calls[-1].body.ignoreRobots
+    assert sim.surface_height(np.zeros((0, 2))).size == 0
+    with pytest.raises(ValueError):
+        sim.surface_height(np.zeros((2, 4)))
+
+
 # //}
 
 # decoding without copies //{
@@ -446,6 +465,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
         lambda: sim.set_capture_mode("ON_DEMAND"), sim.world_origin, sim.class_map, lambda: sim.spawn_objects("objects: []"),
         lambda: sim.remove_object(3), sim.clear_objects, lambda: sim.move_object(3, Pose()), sim.objects, sim.export_scene,
         sim.assets, lambda: sim.load_library("/tmp"), sim.library, sim.world_mesh, lambda: sim.distance_batch([[0, 0, 0]]),
+        lambda: sim.surface_height([[0, 0]]),
         sim.spawn_robot, sim.robots, lambda: sim.remove_robot(1), lambda: sim.set_states({1: Pose()}),
         robot.description, robot.get_state, lambda: robot.set_pose(Pose()), lambda: robot.set_trajectory([]),
         robot.collision, robot.move_line_visible, lambda: robot.set_move_line_visible(True),

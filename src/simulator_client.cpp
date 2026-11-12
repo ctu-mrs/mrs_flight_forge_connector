@@ -371,6 +371,28 @@ Expected<std::vector<float>> SimulatorClient::GetDistanceBatch(const std::vector
   return distances;
 }
 
+Expected<std::vector<double>> SimulatorClient::GetSurfaceHeight(const std::vector<Vec3>& points, const bool ignore_robots) {
+  static_assert(sizeof(Vec3) == sizeof(wire::Vec3));
+
+  FBB         b;
+  wire::Vec3* out    = nullptr;
+  const auto  vector = b.CreateUninitializedVectorOfStructs(points.size(), &out);
+  std::memcpy(out, points.data(), points.size() * sizeof(wire::Vec3));
+
+  const auto reply = connection_->Call(b, wire::CreateGetSurfaceHeightRequest(b, vector, ignore_robots));
+  Status     status;
+  const auto body = Body<wire::GetSurfaceHeightResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  std::vector<double> heights;
+  CopyScalars(heights, body->heights());
+  if (heights.size() != points.size()) {
+    return Status::Fail("get_surface_height answered " + std::to_string(heights.size()) + " heights for " + std::to_string(points.size()) + " points");
+  }
+  return heights;
+}
+
 /* //} */
 
 /* robots //{ */

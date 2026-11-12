@@ -9,6 +9,7 @@ from .geometry import Pose, as_pose
 from .messages import Message, message, pose_from_wire, pose_to_wire, table_of, vec3_from_wire, vec3_to_wire
 from .transport import Connection, FlightForgeError
 from .wire import GetDistanceBatchRequest as _distance_request
+from .wire import GetSurfaceHeightRequest as _surface_request
 from .wire.CaptureMode import CaptureMode
 from .wire.GraphicsQuality import GraphicsQuality
 from .wire.Pose import PoseT
@@ -395,6 +396,29 @@ class Simulator:
         body = reply.body(_table_class("GetDistanceBatchResponse"))
         return _numpy(body.DistancesAsNumpy(), np.float32)
 
+    def surface_height(self, points, ignore_robots=True):
+        """Height in m of the first surface below each (N, 2) or (N, 3) point, NaN where there is none; no z or a NaN z traces from the top."""
+        points = np.atleast_2d(np.asarray(points, dtype="<f8"))
+        if points.ndim != 2 or points.shape[1] not in (2, 3):
+            raise ValueError(f"points must be (N, 2) or (N, 3), got {points.shape}")
+        if points.shape[1] == 2:
+            points = np.column_stack([points, np.full(len(points), np.nan)])
+        points = np.ascontiguousarray(points, dtype="<f8")
+
+        def build(builder):
+            vector = _create_struct_vector(builder, points)
+            _surface_request.Start(builder)
+            _surface_request.AddPoints(builder, vector)
+            _surface_request.AddIgnoreRobots(builder, bool(ignore_robots))
+            return _surface_request.End(builder)
+
+        reply = self._connection.call(RequestBody.GetSurfaceHeightRequest, build)
+        body = reply.body(_table_class("GetSurfaceHeightResponse"))
+        heights = _numpy(body.HeightsAsNumpy(), np.float64)
+        if len(heights) != len(points):
+            raise FlightForgeError(f"get_surface_height answered {len(heights)} heights for {len(points)} points")
+        return heights
+
     # //}
 
     # robots //{
@@ -546,8 +570,9 @@ class Robot:
         """name, kind, segmentation_class, links, joint_names, mounts and the description yaml."""
         return _body(self._call("GetDescriptionRequest"), "GetDescriptionResponse")
 
-    def collision(self):
-        body = _body(self._call("GetCollisionRequest"), "GetCollisionResponse")
+    def collision(self, clear=False):
+        """clear makes the next read report only collisions after this one."""
+        body = _body(self._call("GetCollisionRequest", clear=bool(clear)), "GetCollisionResponse")
         return Collision(body.collided, _point(body.impact_point))
 
     def crashed(self):

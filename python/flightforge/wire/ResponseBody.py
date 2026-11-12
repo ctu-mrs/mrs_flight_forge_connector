@@ -50,6 +50,7 @@ class ResponseBody(object):
     EventCameraDataResponse = 44
     LidarScanResponse = 45
     RangefinderDataResponse = 46
+    GetSurfaceHeightResponse = 47
 
 def ResponseBodyCreator(unionType, table):
     from flatbuffers.table import Table
@@ -193,4 +194,7 @@ def ResponseBodyCreator(unionType, table):
     if unionType == ResponseBody.RangefinderDataResponse:
         import flightforge.wire.RangefinderDataResponse
         return flightforge.wire.RangefinderDataResponse.RangefinderDataResponseT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == ResponseBody.GetSurfaceHeightResponse:
+        import flightforge.wire.GetSurfaceHeightResponse
+        return flightforge.wire.GetSurfaceHeightResponse.GetSurfaceHeightResponseT.InitFromBuf(table.Bytes, table.Pos)
     return None

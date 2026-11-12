@@ -55,7 +55,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 0)
+    assert sim.api_version == (1, 1)
 
 
 def test_schema_matches_this_build(sim):
@@ -581,6 +581,44 @@ def test_a_robot_spawned_at_floor_level_rests_on_it(sim):
         assert robot.collision().collided
     finally:
         sim.remove_robot(robot)
+
+
+def test_a_cleared_collision_reports_only_later_contacts(sim):
+    robot = sim.spawn_robot((0.0, 3.0, 0.0))
+    try:
+        rest = robot.get_position()[2]
+        robot.set_state(Pose.at(0.0, 3.0, rest - 0.2), collide=True)
+        assert robot.collision(clear=True).collided
+        assert not robot.collision().collided
+        robot.set_state(Pose.at(0.0, 3.0, rest - 0.2), collide=True)
+        assert robot.collision().collided
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_surface_height_finds_the_ground_below_each_point(sim, robot):
+    sim.clear_objects()
+    try:
+        sim.spawn_objects(
+            "objects:\n"
+            "  - asset: /Engine/BasicShapes/Cube\n    position: [6.0, -3.0, 0.5]\n    scale: [2.0, 2.0, 1.0]\n"
+            "  - asset: /Engine/BasicShapes/Cube\n    position: [9.0, -3.0, 2.0]\n    scale: [2.0, 2.0, 0.2]\n"
+        )
+        x, y, z = robot.get_position()
+        heights = sim.surface_height(
+            [(2.0, -3.0, 1.5), (6.0, -3.0, 3.0), (9.0, -3.0, 1.5), (9.0, -3.0, 3.0), (1e5, 1e5, np.nan), (x, y, z + 3.0)]
+        )
+        assert heights.dtype == np.float64 and heights.shape == (6,)
+        assert abs(heights[0]) < 0.01
+        assert heights[1] == pytest.approx(1.0, abs=0.01)
+        assert abs(heights[2]) < 0.01
+        assert heights[3] == pytest.approx(2.1, abs=0.01)
+        assert np.isnan(heights[4])
+        assert abs(heights[5]) < 0.01
+        assert z < sim.surface_height([(x, y, z + 3.0)], ignore_robots=False)[0] < z + 0.5
+        assert sim.surface_height(np.zeros((0, 3))).size == 0
+    finally:
+        sim.clear_objects()
 
 
 def test_robot_describes_its_propellers(robot):

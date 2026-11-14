@@ -1179,6 +1179,101 @@ FF_TEST(RasterLidarRescansNoFasterThanItsFrequency)
   Drone->RemoveSensor(*id);
 }
 
+// GPU when the renderer has hardware ray tracing; a forced GPU is refused without it
+FF_TEST(LidarBackendSelection)
+{
+  const auto id = Drone->AddSensor(wire::SensorType::LIDAR);
+  FF_REQUIRE(id.ok);
+  auto config = Drone->GetLidarConfig(*id);
+  FF_REQUIRE(config.ok);
+  FF_CHECK(config->backend == wire::LidarBackend::AUTO);
+  config->horizontal_rays = 64;
+  config->vertical_rays   = 16;
+  config->frequency       = 0.0;
+
+  config->backend = wire::LidarBackend::CPU;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+  const auto cpu = Drone->GetLidarScan(false, false, *id);
+  FF_CHECK(cpu.ok && cpu->backend == wire::LidarBackend::CPU && cpu->points.size() == 64 * 16);
+  const auto read_back = Drone->GetLidarConfig(*id);
+  FF_CHECK(read_back.ok && read_back->backend == wire::LidarBackend::CPU);
+
+  config->backend      = wire::LidarBackend::GPU;
+  const bool ray_traced = Drone->SetLidarConfig(*config, *id).ok;
+  std::cout << "    hardware ray tracing: " << (ray_traced ? "yes" : "no") << std::endl;
+  if (ray_traced) {
+    const auto gpu = Drone->GetLidarScan(false, false, *id);
+    FF_CHECK(gpu.ok && gpu->backend == wire::LidarBackend::GPU && gpu->points.size() == 64 * 16 && gpu->rows == 16 && gpu->cols == 64);
+  }
+
+  config->backend = wire::LidarBackend::AUTO;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+  const auto chosen = Drone->GetLidarScan(false, false, *id);
+  FF_CHECK(chosen.ok && chosen->backend == (ray_traced ? wire::LidarBackend::GPU : wire::LidarBackend::CPU));
+
+  Drone->RemoveSensor(*id);
+}
+
+// in a room of engine cubes collision is the visible mesh, so the two backends must see the same ranges and objects
+FF_TEST(GpuLidarAgreesWithCpu)
+{
+  const auto id = Drone->AddSensor(wire::SensorType::LIDAR);
+  FF_REQUIRE(id.ok);
+  auto config = Drone->GetLidarConfig(*id);
+  FF_REQUIRE(config.ok);
+  config->horizontal_rays = 512;
+  config->vertical_rays   = 32;
+  config->frequency       = 0.0;
+  config->range_m         = 30.0;
+  config->backend         = wire::LidarBackend::GPU;
+  if (!Drone->SetLidarConfig(*config, *id).ok) {
+    Drone->RemoveSensor(*id);
+    fftest::Skip("no hardware ray tracing");
+  }
+
+  const auto objects = Sim->SpawnObjectsFromYaml(kRoomYaml + kSceneYaml.substr(std::string("objects:\n").size()));
+  FF_REQUIRE(objects.ok);
+  FF_REQUIRE(Drone->SetPose(Pose::At(0.0, 0.0, 6.0)).ok);
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  const auto gpu = Drone->GetLidarScan(false, true, *id);
+  config->backend = wire::LidarBackend::CPU;
+  FF_REQUIRE(Drone->SetLidarConfig(*config, *id).ok);
+  const auto cpu = Drone->GetLidarScan(false, true, *id);
+  FF_REQUIRE(gpu.ok && cpu.ok && gpu->backend == wire::LidarBackend::GPU && cpu->points.size() == gpu->points.size());
+
+  std::vector<double> differences;
+  size_t              mismatched = 0, same_object = 0;
+  for (size_t i = 0; i < cpu->points.size(); i++) {
+    const bool a = Finite(cpu->points[i]), b = Finite(gpu->points[i]);
+    if (a != b) {
+      mismatched++;
+      continue;
+    }
+    if (!a) {
+      continue;
+    }
+    const auto& p = cpu->points[i];
+    const auto& q = gpu->points[i];
+    differences.push_back(std::abs(std::hypot(p[0], p[1], p[2]) - std::hypot(q[0], q[1], q[2])));
+    same_object += cpu->instance_id[i] == gpu->instance_id[i];
+  }
+  FF_REQUIRE(!differences.empty());
+  std::sort(differences.begin(), differences.end());
+  const double median = differences[differences.size() / 2];
+  const double p99    = differences[differences.size() * 99 / 100];
+  std::cout << "    " << differences.size() << " common returns, median " << median * 100 << " cm, p99 " << p99 * 100 << " cm, " << mismatched
+            << " rays hit on one side only, " << same_object << " on the same object" << std::endl;
+  FF_CHECK(median < 0.01);
+  FF_CHECK(p99 < 0.05);
+  FF_CHECK(double(mismatched) / double(cpu->points.size()) < 0.01);
+  FF_CHECK(double(same_object) / double(differences.size()) > 0.99);
+
+  Drone->RemoveSensor(*id);
+  Sim->RemoveAllSpawnedObjects();
+  Drone->SetPose(kHome);
+}
+
 /* //} */
 
 /* stamps //{ */

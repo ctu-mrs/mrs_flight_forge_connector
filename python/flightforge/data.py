@@ -89,6 +89,7 @@ class LidarScan:
     intensity: np.ndarray  # (N,) int32, empty unless requested
     class_id: np.ndarray  # (N,) int32, empty unless requested
     instance_id: np.ndarray  # (N,) uint32, empty unless requested
+    backend: int = 1  # LidarBackend that traced this scan, CPU or GPU
 
     @property
     def hits(self):

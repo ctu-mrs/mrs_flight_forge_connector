@@ -839,6 +839,7 @@ class Robot:
             intensity=_numpy(body.IntensityAsNumpy(), np.int32),
             class_id=_numpy(body.ClassIdAsNumpy(), np.int32),
             instance_id=_numpy(body.InstanceIdAsNumpy(), np.uint32),
+            backend=body.Backend(),
         )
 
     def rangefinder(self, sensor_id=-1):

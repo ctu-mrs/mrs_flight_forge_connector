@@ -218,6 +218,7 @@ struct LidarScan
   std::vector<int32_t>             intensity;
   std::vector<int32_t>             class_id;
   std::vector<uint32_t>            instance_id;
+  wire::LidarBackend               backend = wire::LidarBackend::CPU;  // the one that traced this scan
 };
 
 struct RangefinderReading

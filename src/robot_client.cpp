@@ -411,6 +411,7 @@ Expected<LidarScan> RobotClient::GetLidarScan(const bool with_intensity, const b
   if (body->instance_id()) {
     CopyScalars(scan.instance_id, body->instance_id());
   }
+  scan.backend = body->backend();
   return scan;
 }
 

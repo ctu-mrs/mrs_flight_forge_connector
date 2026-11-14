@@ -126,8 +126,15 @@ class LidarConfig(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
+    # LidarConfig
+    def Backend(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(32))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
 def LidarConfigStart(builder):
-    builder.StartObject(14)
+    builder.StartObject(15)
 
 def Start(builder):
     LidarConfigStart(builder)
@@ -216,6 +223,12 @@ def LidarConfigAddShowSensorBody(builder, showSensorBody):
 def AddShowSensorBody(builder, showSensorBody):
     LidarConfigAddShowSensorBody(builder, showSensorBody)
 
+def LidarConfigAddBackend(builder, backend):
+    builder.PrependUint8Slot(14, backend, 0)
+
+def AddBackend(builder, backend):
+    LidarConfigAddBackend(builder, backend)
+
 def LidarConfigEnd(builder):
     return builder.EndObject()
 
@@ -247,6 +260,7 @@ class LidarConfigT(object):
         livox = False,
         livoxPattern = None,
         showSensorBody = False,
+        backend = 0,
     ):
         self.enable = enable  # type: bool
         self.showBeams = showBeams  # type: bool
@@ -262,6 +276,7 @@ class LidarConfigT(object):
         self.livox = livox  # type: bool
         self.livoxPattern = livoxPattern  # type: Optional[str]
         self.showSensorBody = showSensorBody  # type: bool
+        self.backend = backend  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -299,6 +314,7 @@ class LidarConfigT(object):
         self.livox = lidarConfig.Livox()
         self.livoxPattern = lidarConfig.LivoxPattern()
         self.showSensorBody = lidarConfig.ShowSensorBody()
+        self.backend = lidarConfig.Backend()
 
     # LidarConfigT
     def Pack(self, builder):
@@ -322,5 +338,6 @@ class LidarConfigT(object):
         if self.livoxPattern is not None:
             LidarConfigAddLivoxPattern(builder, livoxPattern)
         LidarConfigAddShowSensorBody(builder, self.showSensorBody)
+        LidarConfigAddBackend(builder, self.backend)
         lidarConfig = LidarConfigEnd(builder)
         return lidarConfig

@@ -161,8 +161,15 @@ class LidarScanResponse(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
         return o == 0
 
+    # LidarScanResponse
+    def Backend(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
 def LidarScanResponseStart(builder):
-    builder.StartObject(8)
+    builder.StartObject(9)
 
 def Start(builder):
     LidarScanResponseStart(builder)
@@ -239,6 +246,12 @@ def LidarScanResponseStartInstanceIdVector(builder, numElems):
 def StartInstanceIdVector(builder, numElems):
     return LidarScanResponseStartInstanceIdVector(builder, numElems)
 
+def LidarScanResponseAddBackend(builder, backend):
+    builder.PrependUint8Slot(8, backend, 0)
+
+def AddBackend(builder, backend):
+    LidarScanResponseAddBackend(builder, backend)
+
 def LidarScanResponseEnd(builder):
     return builder.EndObject()
 
@@ -265,6 +278,7 @@ class LidarScanResponseT(object):
         intensity = None,
         classId = None,
         instanceId = None,
+        backend = 0,
     ):
         self.stamp = stamp  # type: float
         self.sensorPose = sensorPose  # type: Optional[flightforge.wire.Pose.PoseT]
@@ -274,6 +288,7 @@ class LidarScanResponseT(object):
         self.intensity = intensity  # type: Optional[List[int]]
         self.classId = classId  # type: Optional[List[int]]
         self.instanceId = instanceId  # type: Optional[List[int]]
+        self.backend = backend  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -330,6 +345,7 @@ class LidarScanResponseT(object):
                     self.instanceId.append(lidarScanResponse.InstanceId(i))
             else:
                 self.instanceId = lidarScanResponse.InstanceIdAsNumpy()
+        self.backend = lidarScanResponse.Backend()
 
     # LidarScanResponseT
     def Pack(self, builder):
@@ -377,5 +393,6 @@ class LidarScanResponseT(object):
             LidarScanResponseAddClassId(builder, classId)
         if self.instanceId is not None:
             LidarScanResponseAddInstanceId(builder, instanceId)
+        LidarScanResponseAddBackend(builder, self.backend)
         lidarScanResponse = LidarScanResponseEnd(builder)
         return lidarScanResponse

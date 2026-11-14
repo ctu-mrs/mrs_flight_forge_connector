@@ -15,6 +15,7 @@ from .wire.Eye import Eye
 from .wire.FisheyeLens import FisheyeLens
 from .wire.GraphicsQuality import GraphicsQuality
 from .wire.JointType import JointType
+from .wire.LidarBackend import LidarBackend
 from .wire.PixelFormat import PixelFormat
 from .wire.Projection import Projection
 from .wire.RobotKind import RobotKind
@@ -43,6 +44,7 @@ __all__ = [
     "Frame",
     "GraphicsQuality",
     "JointType",
+    "LidarBackend",
     "LidarScan",
     "Message",
     "MujocoBridge",

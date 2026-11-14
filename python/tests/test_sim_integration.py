@@ -16,6 +16,7 @@ import pytest
 from flightforge import (
     Compression,
     FlightForgeError,
+    LidarBackend,
     PixelFormat,
     Pose,
     Robot,
@@ -55,7 +56,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 3)
+    assert sim.api_version == (1, 4)
 
 
 def test_schema_matches_this_build(sim):
@@ -357,6 +358,61 @@ def test_segmentation_returns_a_mask_not_a_photograph(robot):
         time.sleep(0.2)
     assert 1 < colours < 512
     robot.remove_sensor(sensor_id)
+
+
+def _gpu_lidar(robot, sensor_id, **fields):
+    """True when the simulator accepted the GPU backend, False when it has no hardware ray tracing."""
+    try:
+        robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.GPU, **fields)
+        return True
+    except FlightForgeError:
+        return False
+
+
+def test_lidar_backend_selection(robot):
+    sensor_id = robot.add_sensor(SensorType.LIDAR)
+    fields = dict(horizontal_rays=64, vertical_rays=16, frequency=0.0)
+    assert robot.lidar_config(sensor_id).backend == LidarBackend.AUTO
+
+    robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.CPU, **fields)
+    assert robot.lidar_scan(sensor_id=sensor_id).backend == LidarBackend.CPU
+
+    ray_traced = _gpu_lidar(robot, sensor_id, **fields)
+    if ray_traced:
+        scan = robot.lidar_scan(sensor_id=sensor_id)
+        assert scan.backend == LidarBackend.GPU and scan.points.shape == (64 * 16, 3) and (scan.rows, scan.cols) == (16, 64)
+
+    robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.AUTO, **fields)
+    assert robot.lidar_scan(sensor_id=sensor_id).backend == (LidarBackend.GPU if ray_traced else LidarBackend.CPU)
+    robot.remove_sensor(sensor_id)
+
+
+def test_gpu_lidar_agrees_with_cpu(sim):
+    """Engine cubes collide with their visible mesh, so both backends must see the same ranges and objects."""
+    sim.clear_objects()
+    robot = sim.spawn_robot((0.0, 0.0, 1.5))
+    try:
+        sensor_id = robot.add_sensor(SensorType.LIDAR)
+        fields = dict(horizontal_rays=512, vertical_rays=32, frequency=0.0, range_m=30.0)
+        if not _gpu_lidar(robot, sensor_id, **fields):
+            pytest.skip("no hardware ray tracing")
+        sim.spawn_objects(RING_YAML)
+        time.sleep(2.0)
+        gpu = robot.lidar_scan(labels=True, sensor_id=sensor_id)
+        robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.CPU, **fields)
+        cpu = robot.lidar_scan(labels=True, sensor_id=sensor_id)
+        assert gpu.backend == LidarBackend.GPU and cpu.backend == LidarBackend.CPU
+
+        both = cpu.hits & gpu.hits
+        difference = np.abs(cpu.ranges()[both] - gpu.ranges()[both])
+        x, y = np.nan_to_num(cpu.points[:, 0]), np.nan_to_num(cpu.points[:, 1])
+        cube = both & (np.abs(x - 4.5) < 0.05) & (np.abs(y) < 0.4)  # the near face of the cube 5 m ahead
+        assert cube.sum() > 0
+        assert np.median(difference) < 0.01
+        assert np.mean(cpu.instance_id[cube] == gpu.instance_id[cube]) > 0.99
+    finally:
+        sim.clear_objects()
+        sim.remove_robot(robot)
 
 
 def test_lidar_scan_labels_agree_with_the_instance_camera(sim):

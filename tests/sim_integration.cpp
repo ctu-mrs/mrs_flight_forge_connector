@@ -2043,15 +2043,6 @@ int AddFixedExposureCamera()
   return Drone->SetRgbCameraConfig(*config, *id).ok ? *id : -1;
 }
 
-// BGRA after the sky has had 3 s to settle
-std::vector<uint8_t> SettledFrame(const int camera)
-{
-  std::this_thread::sleep_for(std::chrono::seconds(3));
-  Drone->GetRgbCameraData(camera);
-  const auto image = Drone->GetRgbCameraData(camera);
-  return image.ok ? image->data : std::vector<uint8_t>{};
-}
-
 double MeanBrightness(const std::vector<uint8_t>& bgra)
 {
   double sum = 0.0;
@@ -2059,6 +2050,27 @@ double MeanBrightness(const std::vector<uint8_t>& bgra)
     sum += bgra[i] + bgra[i + 1] + bgra[i + 2];
   }
   return bgra.empty() ? 0.0 : sum / (bgra.size() / 4 * 3);
+}
+
+// BGRA once the mean has held for 3 s; a camera renders only while read, and Lumen at high and above follows the sky over seconds
+std::vector<uint8_t> SettledFrame(const int camera)
+{
+  using Clock      = std::chrono::steady_clock;
+  const auto start = Clock::now();
+  std::vector<std::pair<Clock::time_point, double>> means;
+  while (true) {
+    const auto image = Drone->GetRgbCameraData(camera);
+    if (!image.ok) {
+      return {};
+    }
+    const auto   now  = Clock::now();
+    const double mean = MeanBrightness(image->data);
+    means.emplace_back(now, mean);
+    const auto earlier = std::find_if(means.rbegin(), means.rend(), [&](const auto& m) { return now - m.first >= std::chrono::seconds(3); });
+    if ((earlier != means.rend() && std::abs(mean - earlier->second) <= std::max(0.5, 0.02 * mean)) || now - start > std::chrono::seconds(25)) {
+      return image->data;
+    }
+  }
 }
 
 double MeanAbsoluteDifference(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b)

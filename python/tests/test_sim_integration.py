@@ -986,9 +986,15 @@ def fixed_exposure_camera(robot):
 
 
 def settled_frame(robot, camera):
-    time.sleep(3.0)
-    robot.rgb(camera)
-    return robot.rgb(camera)[0].astype(np.float64)
+    """Once the mean has held for 3 s: a camera renders only while read, and Lumen at high and above follows the sky over seconds."""
+    start, means = time.time(), []
+    while True:
+        frame = robot.rgb(camera)[0].astype(np.float64)
+        now, mean = time.time(), frame.mean()
+        means.append((now, mean))
+        earlier = [m for t, m in means if now - t >= 3.0]
+        if (earlier and abs(mean - earlier[-1]) <= max(0.5, 0.02 * mean)) or now - start > 25.0:
+            return frame
 
 
 def test_noon_is_brighter_than_midnight(sim, robot, fixed_exposure_camera):

@@ -76,7 +76,7 @@ public:
 
   /* configs //{ */
 
-  // also the depth, instance and legacy segmentation cameras' config
+  // also the depth and instance segmentation cameras' config
   Expected<wire::RgbCameraConfigT> GetRgbCameraConfig(int sensor_id = -1);
   Status                           SetRgbCameraConfig(const wire::RgbCameraConfigT& config, int sensor_id = -1);
 
@@ -100,7 +100,6 @@ public:
   Expected<StereoImage> GetStereoCameraData(int sensor_id = -1);
   Expected<Image>       GetFisheyeCameraData(int sensor_id = -1);
   Expected<DepthImage>  GetDepthCameraData(int sensor_id = -1);
-  Expected<Image>       GetRgbSegCameraData(int sensor_id = -1);
 
   // RGBA8: instance id = R + (G << 8) + (B << 16), A the class id
   Expected<Image>                                  GetInstanceSegData(int sensor_id = -1);

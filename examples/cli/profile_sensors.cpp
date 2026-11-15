@@ -77,7 +77,6 @@ int main() {
   Print("stereo", Time([&] { return robot.GetStereoCameraData().ok; }));
   Print("fisheye", Time([&] { return robot.GetFisheyeCameraData().ok; }));
   Print("depth", Time([&] { return robot.GetDepthCameraData().ok; }));
-  Print("segmentation", Time([&] { return robot.GetRgbSegCameraData().ok; }));
   Print("instances", Time([&] { return robot.GetInstanceSegData().ok; }));
   Print("events", Time([&] { return robot.GetEventCameraData().ok; }));
   Print("lidar", Time([&] { return robot.GetLidarScan().ok; }));

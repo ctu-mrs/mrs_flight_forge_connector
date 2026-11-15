@@ -493,7 +493,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
         robot.fisheye_camera_config, lambda: robot.set_fisheye_camera_config(flightforge.message("FisheyeCameraConfig")),
         robot.event_camera_config, lambda: robot.set_event_camera_config(flightforge.message("EventCameraConfig")),
         robot.lidar_config, lambda: robot.set_lidar_config(flightforge.message("LidarConfig")),
-        robot.rgb, robot.stereo, robot.fisheye, robot.depth, robot.segmentation, robot.panoptic, robot.instance_map,
+        robot.rgb, robot.stereo, robot.fisheye, robot.depth, robot.panoptic, robot.instance_map,
         robot.event_batch, robot.lidar_scan, robot.rangefinder,
     ]
     for op in ops:
@@ -503,7 +503,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
             pass  # empty replies carry no image or config; the request was still sent
 
     sent = {call.name for call in server.calls}
-    expected = {name for name, value in vars(RequestBody).items() if not name.startswith("_") and name != "NONE"}
+    expected = {name for name, value in vars(RequestBody).items() if not name.startswith(("_", "Retired")) and name != "NONE"}
     assert not expected - sent, f"no method sends {sorted(expected - sent)}"
 
 

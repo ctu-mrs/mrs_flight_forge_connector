@@ -64,7 +64,7 @@ class RequestBody(object):
     GetStereoCameraDataRequest = 58
     GetFisheyeCameraDataRequest = 59
     GetDepthCameraDataRequest = 60
-    GetRgbSegCameraDataRequest = 61
+    RetiredGetRgbSegCameraDataRequest = 61
     GetInstanceSegDataRequest = 62
     GetInstanceSegMapRequest = 63
     GetEventCameraDataRequest = 64
@@ -257,9 +257,9 @@ def RequestBodyCreator(unionType, table):
     if unionType == RequestBody.GetDepthCameraDataRequest:
         import flightforge.wire.GetDepthCameraDataRequest
         return flightforge.wire.GetDepthCameraDataRequest.GetDepthCameraDataRequestT.InitFromBuf(table.Bytes, table.Pos)
-    if unionType == RequestBody.GetRgbSegCameraDataRequest:
-        import flightforge.wire.GetRgbSegCameraDataRequest
-        return flightforge.wire.GetRgbSegCameraDataRequest.GetRgbSegCameraDataRequestT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == RequestBody.RetiredGetRgbSegCameraDataRequest:
+        import flightforge.wire.RetiredGetRgbSegCameraDataRequest
+        return flightforge.wire.RetiredGetRgbSegCameraDataRequest.RetiredGetRgbSegCameraDataRequestT.InitFromBuf(table.Bytes, table.Pos)
     if unionType == RequestBody.GetInstanceSegDataRequest:
         import flightforge.wire.GetInstanceSegDataRequest
         return flightforge.wire.GetInstanceSegDataRequest.GetInstanceSegDataRequestT.InitFromBuf(table.Bytes, table.Pos)

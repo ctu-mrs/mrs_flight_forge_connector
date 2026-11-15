@@ -26,7 +26,7 @@ void Menu() {
             << "5 lidar config\n"
             << "6 rgb camera config\n"
             << "7 rangefinder\n"
-            << "8 segmentation frame\n"
+            << "8 instance segmentation frame\n"
             << "9 camera info\n"
             << "a list sensors\n"
             << "b set joint velocities [rad/s ...]\n"
@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
         std::cout << "  " << range->range << " m" << std::endl;
       }
     } else if (command == "8") {
-      const auto image = robot.GetRgbSegCameraData();
+      const auto image = robot.GetInstanceSegData();
       Report(image, start);
       if (image.ok) {
         std::cout << "  " << image->width << "x" << image->height << ", " << image->data.size() << " bytes" << std::endl;

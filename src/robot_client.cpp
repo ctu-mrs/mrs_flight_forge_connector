@@ -316,17 +316,6 @@ Expected<DepthImage> RobotClient::GetDepthCameraData(const int sensor_id) {
   return depth;
 }
 
-Expected<Image> RobotClient::GetRgbSegCameraData(const int sensor_id) {
-  FBB        b;
-  const auto reply = connection_->Call(b, wire::CreateGetRgbSegCameraDataRequest(b), robot_id_, Sensor(sensor_id));
-  Status     status;
-  const auto body = Body<wire::RgbSegCameraDataResponse>(reply, status);
-  if (!body) {
-    return status;
-  }
-  return ReadImage(body->image(), body->stamp());
-}
-
 Expected<Image> RobotClient::GetInstanceSegData(const int sensor_id) {
   FBB        b;
   const auto reply = connection_->Call(b, wire::CreateGetInstanceSegDataRequest(b), robot_id_, Sensor(sensor_id));

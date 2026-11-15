@@ -44,7 +44,7 @@ class ResponseBody(object):
     StereoCameraDataResponse = 38
     FisheyeCameraDataResponse = 39
     DepthCameraDataResponse = 40
-    RgbSegCameraDataResponse = 41
+    RetiredRgbSegCameraDataResponse = 41
     InstanceSegDataResponse = 42
     InstanceSegMapResponse = 43
     EventCameraDataResponse = 44
@@ -177,9 +177,9 @@ def ResponseBodyCreator(unionType, table):
     if unionType == ResponseBody.DepthCameraDataResponse:
         import flightforge.wire.DepthCameraDataResponse
         return flightforge.wire.DepthCameraDataResponse.DepthCameraDataResponseT.InitFromBuf(table.Bytes, table.Pos)
-    if unionType == ResponseBody.RgbSegCameraDataResponse:
-        import flightforge.wire.RgbSegCameraDataResponse
-        return flightforge.wire.RgbSegCameraDataResponse.RgbSegCameraDataResponseT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == ResponseBody.RetiredRgbSegCameraDataResponse:
+        import flightforge.wire.RetiredRgbSegCameraDataResponse
+        return flightforge.wire.RetiredRgbSegCameraDataResponse.RetiredRgbSegCameraDataResponseT.InitFromBuf(table.Bytes, table.Pos)
     if unionType == ResponseBody.InstanceSegDataResponse:
         import flightforge.wire.InstanceSegDataResponse
         return flightforge.wire.InstanceSegDataResponse.InstanceSegDataResponseT.InitFromBuf(table.Bytes, table.Pos)

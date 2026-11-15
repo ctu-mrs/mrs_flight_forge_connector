@@ -750,44 +750,9 @@ FF_TEST(TwoLivoxesDoNotShareAPhase)
   Drone->RemoveSensor(*b);
 }
 
-// a class mask has a handful of flat colours; a photograph has thousands
-FF_TEST(SegmentationReturnsAMaskNotAPhotograph)
+FF_TEST(LegacySegmentationIsRefused)
 {
-  const auto id = Drone->AddSensor(wire::SensorType::RGB_SEG_CAMERA);
-  FF_REQUIRE(id.ok);
-
-  const auto config = Drone->GetRgbCameraConfig(*id);
-  FF_REQUIRE(config.ok);
-
-  // a fresh capture serves photographs for a few frames; the steady state is what matters
-  size_t     colours  = 0;
-  const auto deadline = Clock::now() + std::chrono::seconds(3);
-
-  while (Clock::now() < deadline) {
-    const auto image = Drone->GetRgbSegCameraData(*id);
-    FF_REQUIRE(image.ok);
-    FF_REQUIRE(image->compression == wire::Compression::NONE && image->format == wire::PixelFormat::BGR8);
-    FF_REQUIRE(image->data.size() >= size_t(config->width) * config->height * 3);
-
-    std::vector<uint32_t> packed;
-    packed.reserve(image->data.size() / 3);
-    for (size_t i = 0; i + 2 < image->data.size(); i += 3) {
-      packed.push_back((uint32_t(image->data[i]) << 16) | (uint32_t(image->data[i + 1]) << 8) | image->data[i + 2]);
-    }
-    std::sort(packed.begin(), packed.end());
-    packed.erase(std::unique(packed.begin(), packed.end()), packed.end());
-    colours = packed.size();
-
-    if (colours > 1 && colours < 512) {
-      break;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  }
-
-  FF_CHECK(colours > 1);
-  FF_CHECK(colours < 512);
-
-  Drone->RemoveSensor(*id);
+  FF_CHECK(!Drone->AddSensor(static_cast<wire::SensorType>(4)).ok);
 }
 
 // clearing an empty scene is the requested state, not a failure
@@ -1280,8 +1245,8 @@ FF_TEST(GpuLidarAgreesWithCpu)
 
 const std::vector<wire::SensorType> kStampedTypes = {
     wire::SensorType::RGB_CAMERA,          wire::SensorType::STEREO_CAMERA,  wire::SensorType::DEPTH_CAMERA,
-    wire::SensorType::FISHEYE_CAMERA,      wire::SensorType::RGB_SEG_CAMERA, wire::SensorType::INSTANCE_SEG_CAMERA,
-    wire::SensorType::EVENT_CAMERA,        wire::SensorType::LIDAR,          wire::SensorType::RANGEFINDER,
+    wire::SensorType::FISHEYE_CAMERA,      wire::SensorType::INSTANCE_SEG_CAMERA, wire::SensorType::EVENT_CAMERA,
+    wire::SensorType::LIDAR,               wire::SensorType::RANGEFINDER,
 };
 
 std::optional<double> ReadStamp(const wire::SensorType type, const int id)
@@ -1292,7 +1257,6 @@ std::optional<double> ReadStamp(const wire::SensorType type, const int id)
     case wire::SensorType::STEREO_CAMERA: return stamp(Drone->GetStereoCameraData(id));
     case wire::SensorType::DEPTH_CAMERA: return stamp(Drone->GetDepthCameraData(id));
     case wire::SensorType::FISHEYE_CAMERA: return stamp(Drone->GetFisheyeCameraData(id));
-    case wire::SensorType::RGB_SEG_CAMERA: return stamp(Drone->GetRgbSegCameraData(id));
     case wire::SensorType::INSTANCE_SEG_CAMERA: return stamp(Drone->GetInstanceSegData(id));
     case wire::SensorType::EVENT_CAMERA: return stamp(Drone->GetEventCameraData(id));
     case wire::SensorType::LIDAR: return stamp(Drone->GetLidarScan(false, false, id));
@@ -1338,7 +1302,6 @@ void ReadEveryStep(const wire::SensorType type, const int id)
     case wire::SensorType::FISHEYE_CAMERA: every_tick(&RobotClient::GetFisheyeCameraConfig, &RobotClient::SetFisheyeCameraConfig); break;
     case wire::SensorType::RGB_CAMERA:
     case wire::SensorType::DEPTH_CAMERA:
-    case wire::SensorType::RGB_SEG_CAMERA:
     case wire::SensorType::INSTANCE_SEG_CAMERA: every_tick(&RobotClient::GetRgbCameraConfig, &RobotClient::SetRgbCameraConfig); break;
     case wire::SensorType::LIDAR: {
       auto config = Drone->GetLidarConfig(id);

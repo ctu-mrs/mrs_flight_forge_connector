@@ -107,6 +107,7 @@ def test_config_defaults():
     assert not rolling_shutter.enable and rolling_shutter.readout_time == pytest.approx(0.03)
 
     assert flightforge.SensorType.INSTANCE_SEG_CAMERA == 8
+    assert not hasattr(flightforge.SensorType, "RGB_SEG_CAMERA")
 
     encoding = message("ImageEncoding")
     assert encoding.compression == flightforge.Compression.JPEG and encoding.quality == 90

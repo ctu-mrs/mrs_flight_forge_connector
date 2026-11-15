@@ -111,11 +111,6 @@ int main(int argc, char** argv) {
     }
   }
 
-  robot.GetRgbSegCameraData();
-  if (const auto image = robot.GetRgbSegCameraData(); image.ok) {
-    WriteRgb("segmentation", ToRgb(*image), image->width, image->height);
-  }
-
   robot.GetInstanceSegData();
   if (const auto image = robot.GetInstanceSegData(); image.ok) {
     int      w = 0, h = 0, n = 0;

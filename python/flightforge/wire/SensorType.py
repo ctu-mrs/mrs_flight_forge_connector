@@ -6,7 +6,6 @@ class SensorType(object):
     RGB_CAMERA = 0
     LIDAR = 1
     RANGEFINDER = 2
-    RGB_SEG_CAMERA = 4
     STEREO_CAMERA = 5
     EVENT_CAMERA = 6
     FISHEYE_CAMERA = 7

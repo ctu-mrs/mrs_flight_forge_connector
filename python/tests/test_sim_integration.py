@@ -57,7 +57,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 4)
+    assert sim.api_version == (1, 5)
 
 
 def test_schema_matches_this_build(sim):
@@ -365,18 +365,11 @@ def test_instance_segmentation_smoke(sim, robot):
         sim.clear_objects()
 
 
-def test_segmentation_returns_a_mask_not_a_photograph(robot):
-    sensor_id = robot.add_sensor(SensorType.RGB_SEG_CAMERA)
-    colours = 0
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline:
-        mask, _ = robot.segmentation(sensor_id)
-        colours = len(np.unique(mask.reshape(-1, 3), axis=0))
-        if 1 < colours < 512:
-            break
-        time.sleep(0.2)
-    assert 1 < colours < 512
-    robot.remove_sensor(sensor_id)
+def test_legacy_segmentation_is_refused(robot):
+    with pytest.raises(FlightForgeError, match="removed in API 1.5"):
+        robot._image("RetiredGetRgbSegCameraDataRequest", "RetiredRgbSegCameraDataResponse", -1)
+    with pytest.raises(FlightForgeError):
+        robot.add_sensor(4)
 
 
 def _gpu_lidar(robot, sensor_id, **fields):
@@ -844,7 +837,6 @@ STAMP_READERS = {
     "depth": (SensorType.DEPTH_CAMERA, lambda robot, i: robot.depth(i)[1]),
     "fisheye": (SensorType.FISHEYE_CAMERA, lambda robot, i: robot.fisheye(i)[1]),
     "instance": (SensorType.INSTANCE_SEG_CAMERA, lambda robot, i: robot.instance_segmentation(i)[1]),
-    "segmentation": (SensorType.RGB_SEG_CAMERA, lambda robot, i: robot.segmentation(i)[1]),
     "events": (SensorType.EVENT_CAMERA, lambda robot, i: robot.event_batch(i).stamp),
     "lidar": (SensorType.LIDAR, lambda robot, i: robot.lidar_scan(sensor_id=i).stamp),
     "rangefinder": (SensorType.RANGEFINDER, lambda robot, i: robot.rangefinder(i)[1]),

@@ -667,7 +667,7 @@ class Robot:
         return config
 
     def rgb_camera_config(self, sensor_id=-1):
-        """Also the depth, instance and legacy segmentation cameras' config."""
+        """Also the depth and instance segmentation cameras' config."""
         return self._config("RgbCamera", sensor_id)
 
     def set_rgb_camera_config(self, config=None, sensor_id=-1, **fields):
@@ -773,11 +773,6 @@ class Robot:
     def depth(self, sensor_id=-1):
         """(H, W) uint16 mm, 0 invalid or too close, 65535 clamped, and the stamp."""
         frame = self._image("GetDepthCameraDataRequest", "DepthCameraDataResponse", sensor_id)
-        return frame.decode(), frame.stamp
-
-    def segmentation(self, sensor_id=-1):
-        """(class mask as RGB (H, W, 3) uint8, stamp) from the legacy stencil segmentation camera."""
-        frame = self._image("GetRgbSegCameraDataRequest", "RgbSegCameraDataResponse", sensor_id)
         return frame.decode(), frame.stamp
 
     def panoptic(self, sensor_id=-1):

@@ -482,7 +482,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
         lambda: sim.set_capture_mode("ON_DEMAND"), sim.world_origin, sim.class_map, lambda: sim.spawn_objects("objects: []"),
         lambda: sim.remove_object(3), sim.clear_objects, lambda: sim.move_object(3, Pose()), sim.objects, sim.export_scene,
         sim.assets, lambda: sim.load_library("/tmp"), sim.library, sim.world_mesh, lambda: sim.distance_batch([[0, 0, 0]]),
-        lambda: sim.surface_height([[0, 0]]), sim.daytime,
+        lambda: sim.surface_height([[0, 0]]), sim.daytime, sim.viewport_image, sim.release_viewport,
         sim.spawn_robot, sim.robots, lambda: sim.remove_robot(1), lambda: sim.set_states({1: Pose()}),
         robot.description, robot.get_state, lambda: robot.set_pose(Pose()), lambda: robot.set_trajectory([]),
         robot.collision, robot.move_line_visible, lambda: robot.set_move_line_visible(True),

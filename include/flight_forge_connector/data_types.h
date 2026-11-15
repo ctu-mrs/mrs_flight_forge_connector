@@ -284,6 +284,12 @@ struct TimeInfo
 };
 
 // where the level animates the clock it advances per simulated second and holds while the world is paused
+struct ViewportImage
+{
+  Image  image;
+  double fov_deg = 0.0;  // horizontal
+};
+
 struct DaytimeInfo
 {
   double      hour     = 0.0;  // since midnight, NaN on a world lit by its own lights until SetDaytime

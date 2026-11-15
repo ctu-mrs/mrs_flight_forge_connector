@@ -52,6 +52,7 @@ class ResponseBody(object):
     RangefinderDataResponse = 46
     GetSurfaceHeightResponse = 47
     GetDaytimeResponse = 48
+    ViewportImageResponse = 49
 
 def ResponseBodyCreator(unionType, table):
     from flatbuffers.table import Table
@@ -201,4 +202,7 @@ def ResponseBodyCreator(unionType, table):
     if unionType == ResponseBody.GetDaytimeResponse:
         import flightforge.wire.GetDaytimeResponse
         return flightforge.wire.GetDaytimeResponse.GetDaytimeResponseT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == ResponseBody.ViewportImageResponse:
+        import flightforge.wire.ViewportImageResponse
+        return flightforge.wire.ViewportImageResponse.ViewportImageResponseT.InitFromBuf(table.Bytes, table.Pos)
     return None

@@ -50,28 +50,28 @@ class CameraLensEffects(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return -1.0
 
     # CameraLensEffects
     def ChromaticAberration(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return -1.0
 
     # CameraLensEffects
     def BloomIntensity(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return -1.0
 
     # CameraLensEffects
     def LensFlareIntensity(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
-        return 0.0
+        return -1.0
 
     # CameraLensEffects
     def WhiteTemp(self):
@@ -119,25 +119,25 @@ def AddSensorWidthMm(builder, sensorWidthMm):
     CameraLensEffectsAddSensorWidthMm(builder, sensorWidthMm)
 
 def CameraLensEffectsAddVignetteIntensity(builder, vignetteIntensity):
-    builder.PrependFloat64Slot(3, vignetteIntensity, 0.0)
+    builder.PrependFloat64Slot(3, vignetteIntensity, -1.0)
 
 def AddVignetteIntensity(builder, vignetteIntensity):
     CameraLensEffectsAddVignetteIntensity(builder, vignetteIntensity)
 
 def CameraLensEffectsAddChromaticAberration(builder, chromaticAberration):
-    builder.PrependFloat64Slot(4, chromaticAberration, 0.0)
+    builder.PrependFloat64Slot(4, chromaticAberration, -1.0)
 
 def AddChromaticAberration(builder, chromaticAberration):
     CameraLensEffectsAddChromaticAberration(builder, chromaticAberration)
 
 def CameraLensEffectsAddBloomIntensity(builder, bloomIntensity):
-    builder.PrependFloat64Slot(5, bloomIntensity, 0.0)
+    builder.PrependFloat64Slot(5, bloomIntensity, -1.0)
 
 def AddBloomIntensity(builder, bloomIntensity):
     CameraLensEffectsAddBloomIntensity(builder, bloomIntensity)
 
 def CameraLensEffectsAddLensFlareIntensity(builder, lensFlareIntensity):
-    builder.PrependFloat64Slot(6, lensFlareIntensity, 0.0)
+    builder.PrependFloat64Slot(6, lensFlareIntensity, -1.0)
 
 def AddLensFlareIntensity(builder, lensFlareIntensity):
     CameraLensEffectsAddLensFlareIntensity(builder, lensFlareIntensity)
@@ -175,10 +175,10 @@ class CameraLensEffectsT(object):
         fstop = 0.0,
         focalDistance = 0.0,
         sensorWidthMm = 0.0,
-        vignetteIntensity = 0.0,
-        chromaticAberration = 0.0,
-        bloomIntensity = 0.0,
-        lensFlareIntensity = 0.0,
+        vignetteIntensity = -1.0,
+        chromaticAberration = -1.0,
+        bloomIntensity = -1.0,
+        lensFlareIntensity = -1.0,
         whiteTemp = 0.0,
         whiteTint = 0.0,
         motionBlurFromShutter = False,

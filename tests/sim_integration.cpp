@@ -2101,6 +2101,122 @@ FF_TEST(FogAndRainChangeTheImage)
   FF_CHECK(Sim->SetWeather(wire::Weather::SUNNY).ok);
 }
 
+constexpr double kLookMad        = 4.0;  // 8-bit levels per channel
+constexpr double kLookMadFisheye = 6.0;  // both sides resampled bilinearly
+
+// the fisheye's pixels inside 40 deg of the axis against the pinhole render at face 0's pose they come from (equidistant lens), BGRA both
+double FisheyeCentreDifference(const Image& fisheye, const wire::CameraInfoT& info, const Image& pinhole, const double fov_deg)
+{
+  const double f   = pinhole.width / 2.0 / std::tan(fov_deg * M_PI / 360.0);
+  double       sum = 0.0;
+  size_t       n   = 0;
+  for (uint32_t y = 0; y < fisheye.height; ++y) {
+    for (uint32_t x = 0; x < fisheye.width; ++x) {
+      const double u = (x - info.cx) / info.fx, v = (y - info.cy) / info.fy, theta = std::hypot(u, v);
+      const double s  = theta > 1e-9 ? std::tan(theta) / theta : 1.0;
+      const double px = pinhole.width / 2.0 - 0.5 + f * u * s, py = pinhole.height / 2.0 - 0.5 + f * v * s;
+      if (theta >= 40.0 * M_PI / 180.0 || px < 0.0 || py < 0.0 || px > pinhole.width - 1.0 || py > pinhole.height - 1.0) {
+        continue;
+      }
+      const int    x0 = std::min(int(px), int(pinhole.width) - 2), y0 = std::min(int(py), int(pinhole.height) - 2);
+      const double ax = px - x0, ay = py - y0;
+      for (int c = 0; c < 3; ++c) {
+        const auto   at       = [&](int xx, int yy) { return double(pinhole.data[(size_t(yy) * pinhole.width + xx) * 4 + c]); };
+        const double expected = (at(x0, y0) * (1 - ax) + at(x0 + 1, y0) * ax) * (1 - ay) + (at(x0, y0 + 1) * (1 - ax) + at(x0 + 1, y0 + 1) * ax) * ay;
+        sum += std::abs(fisheye.data[(size_t(y) * fisheye.width + x) * 4 + c] - expected);
+      }
+      n += 3;
+    }
+  }
+  return n ? sum / n : 1.0e9;
+}
+
+// each colour camera against the main viewport put on its view, at every scalability level; the level is set here, never assumed
+FF_TEST(CamerasMatchTheViewport)
+{
+  Drone->SetPose(kHome);
+  const auto add = [](const wire::SensorType type) {
+    const auto id = Drone->AddSensor(type);
+    return id.ok ? *id : -1;
+  };
+  const SensorGuard rgb{add(wire::SensorType::RGB_CAMERA)};
+  const SensorGuard stereo{add(wire::SensorType::STEREO_CAMERA)};
+  const SensorGuard fisheye{add(wire::SensorType::FISHEYE_CAMERA)};
+  FF_REQUIRE(rgb.id >= 0 && stereo.id >= 0 && fisheye.id >= 0);
+  auto rgb_config = Drone->GetRgbCameraConfig(rgb.id);
+  auto stereo_config = Drone->GetStereoCameraConfig(stereo.id);
+  auto fisheye_config = Drone->GetFisheyeCameraConfig(fisheye.id);
+  FF_REQUIRE(rgb_config.ok && stereo_config.ok && fisheye_config.ok);
+  // one image size, the fisheye's 512 faces: each viewport resize drops every camera's history
+  rgb_config->encoding     = Encoding(wire::Compression::NONE);
+  rgb_config->width = rgb_config->height = 512;
+  stereo_config->encoding  = Encoding(wire::Compression::NONE);
+  stereo_config->width = stereo_config->height = 512;
+  fisheye_config->encoding = Encoding(wire::Compression::NONE);
+  FF_REQUIRE(Drone->SetRgbCameraConfig(*rgb_config, rgb.id).ok && Drone->SetStereoCameraConfig(*stereo_config, stereo.id).ok &&
+             Drone->SetFisheyeCameraConfig(*fisheye_config, fisheye.id).ok);
+  const auto fisheye_info = Drone->GetCameraInfo(fisheye.id);
+  FF_REQUIRE(fisheye_info.ok && fisheye_info->size() == 1);
+
+  struct View
+  {
+    const char* name;
+    int         sensor;
+    int         view;
+  };
+  const View views[] = {{"rgb", rgb.id, 0}, {"stereo left", stereo.id, 0}, {"stereo right", stereo.id, 1}, {"fisheye centre", fisheye.id, 0}};
+
+  FF_REQUIRE(Sim->SetFixedTimestep(1.0 / 30.0).ok && Sim->SetLockstep(true).ok);
+  // the first frames at a new level compile shaders, and one step may not take longer than 60 s
+  const auto steps = [](const int n) {
+    for (int i = 0; i < n / 10; ++i) {
+      for (int attempt = 0; attempt < 5 && !Sim->Step(10).ok; ++attempt) {
+      }
+    }
+  };
+  // cameras that start streaming at a Lumen level can stay without bounce light (section 23.2 look results); a camera renders only once it streams
+  FF_CHECK(Sim->SetGraphicsSettings(wire::GraphicsQuality::LOW).ok);
+  bool matched = false;
+  for (int attempt = 0; attempt < 3 && !matched; ++attempt) {
+    matched = Sim->GetViewportImage(Drone->Id(), rgb.id).ok;
+  }
+  FF_REQUIRE(matched);
+  steps(30);
+  Drone->GetRgbCameraData(rgb.id);
+  Drone->GetStereoCameraData(stereo.id);
+  Drone->GetFisheyeCameraData(fisheye.id);
+  steps(150);
+  for (const wire::GraphicsQuality level :
+       {wire::GraphicsQuality::LOW, wire::GraphicsQuality::MEDIUM, wire::GraphicsQuality::HIGH, wire::GraphicsQuality::EPIC, wire::GraphicsQuality::CINEMATIC}) {
+    FF_CHECK(Sim->SetGraphicsSettings(level).ok);
+    // each camera fills its own Lumen scene; 300 steps covers it at every level
+    steps(300);
+    for (const View& view : views) {
+      FF_CHECK(Sim->GetViewportImage(Drone->Id(), view.sensor, view.view).ok);
+      steps(50);
+      const auto viewport = Sim->GetViewportImage();
+      FF_REQUIRE(viewport.ok);
+      Expected<Image> camera = Status{};
+      if (view.sensor == rgb.id) {
+        camera = Drone->GetRgbCameraData(rgb.id);
+      } else if (view.sensor == stereo.id) {
+        const auto pair = Drone->GetStereoCameraData(stereo.id);
+        camera          = pair.ok ? Expected<Image>(view.view == 0 ? pair->left : pair->right) : Expected<Image>(Status(pair));
+      } else {
+        camera = Drone->GetFisheyeCameraData(fisheye.id);
+      }
+      FF_REQUIRE(camera.ok);
+      const double error = view.sensor == fisheye.id ? FisheyeCentreDifference(*camera, (*fisheye_info)[0], viewport->image, viewport->fov_deg)
+                                                     : MeanAbsoluteDifference(camera->data, viewport->image.data);
+      std::cout << "    " << wire::EnumNameGraphicsQuality(level) << " " << view.name << ": MAD " << error << std::endl;
+      FF_CHECK(error <= (view.sensor == fisheye.id ? kLookMadFisheye : kLookMad));
+    }
+  }
+  FF_CHECK(Sim->ReleaseViewport().ok);
+  FF_CHECK(Sim->SetLockstep(false).ok && Sim->SetFixedTimestep(0.0).ok);
+  FF_CHECK(Sim->SetGraphicsSettings(wire::GraphicsQuality::HIGH).ok);
+}
+
 FF_TEST(DaytimeReadsBack)
 {
   const Status set = Sim->SetDaytime(9, 30);

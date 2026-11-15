@@ -57,7 +57,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 5)
+    assert sim.api_version == (1, 6)
 
 
 def test_schema_matches_this_build(sim):
@@ -1123,6 +1123,103 @@ def test_day_clock_follows_simulated_time(sim):
     assert paused == 0.0
     assert quarter == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
     assert stepped == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
+
+
+# //}
+
+# look //{
+
+LOOK_LEVELS = ["LOW", "MEDIUM", "HIGH", "EPIC", "CINEMATIC"]
+LOOK_MAD = 4.0  # 8-bit levels per channel
+LOOK_MAD_FISHEYE = 6.0  # both sides resampled bilinearly
+
+
+def mad(a, b):
+    return float(np.abs(a.astype(np.float32) - b.astype(np.float32)).mean())
+
+
+def fisheye_from_pinhole(pinhole, fov_deg, K, max_theta_deg=40.0):
+    """The fisheye image a pinhole render at face 0's pose gives inside max_theta of the axis (equidistant lens), and that mask."""
+    h, w = int(round(K[1][2] * 2 + 1)), int(round(K[0][2] * 2 + 1))
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float64)
+    u, v = (xs - K[0][2]) / K[0][0], (ys - K[1][2]) / K[1][1]
+    theta = np.hypot(u, v)
+    scale = np.where(theta > 1e-9, np.tan(np.minimum(theta, 1.5)) / np.maximum(theta, 1e-9), 1.0)
+    ph, pw = pinhole.shape[:2]
+    f = pw / 2.0 / math.tan(math.radians(fov_deg) / 2.0)
+    px, py = pw / 2.0 - 0.5 + f * u * scale, ph / 2.0 - 0.5 + f * v * scale
+    mask = (theta < math.radians(max_theta_deg)) & (px >= 0) & (py >= 0) & (px <= pw - 1) & (py <= ph - 1)
+    x0, y0 = np.clip(np.floor(px).astype(int), 0, pw - 2), np.clip(np.floor(py).astype(int), 0, ph - 2)
+    fx, fy = np.clip(px - x0, 0, 1)[..., None], np.clip(py - y0, 0, 1)[..., None]
+    p = pinhole.astype(np.float64)
+    top = p[y0, x0] * (1 - fx) + p[y0, x0 + 1] * fx
+    bottom = p[y0 + 1, x0] * (1 - fx) + p[y0 + 1, x0 + 1] * fx
+    return top * (1 - fy) + bottom * fy, mask
+
+
+def look_steps(sim, n):
+    """Ten at a time: the first frames at a new level compile shaders, and one step may not take longer than 60 s."""
+    for _ in range(n // 10):
+        for attempt in range(5):
+            try:
+                sim.step(10)
+                break
+            except FlightForgeError as error:
+                if "did not finish" not in str(error) or attempt == 4:
+                    raise
+
+
+def test_cameras_match_the_viewport(sim, robot):
+    """Each colour camera against the main viewport put on its view, at every scalability level; the level is set here, never assumed."""
+    # one image size, the fisheye's 512 faces: each viewport resize drops every camera's history
+    raw = {"encoding": {"compression": Compression.NONE}}
+    rgb = robot.add_sensor(SensorType.RGB_CAMERA)
+    robot.set_rgb_camera_config(sensor_id=rgb, width=512, height=512, **raw)
+    stereo = robot.add_sensor(SensorType.STEREO_CAMERA)
+    robot.set_stereo_camera_config(sensor_id=stereo, width=512, height=512, **raw)
+    fisheye = robot.add_sensor(SensorType.FISHEYE_CAMERA)
+    robot.set_fisheye_camera_config(sensor_id=fisheye, **raw)
+    K = robot.camera_info(fisheye)[0]["K"]
+    views = [
+        ("rgb", rgb, 0, lambda: robot.rgb(rgb)[0]),
+        ("stereo left", stereo, 0, lambda: robot.stereo(stereo)[0]),
+        ("stereo right", stereo, 1, lambda: robot.stereo(stereo)[1]),
+        ("fisheye centre", fisheye, 0, lambda: robot.fisheye(fisheye)[0]),
+    ]
+    failures = []
+    sim.set_fixed_timestep(1.0 / 30.0)
+    sim.set_lockstep(True)
+    try:
+        # cameras that start streaming at a Lumen level can stay without bounce light (section 23.2 look results); a camera renders only once it streams
+        sim.set_graphics_settings(LOOK_LEVELS[0])
+        sim.viewport_image(robot, rgb)
+        look_steps(sim, 30)
+        for _, _, _, read in views:
+            read()
+        look_steps(sim, 150)
+        for level in LOOK_LEVELS:
+            sim.set_graphics_settings(level)
+            # each camera fills its own Lumen scene; 300 steps covers it at every level
+            look_steps(sim, 300)
+            for name, sensor, view, read in views:
+                sim.viewport_image(robot, sensor, view)
+                look_steps(sim, 50)
+                camera = read()
+                viewport, _, fov = sim.viewport_image()
+                if name.startswith("fisheye"):
+                    expected, mask = fisheye_from_pinhole(viewport, fov, K)
+                    error = float(np.abs(camera.astype(np.float64) - expected)[mask].mean())
+                else:
+                    error = mad(camera, viewport)
+                print(f"{level:9s} {name:14s} MAD {error:.2f}")
+                if error > (LOOK_MAD_FISHEYE if name.startswith("fisheye") else LOOK_MAD):
+                    failures.append(f"{level} {name}: {error:.2f}")
+    finally:
+        sim.release_viewport()
+        sim.set_lockstep(False)
+        sim.set_fixed_timestep(0.0)
+        sim.set_graphics_settings("HIGH")
+    assert not failures, f"cameras differ from the viewport: {failures}"
 
 
 # //}

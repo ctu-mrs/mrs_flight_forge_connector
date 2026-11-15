@@ -11,6 +11,7 @@ from .transport import Connection, FlightForgeError
 from .wire import GetDistanceBatchRequest as _distance_request
 from .wire import GetSurfaceHeightRequest as _surface_request
 from .wire.CaptureMode import CaptureMode
+from .wire.Compression import Compression
 from .wire.GraphicsQuality import GraphicsQuality
 from .wire.Pose import PoseT
 from .wire.Projection import Projection
@@ -272,6 +273,21 @@ class Simulator:
     def set_graphics_settings(self, quality):
         """A GraphicsQuality value or its name."""
         self._call("SetGraphicsSettingsRequest", quality=_enum(GraphicsQuality, quality))
+
+    def viewport_image(self, robot=None, sensor_id=-1, view=0, raw=True, decode=True):
+        """(RGB (H, W, 3) uint8, stamp, horizontal fov in deg) of the main viewport, read after its next frame; decode=False
+        returns (Frame, fov). With a robot and a camera's sensor_id the viewport first takes that camera's pose, fov and image
+        size (view: stereo eye, 0 left, or fisheye face) and keeps them until release_viewport()."""
+        fields = {"view": int(view), "encoding": message("ImageEncoding", compression=Compression.NONE if raw else Compression.JPEG)}
+        robot_id = None if robot is None else robot.id if isinstance(robot, Robot) else int(robot)
+        reply = _call(self._connection, "GetViewportImageRequest", fields, robot_id=robot_id, sensor_id=_sensor(sensor_id) if robot_id is not None else None)
+        body = reply.body(_table_class("ViewportImageResponse"))
+        frame = _frame(body.Image(), body.Stamp())
+        return (frame.decode(), frame.stamp, body.Fov()) if decode else (frame, body.Fov())
+
+    def release_viewport(self):
+        """Gives the main viewport its own view and window size back after viewport_image() took a camera's."""
+        self._call("GetViewportImageRequest", release=True)
 
     def set_forest_density(self, level):
         self._call("SetForestDensityRequest", level=int(level))

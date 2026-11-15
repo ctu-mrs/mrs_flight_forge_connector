@@ -147,6 +147,24 @@ Status SimulatorClient::SetGraphicsSettings(const wire::GraphicsQuality quality)
   return AsStatus(connection_->Call(b, wire::CreateSetGraphicsSettingsRequest(b, quality)));
 }
 
+Expected<ViewportImage> SimulatorClient::GetViewportImage(const std::optional<int> robot_id, const int sensor_id, const int view, const bool raw) {
+  FBB        b;
+  const auto encoding = wire::CreateImageEncoding(b, raw ? wire::Compression::NONE : wire::Compression::JPEG);
+  const auto reply    = connection_->Call(b, wire::CreateGetViewportImageRequest(b, view, false, encoding), robot_id,
+                                          robot_id && sensor_id >= 0 ? std::optional<int32_t>(sensor_id) : std::nullopt);
+  Status     status;
+  const auto body = Body<wire::ViewportImageResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+  return ViewportImage{ReadImage(body->image(), body->stamp()), body->fov()};
+}
+
+Status SimulatorClient::ReleaseViewport() {
+  FBB b;
+  return AsStatus(connection_->Call(b, wire::CreateGetViewportImageRequest(b, 0, true)));
+}
+
 Status SimulatorClient::SetForestDensity(const int level) {
   FBB b;
   return AsStatus(connection_->Call(b, wire::CreateSetForestDensityRequest(b, level)));

@@ -72,6 +72,7 @@ class RequestBody(object):
     GetRangefinderDataRequest = 66
     GetSurfaceHeightRequest = 67
     GetDaytimeRequest = 68
+    GetViewportImageRequest = 69
 
 def RequestBodyCreator(unionType, table):
     from flatbuffers.table import Table
@@ -281,4 +282,7 @@ def RequestBodyCreator(unionType, table):
     if unionType == RequestBody.GetDaytimeRequest:
         import flightforge.wire.GetDaytimeRequest
         return flightforge.wire.GetDaytimeRequest.GetDaytimeRequestT.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == RequestBody.GetViewportImageRequest:
+        import flightforge.wire.GetViewportImageRequest
+        return flightforge.wire.GetViewportImageRequest.GetViewportImageRequestT.InitFromBuf(table.Bytes, table.Pos)
     return None

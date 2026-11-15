@@ -17,7 +17,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 5;
+  static constexpr uint16_t kApiMinor = 6;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);
@@ -70,6 +70,11 @@ public:
   Status                SetDaytime(int hour, int minute, std::optional<bool> animate = std::nullopt);
   Expected<DaytimeInfo> GetDaytime();
   Status SetGraphicsSettings(wire::GraphicsQuality quality);
+
+  // the main viewport, read after its next frame; with a robot and a camera's sensor_id it first takes that camera's pose, fov and
+  // image size (view: stereo eye, 0 left, or fisheye face) and keeps them until ReleaseViewport
+  Expected<ViewportImage> GetViewportImage(std::optional<int> robot_id = std::nullopt, int sensor_id = -1, int view = 0, bool raw = true);
+  Status                  ReleaseViewport();
   Status SetForestDensity(int level);
   Status SetForestHillyLevel(int level);
   Status SetMutualVisibility(bool enabled);

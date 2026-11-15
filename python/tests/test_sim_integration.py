@@ -25,6 +25,7 @@ from flightforge import (
     SensorType,
     Simulator,
     message,
+    quat_from_rpy,
 )
 
 pytestmark = pytest.mark.sim
@@ -121,6 +122,24 @@ def test_camera_info(robot):
     assert robot.camera_info(rgb["sensor_id"])[0]["sensor_id"] == rgb["sensor_id"]
     with pytest.raises(FlightForgeError):
         robot.camera_info(9999)
+
+
+def test_camera_config_keeps_the_mount(robot):
+    ahead = robot.add_sensor(SensorType.RGB_CAMERA, pose=Pose.at(0.25, 0.0, 0.0))
+    turned = robot.add_sensor(SensorType.RGB_CAMERA, pose=Pose((0.25, 0.0, 0.0), quat_from_rpy(0.0, 0.0, math.radians(60.0))))
+    try:
+        mount = robot.rgb_camera_config(turned)["mount"]
+        for sensor_id in (ahead, turned):
+            robot.set_rgb_camera_config(sensor_id=sensor_id, capture_rate=0.0, encoding={"compression": Compression.NONE})
+        kept = robot.rgb_camera_config(turned)["mount"]
+        assert np.allclose(kept.orientation, mount.orientation, atol=1e-4)
+        assert kept.orientation[2] == pytest.approx(math.sin(math.radians(30.0)), abs=1e-3)
+        time.sleep(1.0)
+        images = [robot.rgb(s)[0].astype(np.float64) for s in (ahead, turned)]
+        assert np.abs(images[0] - images[1]).mean() > 5.0
+    finally:
+        robot.remove_sensor(ahead)
+        robot.remove_sensor(turned)
 
 
 def test_stereo_pair_reports_its_baseline(robot):

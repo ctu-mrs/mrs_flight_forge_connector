@@ -2174,8 +2174,8 @@ FF_TEST(CamerasMatchTheViewport)
       }
     }
   };
-  // cameras that start streaming at a Lumen level can stay without bounce light (section 23.2 look results); a camera renders only once it streams
-  FF_CHECK(Sim->SetGraphicsSettings(wire::GraphicsQuality::LOW).ok);
+  // HIGH first: cameras that started streaming at a Lumen level once froze there (section 23.2a)
+  FF_CHECK(Sim->SetGraphicsSettings(wire::GraphicsQuality::HIGH).ok);
   bool matched = false;
   for (int attempt = 0; attempt < 3 && !matched; ++attempt) {
     matched = Sim->GetViewportImage(Drone->Id(), rgb.id).ok;
@@ -2187,9 +2187,9 @@ FF_TEST(CamerasMatchTheViewport)
   Drone->GetFisheyeCameraData(fisheye.id);
   steps(150);
   for (const wire::GraphicsQuality level :
-       {wire::GraphicsQuality::LOW, wire::GraphicsQuality::MEDIUM, wire::GraphicsQuality::HIGH, wire::GraphicsQuality::EPIC, wire::GraphicsQuality::CINEMATIC}) {
+       {wire::GraphicsQuality::HIGH, wire::GraphicsQuality::LOW, wire::GraphicsQuality::MEDIUM, wire::GraphicsQuality::EPIC, wire::GraphicsQuality::CINEMATIC}) {
     FF_CHECK(Sim->SetGraphicsSettings(level).ok);
-    // each camera fills its own Lumen scene; 300 steps covers it at every level
+    // the world's one Lumen scene settles after a level change; 300 steps covers it at every level
     steps(300);
     for (const View& view : views) {
       FF_CHECK(Sim->GetViewportImage(Drone->Id(), view.sensor, view.view).ok);

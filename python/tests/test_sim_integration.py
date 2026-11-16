@@ -1129,7 +1129,8 @@ def test_day_clock_follows_simulated_time(sim):
 
 # look //{
 
-LOOK_LEVELS = ["LOW", "MEDIUM", "HIGH", "EPIC", "CINEMATIC"]
+# HIGH first: cameras that started streaming at a Lumen level once froze there (section 23.2a)
+LOOK_LEVELS = ["HIGH", "LOW", "MEDIUM", "EPIC", "CINEMATIC"]
 LOOK_MAD = 4.0  # 8-bit levels per channel
 LOOK_MAD_FISHEYE = 6.0  # both sides resampled bilinearly
 
@@ -1190,7 +1191,6 @@ def test_cameras_match_the_viewport(sim, robot):
     sim.set_fixed_timestep(1.0 / 30.0)
     sim.set_lockstep(True)
     try:
-        # cameras that start streaming at a Lumen level can stay without bounce light (section 23.2 look results); a camera renders only once it streams
         sim.set_graphics_settings(LOOK_LEVELS[0])
         sim.viewport_image(robot, rgb)
         look_steps(sim, 30)
@@ -1199,7 +1199,7 @@ def test_cameras_match_the_viewport(sim, robot):
         look_steps(sim, 150)
         for level in LOOK_LEVELS:
             sim.set_graphics_settings(level)
-            # each camera fills its own Lumen scene; 300 steps covers it at every level
+            # the world's one Lumen scene settles after a level change; 300 steps covers it at every level
             look_steps(sim, 300)
             for name, sensor, view, read in views:
                 sim.viewport_image(robot, sensor, view)

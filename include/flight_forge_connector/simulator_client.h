@@ -17,7 +17,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 6;
+  static constexpr uint16_t kApiMinor = 7;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);
@@ -35,6 +35,11 @@ public:
   // how long Step may run before the call gives up
   void SetStepTimeout(std::chrono::milliseconds timeout) {
     step_timeout_ = timeout;
+  }
+
+  // the simulator gives up on a switch after 30 min; a large world can take ten
+  void SetSwitchTimeout(std::chrono::milliseconds timeout) {
+    switch_timeout_ = timeout;
   }
 
   /* connection //{ */
@@ -63,7 +68,10 @@ public:
 
   /* world //{ */
 
-  Status SwitchWorld(const std::string& level);
+  // the maps this build can open, and what is loaded
+  Expected<WorldList> ListWorlds();
+  // a name from ListWorlds, a package path, or a short name unique ignoring case; returns once the new world ticks
+  Expected<SwitchWorldResult> SwitchWorld(const std::string& level);
   // a world without a sky or weather system fails with an error containing "has no sky system"
   Status SetWeather(wire::Weather weather);
   // animate unset keeps the level's day cycle; true runs it at the level's day length (Ultra Dynamic Sky only)
@@ -129,6 +137,7 @@ public:
 private:
   std::shared_ptr<Connection> connection_;
   std::chrono::milliseconds   step_timeout_{120000};
+  std::chrono::milliseconds   switch_timeout_{1860000};
 };
 
 }  // namespace flightforge

@@ -172,6 +172,49 @@ def test_step_uses_its_own_timeout(fake):
     assert sim.step(7) == (1.5, 7)
 
 
+def test_switch_world_waits_with_its_own_timeout(fake):
+    from flightforge.wire.SwitchWorldResponse import SwitchWorldResponseT
+
+    def handler(call):
+        if call.name == "SwitchWorldRequest":
+            if call.body.level == b"CaveTunnel":
+                return [response_frame(call.seq, ok=False, error='unknown world "CaveTunnel"; list_worlds names the 2 maps in this build')]
+            time.sleep(0.3)
+            body = SwitchWorldResponseT()
+            body.package, body.removedRobots = "/Game/Worlds/Valley/Maps/Valley", [0, 2]
+            return body
+
+    sim = connect(fake(handler), timeout=0.1, switch_timeout=2.0)
+    with pytest.raises(FlightForgeError, match="unknown world"):
+        sim.switch_world("CaveTunnel")
+    assert sim.switch_world("Valley") == ("/Game/Worlds/Valley/Maps/Valley", [0, 2])
+
+
+def test_list_worlds_reads_names_and_state(fake):
+    from flightforge.wire.ListWorldsResponse import ListWorldsResponseT
+    from flightforge.wire.WorldInfo import WorldInfoT
+
+    def world(name, package, display_name):
+        info = WorldInfoT()
+        info.name, info.package, info.displayName = name, package, display_name
+        return info
+
+    def handler(call):
+        if call.name == "ListWorldsRequest":
+            body = ListWorldsResponseT()
+            body.worlds = [
+                world("Warehouse", "/Game/Worlds/Warehouse/Maps/Warehouse", "Warehouse"),
+                world("/Game/Worlds/Warehouse/Maps/SprindLab", "/Game/Worlds/Warehouse/Maps/SprindLab", "Sprind Lab"),
+            ]
+            body.current, body.loading = "/Game/Worlds/Warehouse/Maps/Warehouse", ""
+            return body
+
+    worlds, current, loading = connect(fake(handler)).list_worlds()
+    assert [w.name for w in worlds] == ["Warehouse", "/Game/Worlds/Warehouse/Maps/SprindLab"]
+    assert worlds[1].display_name == "Sprind Lab"
+    assert (current, loading) == ("/Game/Worlds/Warehouse/Maps/Warehouse", "")
+
+
 def test_a_reply_that_is_not_a_response_is_refused(fake):
     def handler(call):
         if call.name == "PingRequest":
@@ -476,7 +519,7 @@ def test_every_request_in_the_schema_has_a_method(fake):
     robot = sim.robot(1)
     ops = [
         sim.ping, sim.time, sim.fps, lambda: sim.set_time_dilation(1.0), lambda: sim.set_fixed_timestep(0.0),
-        sim.set_lockstep, sim.step, lambda: sim.switch_world("warehouse"), lambda: sim.set_weather("RAIN"),
+        sim.set_lockstep, sim.step, lambda: sim.switch_world("warehouse"), sim.list_worlds, lambda: sim.set_weather("RAIN"),
         lambda: sim.set_daytime(12, 30), lambda: sim.set_graphics_settings("EPIC"), lambda: sim.set_forest_density(2),
         lambda: sim.set_forest_hilly_level(1), lambda: sim.set_mutual_visibility(False), sim.capture_mode,
         lambda: sim.set_capture_mode("ON_DEMAND"), sim.world_origin, sim.class_map, lambda: sim.spawn_objects("objects: []"),

@@ -4,7 +4,7 @@ import importlib
 
 import numpy as np
 
-from .data import Collision, EventBatch, Frame, LidarScan, RobotInfo, RobotState, SensorInfo, StateResult, TimeInfo
+from .data import Collision, EventBatch, Frame, LidarScan, RobotInfo, RobotState, SensorInfo, StateResult, SwitchResult, TimeInfo, WorldInfo, WorldList
 from .geometry import Pose, as_pose
 from .messages import Message, message, pose_from_wire, pose_to_wire, table_of, vec3_from_wire, vec3_to_wire
 from .transport import Connection, FlightForgeError
@@ -22,29 +22,6 @@ from .wire.TrajectorySample import TrajectorySampleT
 from .wire.Weather import Weather
 
 API_MAJOR = 1
-
-# legacy friendly names onto level names; a full package path also works
-WORLD_LEVELS = {
-    "valley": "Valley",
-    "forest": "Forest",
-    "infinite_forest": "infinite_forest",
-    "warehouse": "Warehouse",
-    "cave": "cave",
-    "erding_airbase": "erding_airbase",
-    "temesvar": "Temesvar_annotated",
-    "electric_towers": "electric_towers",
-    "eletric_towers": "electric_towers",
-    "race_1": "Race_1",
-    "race_2": "Race_2",
-    "race_3": "Race_3",
-    "industrial_warehouse": "/Game/Worlds/IndustrialWarehouse/Maps/industrial_warehouse",
-    "service_tunnel": "service_tunnel",
-    "dead_spruce_forest": "dead_spruce_forest",
-    "mala_skala": "mala_skala",
-    "kayenta_mine": "kayenta_mine",
-    "sprind_lab": "sprind_lab",
-    "spring_lab": "sprind_lab",
-}
 
 # any name resolving to a packed mesh or an on-disk .glb also spawns
 ROBOT_NAMES = ("x500", "t650", "a300", "robofly", "wing", "wing_2", "gimbal", "empty", "drone10", "drone20")
@@ -167,11 +144,14 @@ def _sensor(sensor_id):
 class Simulator:
     """The simulator: worlds, time, scene objects and robots, over one connection the robots share by default."""
 
-    def __init__(self, address="127.0.0.1", port=None, *, timeout=10.0, step_timeout=120.0, connect_attempts=1, retry_delay=0.5):
-        """port defaults to FLIGHTFORGE_PORT, else 8600; timeouts in s."""
+    def __init__(
+        self, address="127.0.0.1", port=None, *, timeout=10.0, step_timeout=120.0, switch_timeout=1860.0, connect_attempts=1, retry_delay=0.5
+    ):
+        """port defaults to FLIGHTFORGE_PORT, else 8600; timeouts in s, the simulator itself gives up on a switch after 1800."""
         self._connection = Connection(address, port, timeout)
         self._connection.connect(connect_attempts, retry_delay)
         self.step_timeout = float(step_timeout)
+        self.switch_timeout = float(switch_timeout)
 
         major, minor = self.info()[:2]
         if major != API_MAJOR:
@@ -248,9 +228,18 @@ class Simulator:
 
     # world //{
 
+    def list_worlds(self):
+        """The maps this build can open, the loaded one, and the one a switch in progress is loading."""
+        body = _body(self._call("ListWorldsRequest"), "ListWorldsResponse")
+        worlds = [WorldInfo(w.name or "", w.package or "", w.display_name or "") for w in body.worlds or []]
+        return WorldList(worlds, body.current or "", body.loading or "")
+
     def switch_world(self, level):
-        """A level name, a package path or a name from WORLD_LEVELS."""
-        self._call("SwitchWorldRequest", level=WORLD_LEVELS.get(level, level))
+        """A name from list_worlds, a package path, or a short name unique ignoring case; returns once the new world ticks.
+        Robots do not survive a switch: removed_robots names the ones that went with the old world."""
+        reply = _call(self._connection, "SwitchWorldRequest", {"level": str(level)}, timeout=self.switch_timeout)
+        body = _body(reply, "SwitchWorldResponse")
+        return SwitchResult(body.package or "", [int(i) for i in _numpy(body.removed_robots, np.int32)])
 
     def set_weather(self, weather):
         """A Weather value or its name; on a world without a sky or weather system the error says "has no sky system"."""

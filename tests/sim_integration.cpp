@@ -2299,6 +2299,105 @@ FF_TEST(DayClockFollowsSimulatedTime)
 
 /* //} */
 
+/* worlds //{ */
+
+std::vector<std::string> SplitNames(const std::string& text)
+{
+  std::vector<std::string> names;
+  size_t                   start = 0;
+  while (start <= text.size()) {
+    const size_t end = std::min(text.find(',', start), text.size());
+    if (end > start) {
+      names.push_back(text.substr(start, end - start));
+    }
+    start = end + 1;
+  }
+  return names;
+}
+
+FF_TEST(WorldsListTheLoadedOne)
+{
+  const auto list = Sim->ListWorlds();
+  FF_REQUIRE(list.ok);
+  FF_CHECK(!list->worlds.empty());
+  FF_CHECK(list->loading.empty());
+  FF_CHECK(std::any_of(list->worlds.begin(), list->worlds.end(), [&](const WorldInfo& w) { return w.package == list->current; }));
+
+  std::set<std::string> names;
+  for (const WorldInfo& world : list->worlds) {
+    FF_CHECK(!world.name.empty() && !world.display_name.empty());
+    FF_CHECK(world.package.rfind("/Game/", 0) == 0);
+    FF_CHECK(names.insert(world.name).second);
+  }
+  std::cout << "    " << list->worlds.size() << " worlds, loaded " << list->current << std::endl;
+}
+
+FF_TEST(UnknownWorldIsRefused)
+{
+  const auto before = Sim->ListWorlds();
+  FF_REQUIRE(before.ok);
+
+  for (const std::string bad : {"CaveTunnel", "IndustialWarehouse", "/Game/Nowhere/Maps/Nowhere", ""}) {
+    const auto reply = Sim->SwitchWorld(bad);
+    FF_CHECK(!reply.ok);
+    std::cout << "    \"" << bad << "\": " << reply.error << std::endl;
+  }
+
+  const auto after = Sim->ListWorlds();
+  FF_REQUIRE(after.ok);
+  FF_CHECK(after->current == before->current);
+  FF_CHECK(Drone->GetState().ok);
+}
+
+// FF_SWITCH_WORLDS="Valley,MF_Kladno" visits each world and returns to the first, spawning a robot after every switch
+FF_TEST(SwitchThenSpawn)
+{
+  const char* env = std::getenv("FF_SWITCH_WORLDS");
+  if (!env) {
+    fftest::Skip("FF_SWITCH_WORLDS names the worlds to visit");
+  }
+
+  const auto start = Sim->ListWorlds();
+  FF_REQUIRE(start.ok);
+  std::vector<std::string> targets = SplitNames(env);
+  targets.push_back(start->current);
+
+  for (const std::string& target : targets) {
+    const int  old_id  = Drone->Id();
+    const auto started = Clock::now();
+    const auto result  = Sim->SwitchWorld(target);
+    const auto seconds = std::chrono::duration<double>(Clock::now() - started).count();
+    std::cout << "    " << target << ": " << (result.ok ? result->package : result.error) << " in " << seconds << " s" << std::endl;
+    FF_REQUIRE(result.ok);
+    FF_CHECK(std::find(result->removed_robots.begin(), result->removed_robots.end(), old_id) != result->removed_robots.end());
+
+    const auto list = Sim->ListWorlds();
+    FF_REQUIRE(list.ok);
+    FF_CHECK(list->current == result->package);
+    FF_CHECK(list->loading.empty());
+
+    const auto gone = RobotClient(Sim->SharedConnection(), old_id).GetState();
+    FF_CHECK(!gone.ok && gone.error.find("switch_world") != std::string::npos);
+
+    const auto id = Sim->SpawnRobot("x500", kHome, "test");
+    FF_REQUIRE(id.ok);
+    Drone = std::make_unique<RobotClient>(Sim->SharedConnection(), *id);
+    FF_CHECK(Drone->GetState().ok);
+
+    bool framed = false;
+    for (int attempt = 0; attempt < 50 && !framed; ++attempt) {
+      const auto image = Drone->GetRgbCameraData();
+      framed           = image.ok && !image->data.empty();
+      if (!framed) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      }
+    }
+    FF_CHECK(framed);
+  }
+}
+
+/* //} */
+
 }  // namespace
 
 int main()
@@ -2324,7 +2423,7 @@ int main()
 
   const int result = fftest::RunAll();
 
-  Sim->RemoveRobot(*id);
+  Sim->RemoveRobot(Drone->Id());
   connection->Disconnect();
 
   return result;

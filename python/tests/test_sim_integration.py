@@ -1288,27 +1288,38 @@ def test_gym_envs_build_through_make(sim):
             env.close()
 
 
-@pytest.mark.skipif(os.environ.get("FF_ALLOW_WORLD_SWITCH") is None, reason="switches the loaded map; set FF_ALLOW_WORLD_SWITCH=1 to run")
-def test_world_switch_keeps_the_server_answering(sim):
-    """A map carrying its own GameModeOverride used to leave the server unbound after the switch."""
-    target = "/Game/FirstPerson/Lvl_FirstPerson"
-    sim.switch_world(target)
+def test_list_worlds_names_the_loaded_one(sim):
+    worlds, current, loading = sim.list_worlds()
+    assert worlds and not loading
+    assert current in {w.package for w in worlds}
+    assert len({w.name for w in worlds}) == len(worlds)
 
-    deadline = time.time() + 120.0
-    while time.time() < deadline:
+
+def test_unknown_world_is_refused(sim):
+    before = sim.list_worlds().current
+    for bad in ("CaveTunnel", "IndustialWarehouse", "/Game/Nowhere/Maps/Nowhere"):
+        with pytest.raises(FlightForgeError, match="unknown world|no map"):
+            sim.switch_world(bad)
+    assert sim.list_worlds().current == before
+
+
+@pytest.mark.skipif(os.environ.get("FF_SWITCH_WORLDS") is None, reason="switches the loaded map; FF_SWITCH_WORLDS names the worlds to visit")
+def test_switch_then_spawn(sim):
+    """Each switch answers once the world ticks, the old robots are gone, and one spawned right after works."""
+    start = sim.list_worlds().current
+    for target in os.environ["FF_SWITCH_WORLDS"].split(",") + [start]:
+        before = sim.spawn_robot((0.0, 0.0, 2.0))
+        package, removed = sim.switch_world(target)
+        assert before.id in removed
+        assert sim.list_worlds().current == package
+        with pytest.raises(FlightForgeError, match="switch_world"):
+            before.get_state()
+
+        robot = sim.spawn_robot((0.0, 0.0, 2.0))
         try:
-            with Simulator(port=sim.connection.port) as probe:
-                if probe.fps() > 0:
-                    break
-        except FlightForgeError:
-            pass
-        time.sleep(2.0)
-    else:
-        pytest.fail(f"the server never answered again after switching to {target}")
-
-    with Simulator(port=sim.connection.port) as after:
-        robot = after.spawn_robot((0.0, 0.0, 3.0))
-        after.remove_robot(robot)
+            robot.get_state()
+        finally:
+            sim.remove_robot(robot)
 
 
 # //}

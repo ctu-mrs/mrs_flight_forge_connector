@@ -297,6 +297,26 @@ struct DaytimeInfo
   std::string sky;  // ultra_dynamic_sky, sun_sky or lights
 };
 
+struct WorldInfo
+{
+  std::string name;  // what SwitchWorld takes
+  std::string package;
+  std::string display_name;
+};
+
+struct WorldList
+{
+  std::vector<WorldInfo> worlds;
+  std::string            current;  // package of the world that has begun play, empty while none has
+  std::string            loading;  // package a SwitchWorld in progress is loading, else empty
+};
+
+struct SwitchWorldResult
+{
+  std::string      package;
+  std::vector<int> removed_robots;  // robots do not survive a switch
+};
+
 struct StepResult
 {
   double   sim_time   = 0.0;
@@ -342,35 +362,6 @@ struct UavFrameType
   static const std::vector<std::string>& KnownNames() {
     static const std::vector<std::string> names = {"x500", "t650", "a300", "robofly", "wing", "wing_2", "gimbal", "empty", "drone10", "drone20"};
     return names;
-  }
-};
-
-struct WorldName
-{
-  // legacy friendly names onto level names; a full package path also works
-  static const std::map<std::string, std::string>& Name2Level() {
-    static const std::map<std::string, std::string> map = {
-        {"valley", "Valley"},
-        {"forest", "Forest"},
-        {"infinite_forest", "infinite_forest"},
-        {"warehouse", "Warehouse"},
-        {"cave", "cave"},
-        {"erding_airbase", "erding_airbase"},
-        {"temesvar", "Temesvar_annotated"},
-        {"electric_towers", "electric_towers"},
-        {"eletric_towers", "electric_towers"},
-        {"race_1", "Race_1"},
-        {"race_2", "Race_2"},
-        {"race_3", "Race_3"},
-        {"industrial_warehouse", "/Game/Worlds/IndustrialWarehouse/Maps/industrial_warehouse"},
-        {"service_tunnel", "service_tunnel"},
-        {"dead_spruce_forest", "dead_spruce_forest"},
-        {"mala_skala", "mala_skala"},
-        {"kayenta_mine", "kayenta_mine"},
-        {"sprind_lab", "sprind_lab"},
-        {"spring_lab", "sprind_lab"},
-    };
-    return map;
   }
 };
 

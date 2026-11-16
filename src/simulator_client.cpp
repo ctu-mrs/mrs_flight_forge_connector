@@ -108,10 +108,44 @@ Expected<StepResult> SimulatorClient::Step(const uint32_t ticks) {
 
 /* world //{ */
 
-Status SimulatorClient::SwitchWorld(const std::string& level) {
+Expected<WorldList> SimulatorClient::ListWorlds() {
   FBB        b;
-  const auto name = b.CreateString(level);
-  return AsStatus(connection_->Call(b, wire::CreateSwitchWorldRequest(b, name)));
+  const auto reply = connection_->Call(b, wire::CreateListWorldsRequest(b));
+  Status     status;
+  const auto body = Body<wire::ListWorldsResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+
+  const auto text = [](const flatbuffers::String* s) { return s ? s->str() : std::string(); };
+
+  WorldList list;
+  list.current = text(body->current());
+  list.loading = text(body->loading());
+  if (body->worlds()) {
+    for (const auto* world : *body->worlds()) {
+      list.worlds.push_back(WorldInfo{text(world->name()), text(world->package()), text(world->display_name())});
+    }
+  }
+  return list;
+}
+
+Expected<SwitchWorldResult> SimulatorClient::SwitchWorld(const std::string& level) {
+  FBB        b;
+  const auto name  = b.CreateString(level);
+  const auto reply = connection_->Call(b, wire::CreateSwitchWorldRequest(b, name), std::nullopt, std::nullopt, switch_timeout_);
+  Status     status;
+  const auto body = Body<wire::SwitchWorldResponse>(reply, status);
+  if (!body) {
+    return status;
+  }
+
+  SwitchWorldResult result;
+  result.package = body->package() ? body->package()->str() : std::string();
+  if (body->removed_robots()) {
+    result.removed_robots.assign(body->removed_robots()->begin(), body->removed_robots()->end());
+  }
+  return result;
 }
 
 Status SimulatorClient::SetWeather(const wire::Weather weather) {

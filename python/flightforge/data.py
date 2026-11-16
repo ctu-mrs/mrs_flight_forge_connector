@@ -39,6 +39,23 @@ class TimeInfo(NamedTuple):
     time_dilation: float
 
 
+class WorldInfo(NamedTuple):
+    name: str  # what switch_world takes
+    package: str
+    display_name: str
+
+
+class WorldList(NamedTuple):
+    worlds: List[WorldInfo]
+    current: str  # package of the world that has begun play, empty while none has
+    loading: str  # package a switch in progress is loading, else empty
+
+
+class SwitchResult(NamedTuple):
+    package: str
+    removed_robots: List[int]
+
+
 class Collision(NamedTuple):
     collided: bool
     impact_point: np.ndarray  # m

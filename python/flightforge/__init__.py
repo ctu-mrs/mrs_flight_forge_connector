@@ -4,8 +4,22 @@ Everything is in the ground frame (x forward, y left, z up, origin on the floor 
 metres, unit quaternions (x, y, z, w) and rad/s.
 """
 
-from .client import API_MAJOR, ROBOT_NAMES, WORLD_LEVELS, Robot, Simulator
-from .data import Collision, EventBatch, Frame, LidarScan, RobotInfo, RobotState, SensorInfo, StateResult, TimeInfo, decode_image
+from .client import API_MAJOR, ROBOT_NAMES, Robot, Simulator
+from .data import (
+    Collision,
+    EventBatch,
+    Frame,
+    LidarScan,
+    RobotInfo,
+    RobotState,
+    SensorInfo,
+    StateResult,
+    SwitchResult,
+    TimeInfo,
+    WorldInfo,
+    WorldList,
+    decode_image,
+)
 from .geometry import Pose, quat_conjugate, quat_from_rpy, quat_multiply, quat_rotate, rpy_from_quat
 from .messages import Message, message
 from .transport import DEFAULT_PORT, Connection, FlightForgeConnectionError, FlightForgeError
@@ -60,9 +74,11 @@ __all__ = [
     "SensorType",
     "Simulator",
     "StateResult",
+    "SwitchResult",
     "TimeInfo",
-    "WORLD_LEVELS",
     "Weather",
+    "WorldInfo",
+    "WorldList",
     "decode_image",
     "message",
     "quat_conjugate",

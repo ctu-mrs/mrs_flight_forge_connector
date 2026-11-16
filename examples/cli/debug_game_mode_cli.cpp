@@ -27,7 +27,8 @@ void Menu() {
             << "6 fps and time\n"
             << "7 set weather [ID]\n"
             << "8 set daytime [HOUR] [MINUTE]\n"
-            << "9 switch world [LEVEL or friendly name]\n"
+            << "9 switch world [name from l, or package path]\n"
+            << "l list worlds\n"
             << "a set graphics [0 low .. 4 cinematic]\n"
             << "b mutual visibility [0|1]\n"
             << "c spawn objects from yaml [PATH]\n"
@@ -115,8 +116,13 @@ int main() {
     } else if (command == "9") {
       std::string level;
       in >> level;
-      const auto& names = WorldName::Name2Level();
-      Report(sim.SwitchWorld(names.count(level) ? names.at(level) : level));
+      Report(sim.SwitchWorld(level));
+    } else if (command == "l") {
+      const auto list = sim.ListWorlds();
+      Report(list);
+      for (const auto& world : list.value.worlds) {
+        std::cout << "  " << world.name << (world.package == list.value.current ? "  (loaded)" : "") << std::endl;
+      }
     } else if (command == "a") {
       int quality = 2;
       in >> quality;

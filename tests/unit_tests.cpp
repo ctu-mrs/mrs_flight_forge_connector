@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -53,6 +54,13 @@ public:
 
   uint16_t Port() const {
     return port_;
+  }
+
+  static void Send(const int fd, const flatbuffers::FlatBufferBuilder& b) {
+    std::vector<uint8_t> frame(kFrameHeaderBytes + b.GetSize());
+    EncodeFrameHeader(b.GetSize(), frame.data());
+    std::copy(b.GetBufferPointer(), b.GetBufferPointer() + b.GetSize(), frame.begin() + kFrameHeaderBytes);
+    ::send(fd, frame.data(), frame.size(), MSG_NOSIGNAL);
   }
 
   static void Reply(const int fd, const uint32_t seq, const bool ok, const size_t chunk = 0, const size_t padding = 0) {
@@ -246,22 +254,6 @@ FF_TEST(UavFrameCatalog)
   FF_CHECK(std::find(Names.begin(), Names.end(), "t650") != Names.end());
 }
 
-FF_TEST(WorldNameCatalog)
-{
-  const auto& Levels = WorldName::Name2Level();
-
-  FF_CHECK(!Levels.empty());
-  for (const auto& [Name, Level] : Levels) {
-    FF_CHECK(!Name.empty());
-    FF_CHECK(!Level.empty());
-  }
-
-  for (const char* Legacy : {"eletric_towers", "electric_towers", "sprind_lab", "kayenta_mine", "mala_skala", "warehouse"}) {
-    FF_CHECK(Levels.count(Legacy) == 1);
-  }
-  FF_CHECK(Levels.at("sprind_lab") == "sprind_lab");
-}
-
 /* //} */
 
 /* instance id convention //{ */
@@ -314,6 +306,67 @@ FF_TEST(SphereSearchConvergesOnTheSurface)
 
   const auto Blocked = [](const double Radius) { return Radius >= 1.234567; };
   FF_CHECK(std::fabs(Search(Blocked, 5.0, 0.01) - 1.234567) <= 0.01);
+}
+
+/* //} */
+
+/* worlds //{ */
+
+FF_TEST(ListWorldsReadsNamesAndState)
+{
+  FakeSimulator fake([](const int fd, const uint32_t seq, int) {
+    flatbuffers::FlatBufferBuilder b;
+    const auto worlds = std::vector<flatbuffers::Offset<wire::WorldInfo>>{
+        wire::CreateWorldInfoDirect(b, "Warehouse", "/Game/Worlds/Warehouse/Maps/Warehouse", "Warehouse"),
+        wire::CreateWorldInfoDirect(b, "/Game/Worlds/Warehouse/Maps/SprindLab", "/Game/Worlds/Warehouse/Maps/SprindLab", "Sprind Lab"),
+    };
+    const auto body = wire::CreateListWorldsResponseDirect(b, &worlds, "/Game/Worlds/Warehouse/Maps/Warehouse", "");
+    b.Finish(wire::CreateResponse(b, seq, true, 0, wire::ResponseBody::ListWorldsResponse, body.Union()));
+    FakeSimulator::Send(fd, b);
+  });
+
+  SimulatorClient sim(std::make_shared<Connection>("127.0.0.1", fake.Port()));
+  FF_REQUIRE(sim.Connect());
+  const auto list = sim.ListWorlds();
+  FF_REQUIRE(list.ok);
+  FF_REQUIRE(list->worlds.size() == 2);
+  FF_CHECK(list->worlds[0].name == "Warehouse");
+  FF_CHECK(list->worlds[1].name == list->worlds[1].package);
+  FF_CHECK(list->worlds[1].display_name == "Sprind Lab");
+  FF_CHECK(list->current == "/Game/Worlds/Warehouse/Maps/Warehouse");
+  FF_CHECK(list->loading.empty());
+}
+
+// a switch answers only once the new world ticks, far beyond the usual receive timeout
+FF_TEST(SwitchWorldWaitsAndReportsRemovedRobots)
+{
+  FakeSimulator fake([](const int fd, const uint32_t seq, const int index) {
+    flatbuffers::FlatBufferBuilder b;
+    if (index == 0) {
+      b.Finish(wire::CreateResponseDirect(b, seq, false, "unknown world \"CaveTunnel\"; list_worlds names the 2 maps in this build"));
+      FakeSimulator::Send(fd, b);
+      return;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    const std::vector<int32_t> removed{0, 2};
+    const auto body = wire::CreateSwitchWorldResponseDirect(b, "/Game/Worlds/Valley/Maps/Valley", &removed);
+    b.Finish(wire::CreateResponse(b, seq, true, 0, wire::ResponseBody::SwitchWorldResponse, body.Union()));
+    FakeSimulator::Send(fd, b);
+  });
+
+  auto connection = std::make_shared<Connection>("127.0.0.1", fake.Port());
+  FF_REQUIRE(connection->Connect());
+  connection->SetReceiveTimeout(std::chrono::milliseconds(100));
+  SimulatorClient sim(connection);
+
+  const auto bad = sim.SwitchWorld("CaveTunnel");
+  FF_CHECK(!bad.ok);
+  FF_CHECK(bad.error.find("unknown world") != std::string::npos);
+
+  const auto good = sim.SwitchWorld("Valley");
+  FF_REQUIRE(good.ok);
+  FF_CHECK(good->package == "/Game/Worlds/Valley/Maps/Valley");
+  FF_CHECK((good->removed_robots == std::vector<int>{0, 2}));
 }
 
 /* //} */

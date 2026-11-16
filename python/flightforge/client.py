@@ -409,20 +409,29 @@ class Simulator:
         body = reply.body(_table_class("GetDistanceBatchResponse"))
         return _numpy(body.DistancesAsNumpy(), np.float32)
 
-    def surface_height(self, points, ignore_robots=True):
-        """Height in m of the first surface below each (N, 2) or (N, 3) point, NaN where there is none; no z or a NaN z traces from the top."""
+    def surface_height(self, points, ignore_robots=True, robot_ids=None):
+        """Height in m of the first surface below each (N, 2) or (N, 3) point, NaN where there is none; no z or a NaN z traces from the top.
+
+        With robot_ids (API 1.8), one per point, each point leaves out only that robot (-1 none) and stands on every other one."""
         points = np.atleast_2d(np.asarray(points, dtype="<f8"))
         if points.ndim != 2 or points.shape[1] not in (2, 3):
             raise ValueError(f"points must be (N, 2) or (N, 3), got {points.shape}")
         if points.shape[1] == 2:
             points = np.column_stack([points, np.full(len(points), np.nan)])
         points = np.ascontiguousarray(points, dtype="<f8")
+        if robot_ids is not None:
+            robot_ids = np.asarray(robot_ids, dtype="<i4").reshape(-1)
+            if len(robot_ids) != len(points):
+                raise ValueError(f"robot_ids needs one id per point, got {len(robot_ids)} for {len(points)}")
 
         def build(builder):
             vector = _create_struct_vector(builder, points)
+            ids = builder.CreateNumpyVector(robot_ids) if robot_ids is not None else None
             _surface_request.Start(builder)
             _surface_request.AddPoints(builder, vector)
             _surface_request.AddIgnoreRobots(builder, bool(ignore_robots))
+            if ids is not None:
+                _surface_request.AddRobotIds(builder, ids)
             return _surface_request.End(builder)
 
         reply = self._connection.call(RequestBody.GetSurfaceHeightRequest, build)

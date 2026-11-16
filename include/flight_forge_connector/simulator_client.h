@@ -17,7 +17,7 @@ namespace flightforge
 class SimulatorClient {
 public:
   static constexpr uint16_t kApiMajor = 1;
-  static constexpr uint16_t kApiMinor = 7;
+  static constexpr uint16_t kApiMinor = 8;
 
   SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
   explicit SimulatorClient(std::shared_ptr<Connection> connection);
@@ -121,6 +121,9 @@ public:
   // m, of the first surface below each point, NaN where there is none; a NaN z traces from the top of the world
   Expected<std::vector<double>> GetSurfaceHeight(const std::vector<Vec3>& points, bool ignore_robots = true);
 
+  // API 1.8: point i leaves out only robot robot_ids[i] (-1 none) and stands on every other robot
+  Expected<std::vector<double>> GetSurfaceHeight(const std::vector<Vec3>& points, const std::vector<int32_t>& robot_ids);
+
   /* //} */
 
   /* robots //{ */
@@ -135,6 +138,8 @@ public:
   /* //} */
 
 private:
+  Expected<std::vector<double>> SurfaceHeight(const std::vector<Vec3>& points, bool ignore_robots, const std::vector<int32_t>* robot_ids);
+
   std::shared_ptr<Connection> connection_;
   std::chrono::milliseconds   step_timeout_{120000};
   std::chrono::milliseconds   switch_timeout_{1860000};

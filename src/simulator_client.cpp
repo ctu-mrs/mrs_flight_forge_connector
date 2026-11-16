@@ -439,14 +439,27 @@ Expected<std::vector<float>> SimulatorClient::GetDistanceBatch(const std::vector
 }
 
 Expected<std::vector<double>> SimulatorClient::GetSurfaceHeight(const std::vector<Vec3>& points, const bool ignore_robots) {
+  return SurfaceHeight(points, ignore_robots, nullptr);
+}
+
+Expected<std::vector<double>> SimulatorClient::GetSurfaceHeight(const std::vector<Vec3>& points, const std::vector<int32_t>& robot_ids) {
+  if (robot_ids.size() != points.size()) {
+    return Status::Fail("get_surface_height takes one robot id per point, got " + std::to_string(robot_ids.size()) + " for " + std::to_string(points.size()) +
+                        " points");
+  }
+  return SurfaceHeight(points, false, &robot_ids);
+}
+
+Expected<std::vector<double>> SimulatorClient::SurfaceHeight(const std::vector<Vec3>& points, const bool ignore_robots, const std::vector<int32_t>* robot_ids) {
   static_assert(sizeof(Vec3) == sizeof(wire::Vec3));
 
   FBB         b;
   wire::Vec3* out    = nullptr;
   const auto  vector = b.CreateUninitializedVectorOfStructs(points.size(), &out);
   std::memcpy(out, points.data(), points.size() * sizeof(wire::Vec3));
+  const auto ids = robot_ids ? b.CreateVector(*robot_ids) : flatbuffers::Offset<flatbuffers::Vector<int32_t>>();
 
-  const auto reply = connection_->Call(b, wire::CreateGetSurfaceHeightRequest(b, vector, ignore_robots));
+  const auto reply = connection_->Call(b, wire::CreateGetSurfaceHeightRequest(b, vector, ignore_robots, ids));
   Status     status;
   const auto body = Body<wire::GetSurfaceHeightResponse>(reply, status);
   if (!body) {

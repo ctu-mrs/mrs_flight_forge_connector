@@ -57,7 +57,7 @@ def livox(robot, sensor_id, **fields):
 
 
 def test_api_version(sim):
-    assert sim.api_version == (1, 6)
+    assert sim.api_version == (1, 8)
 
 
 def test_schema_matches_this_build(sim):
@@ -685,6 +685,12 @@ def test_surface_height_finds_the_ground_below_each_point(sim, robot):
         assert abs(heights[5]) < 0.01
         assert z < sim.surface_height([(x, y, z + 3.0)], ignore_robots=False)[0] < z + 0.5
         assert sim.surface_height(np.zeros((0, 3))).size == 0
+
+        own, other = sim.surface_height([(x, y, z + 3.0), (x, y, z + 3.0)], robot_ids=[robot.id, -1])
+        assert abs(own) < 0.01
+        assert z < other < z + 0.5
+        with pytest.raises(FlightForgeError):
+            sim.surface_height([(x, y, z + 3.0)], robot_ids=[987654])
     finally:
         sim.clear_objects()
 

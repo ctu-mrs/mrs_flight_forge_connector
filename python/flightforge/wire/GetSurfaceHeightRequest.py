@@ -55,8 +55,35 @@ class GetSurfaceHeightRequest(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return True
 
+    # GetSurfaceHeightRequest
+    def RobotIds(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Int32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # GetSurfaceHeightRequest
+    def RobotIdsAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Int32Flags, o)
+        return 0
+
+    # GetSurfaceHeightRequest
+    def RobotIdsLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # GetSurfaceHeightRequest
+    def RobotIdsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        return o == 0
+
 def GetSurfaceHeightRequestStart(builder):
-    builder.StartObject(2)
+    builder.StartObject(3)
 
 def Start(builder):
     GetSurfaceHeightRequestStart(builder)
@@ -79,6 +106,18 @@ def GetSurfaceHeightRequestAddIgnoreRobots(builder, ignoreRobots):
 def AddIgnoreRobots(builder, ignoreRobots):
     GetSurfaceHeightRequestAddIgnoreRobots(builder, ignoreRobots)
 
+def GetSurfaceHeightRequestAddRobotIds(builder, robotIds):
+    builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(robotIds), 0)
+
+def AddRobotIds(builder, robotIds):
+    GetSurfaceHeightRequestAddRobotIds(builder, robotIds)
+
+def GetSurfaceHeightRequestStartRobotIdsVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def StartRobotIdsVector(builder, numElems):
+    return GetSurfaceHeightRequestStartRobotIdsVector(builder, numElems)
+
 def GetSurfaceHeightRequestEnd(builder):
     return builder.EndObject()
 
@@ -98,9 +137,11 @@ class GetSurfaceHeightRequestT(object):
         self,
         points = None,
         ignoreRobots = True,
+        robotIds = None,
     ):
         self.points = points  # type: Optional[List[flightforge.wire.Vec3.Vec3T]]
         self.ignoreRobots = ignoreRobots  # type: bool
+        self.robotIds = robotIds  # type: Optional[List[int]]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -132,6 +173,13 @@ class GetSurfaceHeightRequestT(object):
                     vec3_ = flightforge.wire.Vec3.Vec3T.InitFromObj(getSurfaceHeightRequest.Points(i))
                     self.points.append(vec3_)
         self.ignoreRobots = getSurfaceHeightRequest.IgnoreRobots()
+        if not getSurfaceHeightRequest.RobotIdsIsNone():
+            if np is None:
+                self.robotIds = []
+                for i in range(getSurfaceHeightRequest.RobotIdsLength()):
+                    self.robotIds.append(getSurfaceHeightRequest.RobotIds(i))
+            else:
+                self.robotIds = getSurfaceHeightRequest.RobotIdsAsNumpy()
 
     # GetSurfaceHeightRequestT
     def Pack(self, builder):
@@ -140,9 +188,19 @@ class GetSurfaceHeightRequestT(object):
             for i in reversed(range(len(self.points))):
                 self.points[i].Pack(builder)
             points = builder.EndVector()
+        if self.robotIds is not None:
+            if np is not None and type(self.robotIds) is np.ndarray:
+                robotIds = builder.CreateNumpyVector(self.robotIds)
+            else:
+                GetSurfaceHeightRequestStartRobotIdsVector(builder, len(self.robotIds))
+                for i in reversed(range(len(self.robotIds))):
+                    builder.PrependInt32(self.robotIds[i])
+                robotIds = builder.EndVector()
         GetSurfaceHeightRequestStart(builder)
         if self.points is not None:
             GetSurfaceHeightRequestAddPoints(builder, points)
         GetSurfaceHeightRequestAddIgnoreRobots(builder, self.ignoreRobots)
+        if self.robotIds is not None:
+            GetSurfaceHeightRequestAddRobotIds(builder, robotIds)
         getSurfaceHeightRequest = GetSurfaceHeightRequestEnd(builder)
         return getSurfaceHeightRequest

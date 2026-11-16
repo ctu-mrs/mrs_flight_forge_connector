@@ -1452,6 +1452,13 @@ FF_TEST(SurfaceHeightFindsTheGroundBelowEachPoint)
   const auto none = Sim->GetSurfaceHeight({});
   FF_CHECK(none.ok && none->empty());
 
+  const auto per_robot = Sim->GetSurfaceHeight({Vec3{drone.x, drone.y, drone.z + 3.0}, Vec3{drone.x, drone.y, drone.z + 3.0}}, std::vector<int32_t>{Drone->Id(), -1});
+  FF_REQUIRE(per_robot.ok && per_robot->size() == 2);
+  FF_CHECK(std::fabs((*per_robot)[0]) < 0.01);
+  FF_CHECK((*per_robot)[1] > drone.z && (*per_robot)[1] < drone.z + 0.5);
+  FF_CHECK(!Sim->GetSurfaceHeight({Vec3{drone.x, drone.y, drone.z + 3.0}}, std::vector<int32_t>{987654}).ok);
+  FF_CHECK(!Sim->GetSurfaceHeight({Vec3{drone.x, drone.y, drone.z + 3.0}}, std::vector<int32_t>{}).ok);
+
   Sim->RemoveAllSpawnedObjects();
 }
 

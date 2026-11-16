@@ -347,6 +347,22 @@ def test_surface_height_traces_from_the_top_when_no_z_is_given(fake):
     assert sim.surface_height(np.zeros((0, 2))).size == 0
     with pytest.raises(ValueError):
         sim.surface_height(np.zeros((2, 4)))
+    assert server.calls[-1].body.robotIds is None
+
+
+def test_surface_height_sends_one_robot_id_per_point(fake):
+    def handler(call):
+        if call.name == "GetSurfaceHeightRequest":
+            body = GetSurfaceHeightResponseT()
+            body.heights = np.zeros(len(call.body.points))
+            return body
+
+    server = fake(handler)
+    sim = connect(server)
+    sim.surface_height([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], robot_ids=[3, -1])
+    assert list(server.calls[-1].body.robotIds) == [3, -1]
+    with pytest.raises(ValueError):
+        sim.surface_height([(1.0, 2.0, 3.0)], robot_ids=[1, 2])
 
 
 def test_daytime_leaves_the_day_cycle_alone_unless_asked(fake):

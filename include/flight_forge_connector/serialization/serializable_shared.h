@@ -13,7 +13,7 @@ namespace Serializable
 {
 // bump minor for any wire change; get_meta carries per-op schema hashes so clients can also check op by op
 constexpr int api_version_major = 0;
-constexpr int api_version_minor = 23;
+constexpr int api_version_minor = 25;
 
 namespace Common
 {

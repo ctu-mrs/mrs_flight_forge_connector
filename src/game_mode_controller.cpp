@@ -3,6 +3,7 @@
 
 #include <flight_forge_connector/game_mode_controller.h>
 
+#include <algorithm>
 #include <sstream>
 
 using kissnet::socket_status;
@@ -72,9 +73,15 @@ std::pair<bool, int> GameModeController::SpawnDroneAtLocation(ueds_connector::Co
   request.z = Location.z;
   request.idMesh = TypeUavID;
 
+  // spawning loads the drone assets on the game thread, which can take well over a second on slow (e.g., CI) machines
+  const int saved_timeout = GetReceiveTimeoutMs();
+  SetReceiveTimeoutMs(std::max(saved_timeout, 10000));
+
   Serializable::GameMode::SpawnDroneAtLocation::Response response{};
   const auto                                   status  = Request(request, response);
   const auto                                   success = status && response.status;
+
+  SetReceiveTimeoutMs(saved_timeout);
 
   return std::make_pair(success, success ? response.port : 0);
 }

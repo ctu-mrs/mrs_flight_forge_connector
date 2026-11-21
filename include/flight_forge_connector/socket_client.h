@@ -92,10 +92,19 @@ public:
     return address_;
   }
 
+  void SetReceiveTimeoutMs(int ms) {
+    receive_timeout_ms_ = ms;
+  }
+
+  int GetReceiveTimeoutMs() const {
+    return receive_timeout_ms_;
+  }
+
 private:
   uint16_t                             port_    = DEFAULT_PORT;
   std::string                          address_ = LOCALHOST;
   std::unique_ptr<kissnet::tcp_socket> socket_  = nullptr;
+  int                                  receive_timeout_ms_ = 1000;
 
   std::queue<std::unique_ptr<std::vector<std::byte>>> in_queue_;
 

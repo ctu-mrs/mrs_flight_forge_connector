@@ -8,10 +8,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(LIBRARY_NAME flight_forge_connector)
 project(${LIBRARY_NAME} VERSION 1.0)
 
-if (WIN32)
-    link_libraries(ws2_32 wsock32)
+# an unoptimised client spends longer copying a raw frame than the simulator takes to render it
+if (PROJECT_IS_TOP_LEVEL AND NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+find_package(Threads REQUIRED)
+
+# Add the fpng library from gitman
+add_library(fpng STATIC
+    .gitman/fpng/src/fpng.cpp
+    .gitman/fpng/src/lodepng.cpp
+    .gitman/fpng/src/pvpngreader.cpp
+)
+target_include_directories(fpng PUBLIC .gitman/fpng/src)
+
+option(SSE "Enable SSE4.1" ON)
+
+if (SSE)
+  target_compile_definitions(fpng PRIVATE FPNG_NO_SSE=0)
+  target_compile_options(fpng PRIVATE -msse4.1 -mpclmul)
+else()
+  target_compile_definitions(fpng PRIVATE FPNG_NO_SSE=1)
+endif()
+# End of fpng library
+
+# add_subdirectory(.gitman/fpng)
 add_subdirectory(src)
 
 option(BUILD_EXAMPLES "Build examples" ON)
@@ -19,25 +41,8 @@ if (BUILD_EXAMPLES)
     add_subdirectory(examples/cli)
 endif()
 
-# option(BUILD_PYTHON_LIB "Build python lib" ON)
-# if (BUILD_PYTHON_LIB)
-#     add_subdirectory(extern/pybind11)
-
-#     file (GLOB PYTHON_LIB_SOURCE_FILES "src/*.cpp")
-
-#     include_directories("./include")
-
-#     pybind11_add_module(
-#             _uedsGameModeController
-#             ${PYTHON_LIB_SOURCE_FILES}
-#             src/python-modules/game-mode-controller-module.cpp
-#             )
-#     target_link_libraries(_uedsGameModeController PUBLIC)
-
-#     pybind11_add_module(
-#             _uedsDroneController
-#             ${PYTHON_LIB_SOURCE_FILES}
-#             src/python-modules/drone-controller-module.cpp
-#     )
-#     target_link_libraries(_uedsDroneController PUBLIC)
-# endif()
+option(BUILD_TESTS "Build the wire-protocol tests" OFF)
+if (BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

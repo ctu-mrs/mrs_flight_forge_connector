@@ -1,0 +1,148 @@
+#pragma once
+
+#include <array>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <flight_forge_connector/connection.h>
+#include <flight_forge_connector/data_types.h>
+
+namespace flightforge
+{
+
+// simulator-wide ops; poses in the ground frame
+class SimulatorClient {
+public:
+  static constexpr uint16_t kApiMajor = 1;
+  static constexpr uint16_t kApiMinor = 8;
+
+  SimulatorClient(const std::string& address = "127.0.0.1", uint16_t port = Connection::kDefaultPort);
+  explicit SimulatorClient(std::shared_ptr<Connection> connection);
+
+  bool Connect(int attempts = 1, std::chrono::milliseconds retry_delay = std::chrono::milliseconds(500)) {
+    return connection_->Connect(attempts, retry_delay);
+  }
+  void Disconnect() {
+    connection_->Disconnect();
+  }
+  const std::shared_ptr<Connection>& SharedConnection() const {
+    return connection_;
+  }
+
+  // how long Step may run before the call gives up
+  void SetStepTimeout(std::chrono::milliseconds timeout) {
+    step_timeout_ = timeout;
+  }
+
+  // the simulator gives up on a switch after 30 min; a large world can take ten
+  void SetSwitchTimeout(std::chrono::milliseconds timeout) {
+    switch_timeout_ = timeout;
+  }
+
+  /* connection //{ */
+
+  Status           Ping();
+  Expected<ApiInfo> GetInfo();
+
+  /* //} */
+
+  /* time //{ */
+
+  Expected<TimeInfo> GetTime();
+  Expected<float>    GetFps();
+
+  // returns what the engine applied after its clamp
+  Expected<double> SetTimeDilation(double dilation);
+
+  // dt 0 follows the wall clock; adaptive_min_dt > 0 lets an event camera shrink the step
+  Expected<double> SetFixedTimestep(double dt, double adaptive_min_dt = 0.0);
+
+  // lockstep parks the world paused; Step runs ticks and returns once every camera has its frames
+  Status               SetLockstep(bool enabled);
+  Expected<StepResult> Step(uint32_t ticks = 1);
+
+  /* //} */
+
+  /* world //{ */
+
+  // the maps this build can open, and what is loaded
+  Expected<WorldList> ListWorlds();
+  // a name from ListWorlds, a package path, or a short name unique ignoring case; returns once the new world ticks
+  Expected<SwitchWorldResult> SwitchWorld(const std::string& level);
+  // a world without a sky or weather system fails with an error containing "has no sky system"
+  Status SetWeather(wire::Weather weather);
+  // animate unset keeps the level's day cycle; true runs it at the level's day length (Ultra Dynamic Sky only)
+  Status                SetDaytime(int hour, int minute, std::optional<bool> animate = std::nullopt);
+  Expected<DaytimeInfo> GetDaytime();
+  Status SetGraphicsSettings(wire::GraphicsQuality quality);
+
+  // the main viewport, read after its next frame; with a robot and a camera's sensor_id it first takes that camera's pose, fov and
+  // image size (view: stereo eye, 0 left, or fisheye face) and keeps them until ReleaseViewport
+  Expected<ViewportImage> GetViewportImage(std::optional<int> robot_id = std::nullopt, int sensor_id = -1, int view = 0, bool raw = true);
+  Status                  ReleaseViewport();
+  Status SetForestDensity(int level);
+  Status SetForestHillyLevel(int level);
+  Status SetMutualVisibility(bool enabled);
+
+  Expected<wire::CaptureMode> GetCaptureMode();
+  Status                      SetCaptureMode(wire::CaptureMode mode);
+
+  // the ground frame's origin in Unreal cm, for aligning with editor coordinates
+  Expected<Vec3> GetWorldOrigin();
+
+  Expected<wire::GetClassMapResponseT> GetClassMap();
+
+  /* //} */
+
+  /* scene //{ */
+
+  Expected<std::vector<int>> SpawnObjectsFromYaml(const std::string& yaml);
+  Expected<int>              RemoveSpawnedObject(int object_id);
+  Expected<int>              RemoveAllSpawnedObjects();
+  Status                     MoveSpawnedObject(int object_id, const Pose& pose, const Vec3& scale = Vec3{1.0, 1.0, 1.0});
+
+  Expected<std::vector<SpawnedObject>> ListSpawnedObjects();
+  Expected<std::string>                ExportScene();
+
+  Expected<AssetList>   ListAssets(const std::string& path_prefix = "", const std::string& name_filter = "");
+  Expected<int>         LoadLibrary(const std::string& path);
+  Expected<LibraryPage> ListLibrary(const std::string& library = "", const std::string& object_class = "", const std::string& filter = "",
+                                    uint32_t offset = 0, uint32_t limit = 200);
+
+  // any extent <= 0 takes the whole world
+  Expected<WorldMesh> GetWorldMesh(const Vec3& center = {}, const Vec3& extent = {}, uint32_t max_triangles = 0);
+
+  Expected<std::vector<float>> GetDistanceBatch(const std::vector<std::array<float, 3>>& points, double max_radius = 5.0, double tolerance = 0.001,
+                                                bool terrain_only = false);
+
+  // m, of the first surface below each point, NaN where there is none; a NaN z traces from the top of the world
+  Expected<std::vector<double>> GetSurfaceHeight(const std::vector<Vec3>& points, bool ignore_robots = true);
+
+  // API 1.8: point i leaves out only robot robot_ids[i] (-1 none) and stands on every other robot
+  Expected<std::vector<double>> GetSurfaceHeight(const std::vector<Vec3>& points, const std::vector<int32_t>& robot_ids);
+
+  /* //} */
+
+  /* robots //{ */
+
+  Expected<int>                    SpawnRobot(const std::string& name, const Pose& pose, const std::string& label = "");
+  Expected<std::vector<RobotInfo>> ListRobots();
+  Status                           RemoveRobot(int robot_id);
+
+  // many robots in one message; results are empty unless wait_applied
+  Expected<std::vector<SetStateResult>> SetStates(const std::vector<std::pair<int, RobotState>>& states, bool collide = false, bool wait_applied = true);
+
+  /* //} */
+
+private:
+  Expected<std::vector<double>> SurfaceHeight(const std::vector<Vec3>& points, bool ignore_robots, const std::vector<int32_t>* robot_ids);
+
+  std::shared_ptr<Connection> connection_;
+  std::chrono::milliseconds   step_timeout_{120000};
+  std::chrono::milliseconds   switch_timeout_{1860000};
+};
+
+}  // namespace flightforge

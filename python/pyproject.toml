@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flightforge"
+version = "1.0.0"
+description = "Pure-Python client for the FlightForge simulator (API 1.0), with Gymnasium environments and a MuJoCo dynamics bridge"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "flatbuffers==25.12.19",
+    "numpy",
+]
+
+[project.optional-dependencies]
+gym = ["gymnasium>=0.29"]
+mujoco = ["mujoco>=3.0"]
+vision = ["opencv-python"]
+all = ["gymnasium>=0.29", "mujoco>=3.0", "opencv-python"]
+test = ["pytest>=7", "opencv-python", "gymnasium>=0.29", "mujoco>=3.0"]
+
+[project.entry-points."gymnasium.envs"]
+flightforge = "flightforge.gym_envs:register_envs"
+
+[tool.setuptools.packages.find]
+include = ["flightforge", "flightforge.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "sim: needs a running FlightForge simulator on localhost:FLIGHTFORGE_PORT (skips cleanly otherwise)",
+]

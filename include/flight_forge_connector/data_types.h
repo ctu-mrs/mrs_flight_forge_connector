@@ -1,293 +1,370 @@
-// Copyright [2022] <Jakub Jirkal>
-// This code is licensed under MIT license (see LICENSE for details)
-
 #pragma once
 
-#include <string>
+#include <array>
+#include <cmath>
+#include <cstdint>
 #include <map>
+#include <optional>
+#include <string>
+#include <vector>
 
-namespace ueds_connector
+#include <flight_forge_connector/wire/flightforge_generated.h>
+
+// Everything here is in the wire's frame: the ground frame (x = Unreal +X, y = Unreal -Y, z up), metres, rad.
+namespace flightforge
 {
 
-struct Daytime
-{
-  int hour;
-  int minute;
-};  
+/* results //{ */
 
-  
+struct Status
+{
+  bool        ok = false;
+  std::string error;
+
+  explicit operator bool() const {
+    return ok;
+  }
+
+  static Status Ok() {
+    return Status{true, {}};
+  }
+
+  static Status Fail(std::string message) {
+    return Status{false, std::move(message)};
+  }
+};
+
+template <typename T>
+struct Expected : Status
+{
+  T value{};
+
+  Expected() = default;
+  Expected(const Status& status) : Status(status) {}
+  Expected(T v) : Status{true, {}}, value(std::move(v)) {}
+
+  const T& operator*() const {
+    return value;
+  }
+  T& operator*() {
+    return value;
+  }
+  const T* operator->() const {
+    return &value;
+  }
+  T* operator->() {
+    return &value;
+  }
+};
+
+/* //} */
+
+/* geometry //{ */
+
+struct Vec3
+{
+  double x = 0.0;
+  double y = 0.0;
+  double z = 0.0;
+};
+
+// unit quaternion, body to parent
+struct Quat
+{
+  double x = 0.0;
+  double y = 0.0;
+  double z = 0.0;
+  double w = 1.0;
+
+  // rad, applied yaw * pitch * roll about the parent's z, y, x
+  static Quat FromRpy(const double roll, const double pitch, const double yaw) {
+    const double cr = std::cos(roll / 2), sr = std::sin(roll / 2);
+    const double cp = std::cos(pitch / 2), sp = std::sin(pitch / 2);
+    const double cy = std::cos(yaw / 2), sy = std::sin(yaw / 2);
+    return Quat{sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy, cr * cp * cy + sr * sp * sy};
+  }
+
+  static Quat FromYaw(const double yaw) {
+    return FromRpy(0.0, 0.0, yaw);
+  }
+
+  double Yaw() const {
+    return std::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+  }
+
+  Vec3 Rotate(const Vec3& v) const {
+    const double tx = 2.0 * (y * v.z - z * v.y), ty = 2.0 * (z * v.x - x * v.z), tz = 2.0 * (x * v.y - y * v.x);
+    return Vec3{v.x + w * tx + (y * tz - z * ty), v.y + w * ty + (z * tx - x * tz), v.z + w * tz + (x * ty - y * tx)};
+  }
+
+  Quat Conjugate() const {
+    return Quat{-x, -y, -z, w};
+  }
+
+  Quat operator*(const Quat& o) const {
+    return Quat{w * o.x + x * o.w + y * o.z - z * o.y, w * o.y - x * o.z + y * o.w + z * o.x, w * o.z + x * o.y - y * o.x + z * o.w,
+                w * o.w - x * o.x - y * o.y - z * o.z};
+  }
+};
+
+struct Pose
+{
+  Vec3 position;
+  Quat orientation;
+
+  static Pose At(const double x, const double y, const double z, const double yaw = 0.0) {
+    return Pose{Vec3{x, y, z}, Quat::FromYaw(yaw)};
+  }
+};
+
+/* //} */
+
+/* robots //{ */
+
+struct RobotState
+{
+  std::optional<Pose>  base;                // absent leaves the base where it is
+  std::vector<double>  joint_positions;     // rad or m, GetDescription's joint order
+  std::vector<double>  joint_velocities;    // rad/s or m/s
+  std::optional<Vec3>  base_linear_velocity;   // m/s
+  std::optional<Vec3>  base_angular_velocity;  // rad/s, body frame
+};
+
+struct StampedState
+{
+  double     stamp = 0.0;  // s, sim
+  RobotState state;
+};
+
+struct SetStateResult
+{
+  int  robot_id = -1;
+  Pose base;
+  bool hit = false;
+  Vec3 impact_point;
+};
+
+struct TrajectorySample
+{
+  double t = 0.0;  // s, sim
+  Pose   base;
+};
+
+struct CollisionState
+{
+  bool collided = false;
+  Vec3 impact_point;
+};
+
+struct RobotInfo
+{
+  int             id = -1;
+  std::string     name;
+  wire::RobotKind kind = wire::RobotKind::GENERIC;
+  std::string     label;
+};
+
+/* //} */
+
+/* sensors //{ */
+
+struct SensorInfo
+{
+  int              id   = -1;
+  wire::SensorType type = wire::SensorType::RGB_CAMERA;
+  std::string      link;
+};
+
+struct DeviceInfo
+{
+  std::string name;
+  std::string description;
+};
+
+// data holds the codec's output, or packed rows of format when compression is NONE
+struct Image
+{
+  double             stamp       = 0.0;
+  uint32_t           width       = 0;
+  uint32_t           height      = 0;
+  wire::PixelFormat  format      = wire::PixelFormat::UNKNOWN;
+  wire::Compression  compression = wire::Compression::NONE;
+  std::vector<uint8_t> data;
+};
+
+struct StereoImage
+{
+  double stamp = 0.0;
+  Image  left;
+  Image  right;
+};
+
+// 0 invalid or too close, 65535 clamped
+struct DepthImage
+{
+  double                stamp  = 0.0;
+  uint32_t              width  = 0;
+  uint32_t              height = 0;
+  std::vector<uint16_t> mm;
+};
+
+struct LidarScan
+{
+  double                           stamp = 0.0;
+  Pose                             sensor_pose;  // ground frame, at scan time
+  uint32_t                         rows = 0;     // 0 when not organised
+  uint32_t                         cols = 0;
+  std::vector<std::array<float, 3>> points;      // m, sensor frame, NaN for no return
+  std::vector<int32_t>             intensity;
+  std::vector<int32_t>             class_id;
+  std::vector<uint32_t>            instance_id;
+  wire::LidarBackend               backend = wire::LidarBackend::CPU;  // the one that traced this scan
+};
+
+struct RangefinderReading
+{
+  double stamp = 0.0;
+  double range = 0.0;  // m, NaN for no return
+};
+
+struct CameraEvent
+{
+  uint16_t x        = 0;
+  uint16_t y        = 0;
+  int8_t   polarity = 0;  // +1 brighter, -1 darker
+  double   stamp    = 0.0;
+};
+
+// xyp = x | y << 16 | brighter << 31, t_us after base_stamp, time-sorted
+struct CameraEvents
+{
+  std::vector<uint32_t> xyp;
+  std::vector<uint32_t> t_us;
+
+  double   base_stamp = 0.0;
+  double   stamp      = 0.0;  // the batch is complete up to here
+  uint32_t dropped    = 0;
+  uint32_t width      = 0;
+  uint32_t height     = 0;
+
+  size_t size() const {
+    return xyp.size();
+  }
+
+  CameraEvent at(const size_t i) const {
+    return CameraEvent{static_cast<uint16_t>(xyp[i] & 0xFFFFu), static_cast<uint16_t>((xyp[i] >> 16) & 0x7FFFu),
+                       static_cast<int8_t>((xyp[i] & 0x80000000u) ? 1 : -1), base_stamp + t_us[i] * 1e-6};
+  }
+
+  std::vector<CameraEvent> unpack() const {
+    std::vector<CameraEvent> events(xyp.size());
+    for (size_t i = 0; i < xyp.size(); ++i) {
+      events[i] = at(i);
+    }
+    return events;
+  }
+};
+
+/* //} */
+
+/* simulator //{ */
+
+struct ApiInfo
+{
+  uint16_t             major = 0;
+  uint16_t             minor = 0;
+  std::vector<uint8_t> schema;  // flightforge.bfbs
+};
+
+struct TimeInfo
+{
+  double wall_time     = 0.0;
+  double sim_time      = 0.0;
+  double time_dilation = 1.0;
+};
+
+// where the level animates the clock it advances per simulated second and holds while the world is paused
+struct ViewportImage
+{
+  Image  image;
+  double fov_deg = 0.0;  // horizontal
+};
+
+struct DaytimeInfo
+{
+  double      hour     = 0.0;  // since midnight, NaN on a world lit by its own lights until SetDaytime
+  bool        animated = false;
+  std::string sky;  // ultra_dynamic_sky, sun_sky or lights
+};
+
+struct WorldInfo
+{
+  std::string name;  // what SwitchWorld takes
+  std::string package;
+  std::string display_name;
+};
+
+struct WorldList
+{
+  std::vector<WorldInfo> worlds;
+  std::string            current;  // package of the world that has begun play, empty while none has
+  std::string            loading;  // package a SwitchWorld in progress is loading, else empty
+};
+
+struct SwitchWorldResult
+{
+  std::string      package;
+  std::vector<int> removed_robots;  // robots do not survive a switch
+};
+
+struct StepResult
+{
+  double   sim_time   = 0.0;
+  uint64_t tick_count = 0;
+};
+
+struct SpawnedObject
+{
+  int         id = -1;
+  std::string asset;
+  int         stencil = -1;
+  Pose        pose;
+  Vec3        scale{1.0, 1.0, 1.0};
+};
+
+struct AssetList
+{
+  std::vector<std::string> assets;
+  bool                     truncated = false;
+};
+
+struct LibraryPage
+{
+  std::vector<wire::LibraryObjectT> objects;
+  uint32_t                          total = 0;
+};
+
+struct WorldMesh
+{
+  std::vector<std::array<float, 3>> vertices;
+  std::vector<uint32_t>             indices;
+  bool                              truncated    = false;
+  int                               source_count = 0;
+};
+
+/* //} */
+
+/* name helpers //{ */
+
 struct UavFrameType
 {
-    static const std::map<std::string, int>& Type2IdMesh() {
-        static const std::map<std::string, int> map = {
-            {"x500", 0},
-            {"t650", 1},
-            {"a300", 2},
-            {"robofly", 3},
-            {"wing", 4},
-            {"wing_2", 5},
-            {"gimbal", 6},
-            {"empty", 7}
-        };
-        return map;
-    }
-};
-
-struct GraphicsSettings
-{
-    static const std::map<std::string, int>& Name2Id() {
-        static const std::map<std::string, int> map = {
-            {"low", 0},
-            {"medium", 1},
-            {"high", 2},
-            {"epic", 3},
-            {"cinematic", 4},
-            {"custom", 5}
-        };
-        return map;
-    }
-};  
-
-struct WorldName
-{
-    static const std::map<std::string, short>& Name2Id() {
-        static const std::map<std::string, short> map = {
-            {"valley", 0},
-            {"forest", 1},
-            {"infinite_forest", 2},
-            {"warehouse", 3},
-            {"cave", 4},
-            {"erding_airbase", 5},
-            {"temesvar", 6},
-            {"electric_towers", 7},
-            {"race_1", 8},
-            {"race_2", 9},
-            {"industrial_warehouse", 10},
-            {"service_tunnel", 11},
-            {"dead_spruce_forest", 12},
-            {"race_3", 13},
-            {"mala_skala", 14}
-        };
-        return map;
-    }
-};
-
-struct WeatherType
-{
-    static const std::map<std::string, int>& Type2Id() {
-        static const std::map<std::string, int> map = {
-            {"sunny", 0},
-            {"cloudy", 1},
-            {"foggy", 2},
-            {"rain", 3},
-            {"rain_light", 4},
-            {"rain_thunderstorm", 5},
-            {"sand_dust_calm", 6},
-            {"sand_dust_storm", 7},
-            {"snow", 8},
-            {"snow_blizzards", 9},
-            {"overcast", 10}
-        };
-        return map;
-    }
-};
-
-struct Coordinates
-{
-  Coordinates() = default;
-  Coordinates(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {
-  }
-
-  double x;
-  double y;
-  double z;
-
-  std::string toString() const {
-    return "(x: " + std::to_string(x) + ", y: " + std::to_string(y) + ", z: " + std::to_string(z) + ")";
+  // any name resolving to a packed mesh or an on-disk .glb works
+  static const std::vector<std::string>& KnownNames() {
+    static const std::vector<std::string> names = {"x500", "t650", "a300", "robofly", "wing", "wing_2", "gimbal", "empty", "drone10", "drone20"};
+    return names;
   }
 };
 
-struct Rotation
-{
-  Rotation() = default;
-  Rotation(double _pitch, double _yaw, double _roll) : pitch(_pitch), yaw(_yaw), roll(_roll) {
-  }
+/* //} */
 
-  double pitch;
-  double yaw;
-  double roll;
-
-  std::string toString() const {
-    return "(pitch: " + std::to_string(pitch) + ", yaw: " + std::to_string(yaw) + ", roll: " + std::to_string(roll) + ")";
-  }
-};
-
-struct LidarData
-{
-  LidarData() = default;
-
-  double distance;
-  double directionX;
-  double directionY;
-  double directionZ;
-
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ")";
-  }
-};
-
-struct LidarSegData
-{
-  LidarSegData() = default;
-
-  double      distance;
-  double      directionX;
-  double      directionY;
-  double      directionZ;
-  int         segmentation;
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ", segmentation: " + std::to_string(segmentation) + ")";
-  }
-};
-
-struct LidarIntData
-{
-  LidarIntData() = default;
-
-  double      distance;
-  double      directionX;
-  double      directionY;
-  double      directionZ;
-  int      intensity;
-  std::string toString() const {
-    return "(distance: " + std::to_string(distance) + ", directionX: " + std::to_string(directionX) + ", directionY: " + std::to_string(directionY) +
-           ", directionZ: " + std::to_string(directionZ) + ", intensity: " + std::to_string(intensity) + ")";
-  }
-};
-
-struct LidarConfig
-{
-  LidarConfig() = default;
-  LidarConfig(bool Enable, bool showBeams, double BeamHorRays, double BeamVertRays, double beamLength, double Frequency, const Coordinates offset,
-              const Rotation orientation, double FOVHorLeft, double FOVHorRight, double FOVVertUp, double FOVVertDown, bool Livox)
-      : Enable(Enable),
-        showBeams(showBeams),
-        beamLength(beamLength),
-        BeamHorRays(BeamHorRays),
-        BeamVertRays(BeamVertRays),
-        Frequency(Frequency),
-        offset(offset),
-        orientation(orientation),
-        FOVHorLeft(FOVHorLeft),
-        FOVHorRight(FOVHorRight),
-        FOVVertUp(FOVVertUp),
-        FOVVertDown(FOVVertDown),
-        Livox(Livox)
-  {
-  }
-
-  bool        Enable;
-  bool        showBeams;
-  double      beamLength;
-  double      BeamHorRays;
-  double      BeamVertRays;
-  double      Frequency;
-  Coordinates offset;
-  Rotation    orientation;
-  double      FOVHorLeft; 
-  double      FOVHorRight;
-  double      FOVVertUp;
-  double      FOVVertDown;
-  bool       Livox;
-
-  std::string toString() const {
-    return "(showBeams: " + std::to_string(showBeams) + ", beamLength: " + std::to_string(beamLength) + ", offset: " + offset.toString() +
-           ", orientation: " + orientation.toString() + ")";
-  }
-};
-
-enum CameraCaptureModeEnum : unsigned short
-{
-  CAPTURE_ALL_FRAMES  = 0x0,
-  CAPTURE_ON_MOVEMENT = 0x1,
-  CAPTURE_ON_DEMAND   = 0x2,
-};
-
-struct RgbCameraConfig
-{
-  RgbCameraConfig() = default;
-  RgbCameraConfig(bool show_debug_camera, const Coordinates offset, const Rotation orientation, double fov, int width, int height, bool enable_temporal_aa,
-                  bool enable_raytracing, bool enable_hdr, bool enable_motion_blur, double motion_blur_amount, double motion_blur_distortion)
-      : show_debug_camera_(show_debug_camera),
-        offset_(offset),
-        orientation_(orientation),
-        fov_(fov),
-        width_(width),
-        height_(height),
-        enable_temporal_aa_(enable_temporal_aa),
-        enable_raytracing_(enable_raytracing),
-        enable_hdr_(enable_hdr),
-        enable_motion_blur_(enable_motion_blur),
-        motion_blur_amount_(motion_blur_amount),
-        motion_blur_distortion_(motion_blur_distortion) 
-  {
-  }
-
-  bool show_debug_camera_;
-
-  Coordinates offset_;
-
-  Rotation orientation_;
-
-  double fov_;
-
-  int width_;
-  int height_;
-
-  bool enable_temporal_aa_;
-  bool enable_raytracing_;
-  bool enable_hdr_;
-
-  bool     enable_motion_blur_;
-  double   motion_blur_amount_;
-  double   motion_blur_distortion_;
-};
-
-struct StereoCameraConfig
-{
-  StereoCameraConfig() = default;
-  StereoCameraConfig(bool show_debug_camera, const Coordinates offset, const Rotation orientation, double fov, int width, int height, double baseline,
-                     bool enable_temporal_aa, bool enable_raytracing, bool enable_hdr)
-      : show_debug_camera_(show_debug_camera),
-        offset_(offset),
-        orientation_(orientation),
-        fov_(fov),
-        width_(width),
-        height_(height),
-        baseline_(baseline),
-        enable_temporal_aa_(enable_temporal_aa),
-        enable_raytracing_(enable_raytracing),
-        enable_hdr_(enable_hdr) {
-  }
-
-  bool show_debug_camera_;
-
-  Coordinates offset_;
-
-  Rotation orientation_;
-
-  double fov_;
-
-  int width_;
-  int height_;
-
-  double baseline_;
-
-  bool enable_temporal_aa_;
-  bool enable_raytracing_;
-  bool enable_hdr_;
-};
-
-}  // namespace ueds_connector
+}  // namespace flightforge

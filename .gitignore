@@ -1,3 +1,8 @@
+# User Ignore
+
+.gitman/
+
+
 *.swo
 *.swp
 
@@ -51,3 +56,4 @@ env
 ueds_env
 ueds-env
 logs
+python/flightforge.egg-info/

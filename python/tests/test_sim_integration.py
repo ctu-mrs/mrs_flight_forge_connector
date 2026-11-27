@@ -1,0 +1,1331 @@
+"""Integration tests against a live simulator on FLIGHTFORGE_PORT (default 8600); they skip cleanly without one.
+
+Run with:  pytest -m sim          (only these)
+           pytest                 (everything; these skip if no sim)
+"""
+
+import math
+import os
+import threading
+import time
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from flightforge import (
+    Compression,
+    FlightForgeError,
+    LidarBackend,
+    PixelFormat,
+    Pose,
+    Robot,
+    RobotKind,
+    RobotState,
+    SensorType,
+    Simulator,
+    message,
+    quat_from_rpy,
+)
+
+pytestmark = pytest.mark.sim
+
+# an /Engine path exists in every install, so nothing depends on the host project's content
+RING_YAML = """
+objects:
+  - asset: /Engine/BasicShapes/Cube
+    position: [5.0, 0.0, 1.0]
+  - asset: /Engine/BasicShapes/Cube
+    position: [5.0, 2.0, 1.0]
+    scale: 0.5
+"""
+
+LOCAL_SCHEMA = Path(__file__).resolve().parents[2] / "include" / "flight_forge_connector" / "wire" / "flightforge.bfbs"
+
+
+def root_buffer(array):
+    while isinstance(array, (np.ndarray, memoryview)):
+        array = array.base if isinstance(array, np.ndarray) else array.obj
+    return array
+
+
+def livox(robot, sensor_id, **fields):
+    robot.set_lidar_config(sensor_id=sensor_id, enable=True, livox=True, livox_pattern="mid360", range_m=70.0, **fields)
+
+
+# basics //{
+
+
+def test_api_version(sim):
+    assert sim.api_version == (1, 8)
+
+
+def test_schema_matches_this_build(sim):
+    if not LOCAL_SCHEMA.exists():
+        pytest.skip("the connector's compiled schema is not next to this package")
+    assert sim.schema() == LOCAL_SCHEMA.read_bytes()
+
+
+def test_fps_reports(sim):
+    assert sim.fps() > 0.0
+
+
+def test_rgb_capture(robot):
+    image, stamp = robot.rgb()
+    assert image.ndim == 3 and image.shape[2] == 3 and image.dtype == np.uint8
+    assert stamp > 0.0
+
+    jpeg = robot.rgb(decode=False)
+    assert jpeg.compression == Compression.JPEG and bytes(jpeg.data[:2]) == b"\xff\xd8"
+
+
+def test_raw_frames_arrive_without_a_copy(robot):
+    config = robot.rgb_camera_config()
+    robot.set_rgb_camera_config(encoding=message("ImageEncoding", compression=Compression.NONE))
+
+    lit = False
+    for _ in range(40):
+        frame = robot.rgb(decode=False)
+        assert frame.compression == Compression.NONE and frame.format == PixelFormat.BGRA8
+        assert frame.data.size == frame.width * frame.height * 4
+        image = frame.decode()
+        assert image.shape == (config.height, config.width, 3)
+        assert isinstance(root_buffer(image), bytearray)
+        lit = bool(image.any())
+        if lit:
+            break
+        time.sleep(0.1)
+    assert lit
+
+    scan = robot.lidar_scan()
+    assert scan.points.dtype == np.float32 and scan.points.shape[1] == 3
+    assert isinstance(root_buffer(scan.points), bytearray)
+
+
+# //}
+
+# camera calibration //{
+
+
+def test_camera_info(robot):
+    assert robot.camera_info() == []  # nothing exists until a camera is touched
+    K, size = robot.camera_intrinsics()
+    infos = robot.camera_info()
+    rgb = min((c for c in infos if c["sensor_type"] == SensorType.RGB_CAMERA), key=lambda c: c["sensor_id"])
+    assert rgb["projection"] == "pinhole" and rgb["distortion_model"] == "plumb_bob"
+    assert rgb["size"] == size
+    assert np.allclose(rgb["K"], K)
+    assert rgb["K"][0, 2] == pytest.approx(size[0] / 2.0 - 0.5)  # OpenCV pixel convention
+    assert rgb["D"].shape == (5,) and not rgb["D"].any()
+    assert rgb["readout_time"] == 0.0
+    assert rgb["link"] == "base_link" and isinstance(rgb["mount"], Pose)
+    assert robot.camera_info(rgb["sensor_id"])[0]["sensor_id"] == rgb["sensor_id"]
+    with pytest.raises(FlightForgeError):
+        robot.camera_info(9999)
+
+
+def test_camera_config_keeps_the_mount(robot):
+    ahead = robot.add_sensor(SensorType.RGB_CAMERA, pose=Pose.at(0.25, 0.0, 0.0))
+    turned = robot.add_sensor(SensorType.RGB_CAMERA, pose=Pose((0.25, 0.0, 0.0), quat_from_rpy(0.0, 0.0, math.radians(60.0))))
+    try:
+        mount = robot.rgb_camera_config(turned)["mount"]
+        for sensor_id in (ahead, turned):
+            robot.set_rgb_camera_config(sensor_id=sensor_id, capture_rate=0.0, encoding={"compression": Compression.NONE})
+        kept = robot.rgb_camera_config(turned)["mount"]
+        assert np.allclose(kept.orientation, mount.orientation, atol=1e-4)
+        assert kept.orientation[2] == pytest.approx(math.sin(math.radians(30.0)), abs=1e-3)
+        time.sleep(1.0)
+        images = [robot.rgb(s)[0].astype(np.float64) for s in (ahead, turned)]
+        assert np.abs(images[0] - images[1]).mean() > 5.0
+    finally:
+        robot.remove_sensor(ahead)
+        robot.remove_sensor(turned)
+
+
+def test_stereo_pair_reports_its_baseline(robot):
+    sensor_id = robot.add_sensor(SensorType.STEREO_CAMERA)
+    left = robot.stereo_camera_config(sensor_id).mount_left
+    robot.set_stereo_camera_config(sensor_id=sensor_id, mount_right=Pose(left.position - [0.0, 0.12, 0.0], left.orientation))
+    eyes = robot.camera_info(sensor_id)
+    assert len(eyes) == 2 and eyes[0]["eye"] == 0 and eyes[1]["eye"] == 1
+    assert eyes[0]["baseline_m"] == pytest.approx(0.12)
+    left_image, right_image, stamp = robot.stereo(sensor_id)
+    assert left_image.shape == right_image.shape and stamp > 0.0
+    robot.remove_sensor(sensor_id)
+
+
+def test_fisheye_calibration_round_trip(robot):
+    sensor_id = robot.add_sensor(SensorType.FISHEYE_CAMERA)
+    k = (-0.012, 0.021, -0.017, 0.004)
+    robot.set_fisheye_calibration(254.3, 252.9, 405.7, 291.2, k=k, fov_deg=190.0, sensor_id=sensor_id)
+    (info,) = robot.camera_info(sensor_id)
+    assert info["projection"] == "fisheye_kannala_brandt" and info["distortion_model"] == "equidistant"
+    assert np.allclose(info["K"], [[254.3, 0.0, 405.7], [0.0, 252.9, 291.2], [0.0, 0.0, 1.0]])
+    assert np.allclose(info["D"], k)
+    assert info["fov_deg"] == 190.0
+    image, _ = robot.fisheye(sensor_id)
+    assert image.ndim == 3
+    robot.remove_sensor(sensor_id)
+
+
+def test_intrinsics_roundtrip(robot):
+    K0, (width, height) = robot.camera_intrinsics()
+    assert K0[0, 0] > 0.0 and K0[0, 2] == pytest.approx(width / 2.0, abs=1.0)
+
+    robot.set_camera_intrinsics(fx=500.0, fy=505.0, cx=300.0, cy=250.0)
+    K1, _ = robot.camera_intrinsics()
+    assert np.allclose([K1[0, 0], K1[1, 1], K1[0, 2], K1[1, 2]], [500.0, 505.0, 300.0, 250.0])
+
+    image, _ = robot.rgb()
+    assert image.shape[:2] == (height, width)
+
+
+def test_distortion_roundtrip(robot):
+    robot.set_camera_distortion(k1=-0.2, k2=0.05, p1=0.001)
+    enabled, coefficients = robot.camera_distortion()
+    assert enabled
+    assert np.allclose(coefficients[:2], [-0.2, 0.05]) and coefficients[3] == pytest.approx(0.001)
+
+    # the served image stays at the nominal resolution despite the overscan render
+    _, (width, height) = robot.camera_intrinsics()
+    image, _ = robot.rgb()
+    assert image.shape[:2] == (height, width)
+
+    robot.set_camera_distortion(enable=False)
+
+
+def test_noise_and_rolling_shutter_config(robot):
+    robot.set_camera_noise(shot_scale=3.0e-4, read_sigma=4.0e-3)
+    robot.set_rolling_shutter(0.025)
+
+    config = robot.rgb_camera_config()
+    assert config.noise.enable and config.noise.shot_scale == pytest.approx(3.0e-4)
+    assert config.rolling_shutter.enable and config.rolling_shutter.readout_time == pytest.approx(0.025)
+
+    robot.set_camera_noise(enable=False)
+    robot.set_rolling_shutter(0.0, enable=False)
+
+
+# //}
+
+# scene //{
+
+
+def test_scene_editor_roundtrip(sim):
+    sim.clear_objects()
+    ids = sim.spawn_objects(RING_YAML)
+    assert len(ids) == 2
+
+    try:
+        objects = sim.objects()
+        assert set(ids) <= set(objects)
+        assert np.allclose(objects[ids[0]]["position"], [5.0, 0.0, 1.0], atol=0.05)
+
+        sim.move_object(ids[0], Pose.at(6.0, -1.0, 2.0, math.radians(45.0)))
+        moved = sim.objects()[ids[0]]
+        assert np.allclose(moved["position"], [6.0, -1.0, 2.0], atol=0.05)
+        assert moved["pose"].yaw == pytest.approx(math.radians(45.0), abs=0.01)
+
+        exported = sim.export_scene()
+        assert "Cube" in exported and "frame: ground" in exported
+        assert "class: prop/box" in exported  # the host project's Cube rule
+
+        assert sim.clear_objects() == 2
+        assert sim.objects() == {}
+
+        restored = sim.spawn_objects(exported)
+        assert len(restored) == 2
+        assert np.allclose(sim.objects()[restored[0]]["position"], [6.0, -1.0, 2.0], atol=0.05)
+    finally:
+        sim.clear_objects()
+
+
+def test_old_scene_frames_are_refused_by_name(sim):
+    with pytest.raises(FlightForgeError, match="ground"):
+        sim.spawn_objects("frame: origin\nobjects:\n  - asset: /Engine/BasicShapes/Cube\n")
+    with pytest.raises(FlightForgeError, match="unreal"):
+        sim.spawn_objects("frame: world\nobjects:\n  - asset: /Engine/BasicShapes/Cube\n")
+
+
+def test_an_unresolvable_asset_fails_the_request_and_spawns_nothing(sim):
+    sim.clear_objects()
+    yaml = (
+        "objects:\n"
+        "  - asset: /Engine/BasicShapes/Cube\n    position: [5.0, 0.0, 1.0]\n"
+        "  - asset: NoSuchAssetAnywhere\n    position: [6.0, 0.0, 1.0]\n"
+        "  - asset: lib:nowhere/nothing\n    position: [7.0, 0.0, 1.0]\n"
+    )
+    try:
+        with pytest.raises(FlightForgeError, match=r"objects\[1\] 'NoSuchAssetAnywhere', objects\[2\] 'lib:nowhere/nothing'"):
+            sim.spawn_objects(yaml)
+        assert sim.objects() == {}
+    finally:
+        sim.clear_objects()
+
+
+def test_asset_catalog(sim):
+    names, truncated = sim.assets(name_filter="cube")
+    assert isinstance(names, list) and all(isinstance(n, str) for n in names)
+    assert isinstance(truncated, bool)
+
+
+def test_library_lists_what_it_loaded(sim, tmp_path):
+    manifest = tmp_path / "library.yaml"
+    manifest.write_text(
+        "name: pytest\nobjects:\n  - id: crate\n    asset: /Engine/BasicShapes/Cube\n    class: box\n"
+        "    description: a wooden crate\n    scale: 2.0\n    height: 2.0\n    base_z: 0.5\n"
+    )
+    assert sim.load_library(str(manifest)) == 1
+    objects, total = sim.library("pytest", filter="WOODEN", limit=10)
+    assert total == 1 and objects[0].spawn_name == "lib:pytest/crate" and objects[0]["object_class"] == "box"
+
+
+def test_mutual_visibility_toggles(sim):
+    sim.set_mutual_visibility(False)
+    sim.set_mutual_visibility(True)
+
+
+def test_world_mesh_is_ground_truth(sim):
+    """A cube of known scale: if its vertices span anything but scale^3 metres at the requested position, the
+    export's transforms or frames are wrong."""
+    sim.clear_objects()
+    sim.spawn_objects(
+        "objects:\n"
+        "  - asset: /Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube\n"
+        "    position: [15.0, 7.0, 4.0]\n"
+        "    scale: [2.0, 2.0, 2.0]\n"
+    )
+    time.sleep(0.3)
+
+    try:
+        vertices, faces, truncated, sources = sim.world_mesh(center=(15.0, 7.0, 4.0), extent=(6.0, 6.0, 6.0))
+        assert sources >= 1
+        assert len(faces) > 0 and faces.shape[1] == 3
+
+        near = np.all(np.abs(vertices - np.array([15.0, 7.0, 4.0])) < 3.2, axis=1)
+        assert near.sum() >= 8, "the spawned cube is missing from the mesh"
+
+        span = vertices[near].max(axis=0) - vertices[near].min(axis=0)
+        assert np.allclose(span, 2.0, atol=0.05), f"cube span {span} is not 2 m"
+    finally:
+        sim.clear_objects()
+
+
+# //}
+
+# sensors and devices //{
+
+
+def test_sensor_lifecycle(robot):
+    sensor_id = robot.add_sensor(SensorType.RGB_CAMERA)
+    assert sensor_id >= 0
+    assert any(s.id == sensor_id and s.type == SensorType.RGB_CAMERA and s.link == "base_link" for s in robot.sensors())
+    robot.remove_sensor(sensor_id)
+    with pytest.raises(FlightForgeError):
+        robot.remove_sensor(sensor_id)
+
+
+def test_devices_listed(robot):
+    devices = robot.devices()
+    assert "realsense_d435i" in devices and "azure_kinect_dk" in devices
+    sensors = robot.add_device("realsense_d435i", Pose.at(0.12, 0.0, -0.02))
+    assert len(sensors) > 1 and all(s.link == "base_link" for s in sensors)
+
+
+def test_depth_capture(robot):
+    depth, stamp = robot.depth()
+    assert depth.dtype == np.uint16 and depth.ndim == 2 and stamp > 0.0
+    # over open ground something must be in range: not all zeros, not all clamp
+    assert (depth > 0).any() and (depth < 65535).any()
+
+
+def test_rangefinder_does_not_see_its_own_robot(sim):
+    """Mounted above the base and looking down through the airframe, it reads the floor."""
+    robot = sim.spawn_robot((0.0, 0.0, 3.0))
+    try:
+        sensor_id = robot.add_sensor(SensorType.RANGEFINDER, pose=Pose.at(0.0, 0.0, 0.3))
+        distance, _ = robot.rangefinder(sensor_id)
+        assert distance == pytest.approx(3.3, abs=0.05)
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_instance_segmentation_smoke(sim, robot):
+    sim.spawn_objects(RING_YAML)
+    try:
+        instance_ids, stamp = robot.instance_segmentation()
+        assert instance_ids.dtype == np.uint32 and instance_ids.ndim == 2
+        assert stamp > 0.0
+
+        mapping = robot.instance_map()
+        visible = set(np.unique(instance_ids).tolist()) - {0}
+        # every visible id must be explainable
+        assert visible <= set(mapping)
+    finally:
+        sim.clear_objects()
+
+
+def test_legacy_segmentation_is_refused(robot):
+    with pytest.raises(FlightForgeError, match="removed in API 1.5"):
+        robot._image("RetiredGetRgbSegCameraDataRequest", "RetiredRgbSegCameraDataResponse", -1)
+    with pytest.raises(FlightForgeError):
+        robot.add_sensor(4)
+
+
+def _gpu_lidar(robot, sensor_id, **fields):
+    """True when the simulator accepted the GPU backend, False when it has no hardware ray tracing."""
+    try:
+        robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.GPU, **fields)
+        return True
+    except FlightForgeError:
+        return False
+
+
+def test_lidar_backend_selection(robot):
+    sensor_id = robot.add_sensor(SensorType.LIDAR)
+    fields = dict(horizontal_rays=64, vertical_rays=16, frequency=0.0)
+    assert robot.lidar_config(sensor_id).backend == LidarBackend.AUTO
+
+    robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.CPU, **fields)
+    assert robot.lidar_scan(sensor_id=sensor_id).backend == LidarBackend.CPU
+
+    ray_traced = _gpu_lidar(robot, sensor_id, **fields)
+    if ray_traced:
+        scan = robot.lidar_scan(sensor_id=sensor_id)
+        assert scan.backend == LidarBackend.GPU and scan.points.shape == (64 * 16, 3) and (scan.rows, scan.cols) == (16, 64)
+
+    robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.AUTO, **fields)
+    assert robot.lidar_scan(sensor_id=sensor_id).backend == (LidarBackend.GPU if ray_traced else LidarBackend.CPU)
+    robot.remove_sensor(sensor_id)
+
+
+def test_gpu_lidar_agrees_with_cpu(sim):
+    """Engine cubes collide with their visible mesh, so both backends must see the same ranges and objects."""
+    sim.clear_objects()
+    robot = sim.spawn_robot((0.0, 0.0, 1.5))
+    try:
+        sensor_id = robot.add_sensor(SensorType.LIDAR)
+        fields = dict(horizontal_rays=512, vertical_rays=32, frequency=0.0, range_m=30.0)
+        if not _gpu_lidar(robot, sensor_id, **fields):
+            pytest.skip("no hardware ray tracing")
+        sim.spawn_objects(RING_YAML)
+        time.sleep(2.0)
+        gpu = robot.lidar_scan(labels=True, sensor_id=sensor_id)
+        robot.set_lidar_config(sensor_id=sensor_id, backend=LidarBackend.CPU, **fields)
+        cpu = robot.lidar_scan(labels=True, sensor_id=sensor_id)
+        assert gpu.backend == LidarBackend.GPU and cpu.backend == LidarBackend.CPU
+
+        both = cpu.hits & gpu.hits
+        difference = np.abs(cpu.ranges()[both] - gpu.ranges()[both])
+        x, y = np.nan_to_num(cpu.points[:, 0]), np.nan_to_num(cpu.points[:, 1])
+        cube = both & (np.abs(x - 4.5) < 0.05) & (np.abs(y) < 0.4)  # the near face of the cube 5 m ahead
+        assert cube.sum() > 0
+        assert np.median(difference) < 0.01
+        assert np.mean(cpu.instance_id[cube] == gpu.instance_id[cube]) > 0.99
+    finally:
+        sim.clear_objects()
+        sim.remove_robot(robot)
+
+
+def test_lidar_scan_labels_agree_with_the_instance_camera(sim):
+    """A point and a pixel on the same object carry the same instance id, and the point's class id is the
+    object's class."""
+    sim.clear_objects()
+    robot = sim.spawn_robot((0.0, 0.0, 1.5))
+    try:
+        camera = robot.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
+        (cube_id,) = sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [4.0, 0.0, 1.5]\n    scale: 2.0\n")
+        stencil = sim.objects()[cube_id]["stencil"]
+        time.sleep(1.5)
+        for _ in range(3):
+            robot.instance_segmentation(camera)
+
+        image, classes, _ = robot.panoptic(camera)
+        h, w = image.shape
+        pixel_id = int(image[h // 2, w // 2])
+        pixel_class = int(classes[h // 2, w // 2])
+        assert pixel_id != 0
+
+        # the class comes from the tagger: a rule when the project has one for the cube, else the stencil
+        tree = sim.class_map()
+        by_path = {v["path"]: k for k, v in tree.items()}
+        expected_class = by_path.get("prop/box", stencil)
+        assert pixel_class == expected_class
+        assert robot.instance_classes(camera)[pixel_id] == expected_class
+
+        scan = robot.lidar_scan(labels=True)
+        points = scan.points
+        assert scan.class_id.shape == (len(points),) and scan.instance_id.shape == (len(points),)
+        assert scan.intensity.size == 0  # not requested
+        hit = scan.hits
+        direction = np.where(hit[:, None], points / np.linalg.norm(np.where(hit[:, None], points, 1.0), axis=1, keepdims=True), 0.0)
+        forward = hit & (direction[:, 0] > 0.995)  # returns within ~6 deg of the optical axis
+        assert forward.sum() > 0
+        assert set(scan.instance_id[forward].tolist()) == {pixel_id}
+        assert set(scan.class_id[forward].tolist()) == {expected_class}
+        assert np.all(scan.class_id[~hit] == -1) and np.all(scan.instance_id[~hit] == 0)
+
+        if "prop/box" in by_path:
+            # leaf ids collapse through the tree
+            assert tree[expected_class]["parent_id"] == by_path["prop"]
+            assert sim.collapse_classes(np.array([expected_class]), 1)[0] == by_path["prop"]
+    finally:
+        sim.clear_objects()
+        sim.remove_robot(robot)
+
+
+def test_segmentation_covers_rendered_geometry(sim):
+    """Every pixel the renderer put geometry into carries an instance id: the depth buffer is the oracle, which
+    unlike a physics trace sees masked leaves, wind and foliage without collision the same way the id pass must."""
+    robot = sim.spawn_robot(Pose.from_rpy((0.0, 0.0, 3.0), pitch=math.radians(20.0)))
+    try:
+        camera = robot.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
+        time.sleep(2.0)
+        for _ in range(4):
+            robot.panoptic(camera)
+            robot.depth()
+        ids, _, _ = robot.panoptic(camera)
+        depth, _ = robot.depth()
+        geometry = (depth > 0) & (depth < 65535)
+        assert geometry.sum() > 10000
+        unlabelled = geometry & (ids == 0)
+        assert unlabelled.sum() / geometry.sum() < 0.01
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_instance_segmentation_survives_scene_edits(sim):
+    """Destroying actors while an instance camera runs must not kill the simulator."""
+    robot = sim.spawn_robot((0.0, 0.0, 3.0))
+    try:
+        sensor_id = robot.add_sensor(SensorType.INSTANCE_SEG_CAMERA)
+        time.sleep(0.5)
+
+        for i in range(8):
+            sim.spawn_objects(
+                "objects:\n"
+                "  - asset: /Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube\n"
+                f"    position: [{6 + i}, 0.0, 1.0]\n"
+                "    scale: [1.5, 1.5, 1.5]\n"
+            )
+            robot.instance_segmentation(sensor_id)
+            sim.clear_objects()
+            robot.instance_segmentation(sensor_id)
+
+        # the simulator answering at all is the assertion; a dangling proxy took it down
+        assert sim.fps() > 0
+        ids, _ = robot.instance_segmentation(sensor_id)
+        assert ids.shape[0] > 0 and ids.shape[1] > 0
+    finally:
+        sim.remove_robot(robot)
+        sim.clear_objects()
+
+
+def test_sensor_body_occludes_the_airframe_but_not_itself(sim):
+    """With a body, a lidar sees the robot it is bolted to and never its own housing."""
+    robot = sim.spawn_robot((0.0, 0.0, 4.0))
+    try:
+        sensor_id = robot.add_sensor(SensorType.LIDAR)
+
+        def sweep(show_body):
+            # the stock profile stops 7 degrees below horizontal and never looks down
+            robot.set_lidar_config(
+                sensor_id=sensor_id,
+                enable=True,
+                livox=False,
+                range_m=50.0,
+                mount=Pose.at(0.0, 0.0, 0.5),
+                fov_down=85.0,
+                fov_up=15.0,
+                show_sensor_body=show_body,
+            )
+            time.sleep(0.9)
+            robot.lidar_scan(sensor_id=sensor_id)
+            time.sleep(0.3)
+
+            scan = robot.lidar_scan(sensor_id=sensor_id)
+            distance = scan.ranges()
+            hit = scan.hits
+            elevation = np.degrees(np.arcsin(np.clip(np.where(hit, scan.points[:, 2] / np.where(hit, distance, 1.0), 0.0), -1, 1)))
+
+            below = hit & (elevation < -55) & (distance > 0.2) & (distance < 0.8)
+            housing = hit & (distance < 0.15)
+            return int(below.sum()), int(housing.sum())
+
+        off_frame, off_housing = sweep(False)
+        on_frame, on_housing = sweep(True)
+
+        assert off_frame == 0, "the airframe must stay invisible without a sensor body"
+        assert on_frame > 0, "with a body the lidar must see the airframe it is mounted on"
+        assert off_housing == 0 and on_housing == 0, "a lidar must never return its own housing"
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_gltf_model_is_visible_to_the_lidar(sim):
+    """A runtime-loaded glTF model must have collision, not just a mesh."""
+    models = os.environ.get(
+        "FF_MODEL_DIR",
+        "/home/david/Documents/Unreal Projects/TestPlugin/Plugins/FlightForgePlugin/Content/ExternalModels",
+    )
+    if not os.path.isdir(models):
+        pytest.skip(f"no glTF models to spawn (set FF_MODEL_DIR; tried {models})")
+
+    sim.clear_objects()
+    try:
+        ids = sim.spawn_objects(f"model_paths:\n  - {models}\nobjects:\n  - asset: drone20\n    position: [6.0, 0.0, 2.0]\n    scale: 20.0\n")
+    except FlightForgeError as error:
+        pytest.skip(f"could not spawn a glTF model: {error}")
+    if not ids:
+        pytest.skip("could not spawn a glTF model")
+
+    robot = sim.spawn_robot((0.0, 0.0, 2.0))
+    try:
+        sensor_id = robot.add_sensor(SensorType.LIDAR)
+        livox(robot, sensor_id, mount=Pose.at(0.0, 0.0, 0.6))
+
+        time.sleep(1.2)
+        robot.lidar_scan(sensor_id=sensor_id)
+        time.sleep(0.3)  # a Livox scan holds what accumulated since the previous one
+        xyz = robot.lidar_scan(sensor_id=sensor_id).points
+        xyz = xyz[np.isfinite(xyz).all(axis=1)]
+        assert len(xyz) > 0
+
+        # the model spans roughly 3-9 m ahead at this scale; anything landing there is it
+        forward = xyz[
+            (np.abs(np.degrees(np.arctan2(xyz[:, 1], xyz[:, 0]))) < 20.0)
+            & (np.linalg.norm(xyz[:, :2], axis=1) < 10.0)
+            & (np.abs(xyz[:, 2]) < 4.0)
+        ]
+        assert len(forward) > 20, "the glTF model returned no lidar hits - collision is missing"
+    finally:
+        sim.clear_objects()
+        sim.remove_robot(robot)
+
+
+# //}
+
+# robots //{
+
+
+def test_robot_state_round_trips(sim, robot):
+    state = RobotState(
+        base=Pose.at(1.0, -2.0, 3.0, math.radians(30.0)),
+        base_linear_velocity=(1.0, 2.0, 3.0),
+        base_angular_velocity=(0.1, 0.2, 0.3),
+    )
+    result = robot.set_state(state)
+    assert result.robot_id == robot.id and np.allclose(result.base.position, [1.0, -2.0, 3.0], atol=0.01)
+
+    read, stamp = robot.get_state()
+    assert np.allclose(read.base.position, [1.0, -2.0, 3.0], atol=0.01)
+    assert read.base.yaw == pytest.approx(math.radians(30.0), abs=1e-4)
+    assert read.base_linear_velocity[1] == pytest.approx(2.0) and read.base_angular_velocity[2] == pytest.approx(0.3)
+    assert stamp > 0.0
+    assert np.allclose(robot.get_position(), [1.0, -2.0, 3.0], atol=0.01)
+
+    assert any(r.id == robot.id and r.label == "test" and r.name == "x500" and r.kind == RobotKind.MULTIROTOR for r in sim.robots())
+
+    (moved,) = sim.set_states({robot: Pose.at(0.0, 0.0, 2.0)})
+    assert moved.robot_id == robot.id and np.allclose(moved.base.position, [0.0, 0.0, 2.0], atol=0.01)
+    assert sim.set_states({robot.id: Pose.at(0.0, 0.0, 2.5)}, wait=False) == []
+    with pytest.raises(FlightForgeError):
+        sim.set_states({99999: Pose.at(0.0, 0.0, 2.0)})
+    assert robot.collision().collided in (True, False)
+
+
+def test_a_robot_spawned_at_floor_level_rests_on_it(sim):
+    """z = 0 is the floor and the base link sits above the landing gear: the robot starts resting, not inside the floor,
+    so a sweep down from there stops at once and reports the collision."""
+    robot = sim.spawn_robot((0.0, 0.0, 0.0))
+    try:
+        state, _ = robot.get_state()
+        rest = state.base.position[2]
+        assert 0.0 < rest < 0.5
+        assert not robot.collision().collided
+
+        result = robot.set_state(Pose.at(0.0, 0.0, rest - 0.2), collide=True)
+        assert result.hit and result.base.position[2] == pytest.approx(rest, abs=0.02)
+        assert robot.collision().collided
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_a_cleared_collision_reports_only_later_contacts(sim):
+    robot = sim.spawn_robot((0.0, 3.0, 0.0))
+    try:
+        rest = robot.get_position()[2]
+        robot.set_state(Pose.at(0.0, 3.0, rest - 0.2), collide=True)
+        assert robot.collision(clear=True).collided
+        assert not robot.collision().collided
+        robot.set_state(Pose.at(0.0, 3.0, rest - 0.2), collide=True)
+        assert robot.collision().collided
+    finally:
+        sim.remove_robot(robot)
+
+
+def test_surface_height_finds_the_ground_below_each_point(sim, robot):
+    sim.clear_objects()
+    try:
+        sim.spawn_objects(
+            "objects:\n"
+            "  - asset: /Engine/BasicShapes/Cube\n    position: [6.0, -3.0, 0.5]\n    scale: [2.0, 2.0, 1.0]\n"
+            "  - asset: /Engine/BasicShapes/Cube\n    position: [9.0, -3.0, 2.0]\n    scale: [2.0, 2.0, 0.2]\n"
+        )
+        x, y, z = robot.get_position()
+        heights = sim.surface_height(
+            [(2.0, -3.0, 1.5), (6.0, -3.0, 3.0), (9.0, -3.0, 1.5), (9.0, -3.0, 3.0), (1e5, 1e5, np.nan), (x, y, z + 3.0)]
+        )
+        assert heights.dtype == np.float64 and heights.shape == (6,)
+        assert abs(heights[0]) < 0.01
+        assert heights[1] == pytest.approx(1.0, abs=0.01)
+        assert abs(heights[2]) < 0.01
+        assert heights[3] == pytest.approx(2.1, abs=0.01)
+        assert np.isnan(heights[4])
+        assert abs(heights[5]) < 0.01
+        assert z < sim.surface_height([(x, y, z + 3.0)], ignore_robots=False)[0] < z + 0.5
+        assert sim.surface_height(np.zeros((0, 3))).size == 0
+
+        own, other = sim.surface_height([(x, y, z + 3.0), (x, y, z + 3.0)], robot_ids=[robot.id, -1])
+        assert abs(own) < 0.01
+        assert z < other < z + 0.5
+        with pytest.raises(FlightForgeError):
+            sim.surface_height([(x, y, z + 3.0)], robot_ids=[987654])
+    finally:
+        sim.clear_objects()
+
+
+def test_robot_describes_its_propellers(robot):
+    description = robot.description()
+    assert description.links[0].name == "base_link" and description.links[0].parent == ""
+    assert description.kind == RobotKind.MULTIROTOR and len(description.joint_names) == 4
+    assert "base_link" in description.yaml
+
+    robot.set_joint_velocities([100.0] * 4)
+    state, _ = robot.get_state()
+    assert state.joint_velocities == [100.0] * 4 and len(state.joint_positions) == 4
+    with pytest.raises(FlightForgeError):
+        robot.set_joint_velocities([1.0] * 5)
+    robot.set_joint_velocities([])
+
+
+def test_what_the_server_refuses_surfaces_its_message(sim, robot):
+    with pytest.raises(FlightForgeError, match="joint_positions"):
+        robot.set_joint_positions([0.1])
+
+    links = len(robot.description().links)
+    with pytest.raises(FlightForgeError) as refused:
+        robot.set_state(RobotState(link_poses=[Pose.at(0.0, 0.0, 2.0)] * links))
+    assert str(refused.value)
+
+    with pytest.raises(FlightForgeError) as refused:
+        sim.spawn_robot((0.0, 0.0, 2.0), description_yaml="name: inline\nlinks:\n  - name: base_link\n")
+    assert str(refused.value)
+
+    with pytest.raises(FlightForgeError) as refused:
+        robot.add_sensor(SensorType.RGB_CAMERA, link=robot.description().links[1].name)
+    assert str(refused.value)
+
+
+def test_scene_and_robot_share_the_ground_frame(sim):
+    """An object and a robot placed with the same coordinates are in the same place: park the robot a known
+    distance short of a post and let the lidar say how far away it really is."""
+    sim.clear_objects()
+    sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cylinder\n    position: [10.0, 0.0, 2.0]\n    scale: [0.5, 0.5, 4.0]\n")
+
+    stand_off = 6.0
+    robot = sim.spawn_robot((10.0 - stand_off, 0.0, 2.0))
+    try:
+        assert np.allclose(robot.get_position(), [4.0, 0.0, 2.0], atol=0.01)
+
+        sensor_id = robot.add_sensor(SensorType.LIDAR)
+        livox(robot, sensor_id, mount=Pose.at(0.0, 0.0, 0.6))
+
+        time.sleep(1.0)
+        robot.lidar_scan(sensor_id=sensor_id)  # drain the slice spanning the reconfigure
+        time.sleep(0.3)  # a Livox scan holds what accumulated since the previous one
+        xyz = robot.lidar_scan(sensor_id=sensor_id).points
+        xyz = xyz[np.isfinite(xyz).all(axis=1)]
+        forward = xyz[(np.abs(np.degrees(np.arctan2(xyz[:, 1], xyz[:, 0]))) < 4.0) & (np.abs(xyz[:, 2]) < 1.0)]
+        assert len(forward) > 0, "no returns towards where the post should be"
+
+        # the post's near face sits one radius closer than its centre
+        assert np.linalg.norm(forward[:, :2], axis=1).min() == pytest.approx(stand_off - 0.25, abs=0.3)
+    finally:
+        sim.clear_objects()
+        sim.remove_robot(robot)
+
+
+def test_conventions(sim, robot):
+    """A cube at a known ground-frame pose, seen through lidar, rangefinder and camera reprojection; a mirrored
+    axis or a flipped yaw lands it somewhere else. The robot faces +y (+90 deg yaw) with C 4 m ahead, D 3 m left."""
+    sim.clear_objects()
+    sim.spawn_objects(
+        "objects:\n"
+        "  - asset: /Engine/BasicShapes/Cube\n    position: [0.0, 2.0, 3.0]\n"
+        "  - asset: /Engine/BasicShapes/Cube\n    position: [-3.0, -2.0, 3.0]\n"
+    )
+    pose = Pose.at(0.0, -2.0, 3.0, math.pi / 2)
+    try:
+        robot.set_pose(pose)
+        assert np.allclose(robot.get_position(), pose.position, atol=0.01)
+        assert np.allclose(robot.get_pose().rotate([1.0, 0.0, 0.0]), [0.0, 1.0, 0.0], atol=1e-6)
+
+        lidar = robot.add_sensor(SensorType.LIDAR)
+        scan = robot.lidar_scan(sensor_id=lidar)
+        assert scan.rows > 1 and scan.cols > 1 and len(scan.points) == scan.rows * scan.cols
+        assert np.allclose(scan.sensor_pose.position, pose.position, atol=0.01)
+        assert scan.sensor_pose.yaw == pytest.approx(math.pi / 2, abs=1e-3)
+
+        p = scan.points[scan.hits]
+        ahead = p[(np.abs(p[:, 1]) < 0.25) & (np.abs(p[:, 2]) < 0.25) & (p[:, 0] > 0)][:, 0].min()
+        left = p[(np.abs(p[:, 0]) < 0.25) & (np.abs(p[:, 2]) < 0.25) & (p[:, 1] > 0)][:, 1].min()
+        assert ahead == pytest.approx(3.5, abs=0.05)
+        assert left == pytest.approx(2.5, abs=0.05)
+
+        # back in the ground frame C's near face is at y = 1.5
+        ground = scan.in_ground()[scan.hits]
+        assert ground[(np.abs(ground[:, 0]) < 0.25) & (np.abs(ground[:, 2] - 3.0) < 0.25) & (ground[:, 1] > -2.0)][:, 1].min() == pytest.approx(1.5, abs=0.05)
+
+        # organised: row 0 is the top beam
+        rows = scan.organized()
+        seen = np.isfinite(rows).all(axis=2).any(axis=1)
+        with np.errstate(invalid="ignore"):
+            elevation = np.nanmean(rows[seen, :, 2] / np.linalg.norm(rows[seen], axis=2), axis=1)
+        assert elevation[0] > elevation[-1]
+        robot.remove_sensor(lidar)
+
+        # the rangefinder hangs 10 cm under the base and looks down onto C's top 3.5 m below the base
+        robot.set_pose(Pose.at(0.0, 2.0, 6.0))
+        distance, _ = robot.rangefinder()
+        assert distance == pytest.approx(2.4, abs=0.05)
+
+        # E at body (5, 1.5, 0.5): left of and above the image centre, its near face 4.5 m ahead of the base
+        sim.clear_objects()
+        robot.set_pose(pose)
+        sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [-1.5, 3.0, 3.5]\n")
+        camera = robot.add_sensor(SensorType.DEPTH_CAMERA)
+        robot.depth(camera)
+        depth, _ = robot.depth(camera)
+        (info,) = robot.camera_info(camera)
+        mount = info["mount"]
+        assert abs(mount.orientation[3]) == pytest.approx(1.0)
+
+        # optical frame: z = mount x, x = -mount y, y = -mount z
+        target = np.array([5.0, 1.5, 0.5]) - mount.position
+        K = info["K"]
+        u = K[0, 0] * (-target[1] / target[0]) + K[0, 2]
+        v = K[1, 1] * (-target[2] / target[0]) + K[1, 2]
+        assert 0 <= u < K[0, 2] and 0 <= v < K[1, 2]
+        seen = depth[int(round(v)), int(round(u))] / 1000.0
+        assert seen == pytest.approx(4.5 - mount.position[0], abs=0.1)
+        robot.remove_sensor(camera)
+
+        sim.clear_objects()
+        sim.spawn_objects("objects:\n  - asset: /Engine/BasicShapes/Cube\n    position: [0.0, 2.0, 3.0]\n")
+        vertices, _, _, _ = sim.world_mesh(center=(0.0, 2.0, 3.0), extent=(0.6, 0.6, 0.6))
+        corners = np.array([[dx, 2.0 + dy, 3.0 + dz] for dx in (-0.5, 0.5) for dy in (-0.5, 0.5) for dz in (-0.5, 0.5)])
+        assert all(np.linalg.norm(vertices - c, axis=1).min() < 0.01 for c in corners)
+        distances = sim.distance_batch([[0.0, 2.0, 4.5], [1.5, 2.0, 3.0], [0.0, 3.5, 3.0]])
+        assert np.allclose(distances, 1.0, atol=0.02)
+    finally:
+        sim.clear_objects()
+
+
+# //}
+
+# time //{
+
+
+STAMP_READERS = {
+    "rgb": (SensorType.RGB_CAMERA, lambda robot, i: robot.rgb(i)[1]),
+    "stereo": (SensorType.STEREO_CAMERA, lambda robot, i: robot.stereo(i)[2]),
+    "depth": (SensorType.DEPTH_CAMERA, lambda robot, i: robot.depth(i)[1]),
+    "fisheye": (SensorType.FISHEYE_CAMERA, lambda robot, i: robot.fisheye(i)[1]),
+    "instance": (SensorType.INSTANCE_SEG_CAMERA, lambda robot, i: robot.instance_segmentation(i)[1]),
+    "events": (SensorType.EVENT_CAMERA, lambda robot, i: robot.event_batch(i).stamp),
+    "lidar": (SensorType.LIDAR, lambda robot, i: robot.lidar_scan(sensor_id=i).stamp),
+    "rangefinder": (SensorType.RANGEFINDER, lambda robot, i: robot.rangefinder(i)[1]),
+}
+
+
+@pytest.fixture()
+def every_sensor(robot):
+    """{name: (sensor id, reader)} for one sensor of each type, each read once."""
+    sensors = {name: (robot.add_sensor(sensor_type), read) for name, (sensor_type, read) in STAMP_READERS.items()}
+    for sensor_id, read in sensors.values():
+        read(robot, sensor_id)
+    yield sensors
+    for sensor_id, _ in sensors.values():
+        robot.remove_sensor(sensor_id)
+
+
+def test_every_sensor_stamps_simulated_time(sim, robot, every_sensor):
+    """A stamp is the simulated time of the capture: never ahead of get_time().sim_time, at most a few frames behind."""
+    time.sleep(0.5)
+    for name, (sensor_id, read) in every_sensor.items():
+        before = sim.time().sim_time
+        stamp = read(robot, sensor_id)
+        after = sim.time().sim_time
+        assert before - 1.0 <= stamp <= after, f"{name}: stamp {stamp} outside [{before - 1.0}, {after}]"
+
+
+EVERY_STEP = {
+    "rgb": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "depth": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "instance": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "segmentation": lambda robot, i: robot.set_rgb_camera_config(sensor_id=i, capture_rate=0.0),
+    "stereo": lambda robot, i: robot.set_stereo_camera_config(sensor_id=i, capture_rate=0.0),
+    "fisheye": lambda robot, i: robot.set_fisheye_camera_config(sensor_id=i, capture_rate=0.0),
+    "lidar": lambda robot, i: robot.set_lidar_config(sensor_id=i, frequency=0.0),
+}
+
+
+def test_lockstep_reads_carry_the_step_time(sim, robot, every_sensor):
+    """With cameras capturing every tick and the lidar scanning on every read, each read belongs to the step before it."""
+    for name, (sensor_id, _) in every_sensor.items():
+        if name in EVERY_STEP:
+            EVERY_STEP[name](robot, sensor_id)
+    sim.set_lockstep(True)
+    try:
+        for _ in range(3):
+            stepped, _ = sim.step(1)
+            for name, (sensor_id, read) in every_sensor.items():
+                assert read(robot, sensor_id) == stepped, name
+    finally:
+        sim.set_lockstep(False)
+
+
+def test_a_camera_left_unconfigured_captures_at_30_hz(sim, robot):
+    """capture_rate defaults to 30 Hz of simulated time; an explicit 0 still captures every tick."""
+    sensor_id = robot.add_sensor(SensorType.RGB_CAMERA)
+    sim.set_fixed_timestep(0.01)
+    sim.set_lockstep(True)
+    try:
+        assert robot.rgb_camera_config(sensor_id).captureRate == 30.0
+        robot.set_rgb_camera_config(sensor_id=sensor_id, width=320, height=240)
+        assert robot.rgb_camera_config(sensor_id).captureRate == 30.0
+
+        def distinct_stamps(ticks):
+            stamps = set()
+            for _ in range(ticks):
+                sim.step(1)
+                stamps.add(robot.rgb(sensor_id, decode=False).stamp)
+            return len(stamps)
+
+        sim.step(5)
+        robot.rgb(sensor_id, decode=False)
+        assert 29 <= distinct_stamps(100) <= 31
+
+        robot.set_rgb_camera_config(sensor_id=sensor_id, capture_rate=0.0)
+        assert robot.rgb_camera_config(sensor_id).captureRate == 0.0
+        sim.step(5)
+        assert distinct_stamps(10) >= 9
+    finally:
+        sim.set_lockstep(False)
+        sim.set_fixed_timestep(0.0)
+        robot.remove_sensor(sensor_id)
+
+
+def test_time_dilation_changes_how_fast_the_world_runs(sim):
+    """Simulated time must advance at the requested fraction of wall time."""
+    try:
+        for factor in (0.5, 2.0, 1.0):
+            applied = sim.set_time_dilation(factor)
+            assert abs(applied - factor) < 1e-3, f"asked {factor}, engine applied {applied}"
+
+            time.sleep(0.3)
+            t0_sim, dilation = sim.sim_time()
+            assert abs(dilation - factor) < 1e-3
+
+            t0_wall = time.time()
+            time.sleep(1.0)
+            t1_sim, _ = sim.sim_time()
+
+            rate = (t1_sim - t0_sim) / (time.time() - t0_wall)
+            assert abs(rate - factor) < 0.2 * factor, f"at dilation {factor} the world ran at {rate:.3f}x"
+    finally:
+        sim.set_time_dilation(1.0)
+
+
+def test_event_camera_in_lockstep(sim, robot):
+    """A yaw sweep handed over as a trajectory and stepped 200 ms yields a sorted stream inside the stepped window."""
+    sensor_id = robot.add_sensor(SensorType.EVENT_CAMERA)
+    robot.set_event_camera_config(sensor_id=sensor_id, width=320, height=240)
+    try:
+        assert sim.set_fixed_timestep(0.001) == pytest.approx(0.001)
+        sim.set_lockstep(True)
+        start, _ = sim.step(20)
+        robot.event_batch(sensor_id)
+
+        base = robot.get_pose()
+        ts = start + np.linspace(0.0, 0.2, 21)
+        rows = [[t, *base.position, *Pose.at(0, 0, 0, math.radians(100.0) * (t - start)).orientation] for t in ts]
+        robot.set_trajectory(np.array(rows))
+
+        end, _ = sim.step(200)
+        assert end - start == pytest.approx(0.2, abs=2e-3)
+
+        batch = robot.event_batch(sensor_id)
+        assert batch.width == 320 and batch.height == 240
+        assert len(batch) > 1000 and batch.dropped == 0
+        assert batch.base_stamp >= start - 1e-9 and batch.stamp <= end + 1e-9
+        assert np.all(np.diff(batch.t_us.astype(np.int64)) >= 0)
+        assert batch.x.max() < 320 and batch.y.max() < 240
+    finally:
+        sim.set_lockstep(False)
+        sim.set_fixed_timestep(0.0)
+        robot.set_trajectory([])
+        robot.remove_sensor(sensor_id)
+
+
+# //}
+
+# sky //{
+
+
+def sky_missing(error):
+    """FF_EXPECT_SKY=1 turns "this world has no sky" into a failure, for runs on a world that has one."""
+    return "has no sky system" in str(error) and os.environ.get("FF_EXPECT_SKY") is None
+
+
+@pytest.fixture()
+def fixed_exposure_camera(robot):
+    """Manual exposure at EV100 0, so eye adaptation cannot undo what the sky did."""
+    camera = robot.add_sensor(SensorType.RGB_CAMERA)
+    robot.set_rgb_camera_config(
+        sensor_id=camera,
+        encoding={"compression": Compression.NONE},
+        exposure={"manual": True, "shutter_time": 1.0, "iso": 1600.0, "ev_compensation": 0.0},
+    )
+    yield camera
+    robot.remove_sensor(camera)
+
+
+def settled_frame(robot, camera):
+    """Once the mean has held for 3 s: a camera renders only while read, and Lumen at high and above follows the sky over seconds."""
+    start, means = time.time(), []
+    while True:
+        frame = robot.rgb(camera)[0].astype(np.float64)
+        now, mean = time.time(), frame.mean()
+        means.append((now, mean))
+        earlier = [m for t, m in means if now - t >= 3.0]
+        if (earlier and abs(mean - earlier[-1]) <= max(0.5, 0.02 * mean)) or now - start > 25.0:
+            return frame
+
+
+def test_noon_is_brighter_than_midnight(sim, robot, fixed_exposure_camera):
+    try:
+        sim.set_daytime(12, 0)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            pytest.skip(str(error))
+        raise
+    noon = settled_frame(robot, fixed_exposure_camera).mean()
+
+    sim.set_daytime(0, 0)
+    midnight = settled_frame(robot, fixed_exposure_camera).mean()
+    sim.set_daytime(12, 0)
+
+    print(f"mean brightness noon {noon:.1f}, midnight {midnight:.1f}")
+    assert noon >= 2.0 * midnight + 10.0
+
+
+def test_fog_and_rain_change_the_image(sim, robot, fixed_exposure_camera):
+    try:
+        sim.set_daytime(12, 0)
+    except FlightForgeError:
+        pass
+
+    try:
+        sim.set_weather("SUNNY")
+    except FlightForgeError as error:
+        assert sky_missing(error), error
+        with pytest.raises(FlightForgeError, match="has no sky system"):
+            sim.set_weather("FOGGY")
+        return
+
+    # a weather left by an earlier test takes longer to clear than one change takes to show
+    settled_frame(robot, fixed_exposure_camera)
+    clear = settled_frame(robot, fixed_exposure_camera)
+    drift = abs(settled_frame(robot, fixed_exposure_camera).mean() - clear.mean())
+
+    for weather in ("FOGGY", "RAIN"):
+        sim.set_weather(weather)
+        frame = settled_frame(robot, fixed_exposure_camera)
+        print(f"{weather}: mean {frame.mean():.1f} against {clear.mean():.1f}, clear drifts {drift:.2f}")
+        assert abs(frame.mean() - clear.mean()) >= max(10.0, 3.0 * drift)
+    sim.set_weather("SUNNY")
+
+
+DAY_RATE_TOLERANCE = 0.05
+
+
+def day_seconds(sim):
+    return sim.daytime()[0] * 3600.0
+
+
+def free_running_day_rate(sim, wall_s):
+    """Day seconds per simulated second over wall_s of free running."""
+    t0, d0 = sim.time().sim_time, day_seconds(sim)
+    time.sleep(wall_s)
+    t1, d1 = sim.time().sim_time, day_seconds(sim)
+    return (d1 - d0) / (t1 - t0)
+
+
+def test_daytime_reads_back(sim):
+    try:
+        sim.set_daytime(9, 30)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            with pytest.raises(FlightForgeError, match="has no sky system"):
+                sim.daytime()
+            pytest.skip(str(error))
+        raise
+    hour, animated, sky = sim.daytime()
+    print(f"{sky}: 9:30 reads {hour:.4f} h, animated {animated}")
+    assert sky in ("ultra_dynamic_sky", "sun_sky", "lights")
+    assert abs(hour - 9.5) < 0.05
+    sim.set_daytime(12, 0)
+
+
+def test_day_clock_follows_simulated_time(sim):
+    """The level's day cycle advances the same per simulated second at full speed, at quarter speed and per step, and
+    holds while lockstep has the world paused."""
+    try:
+        sim.set_daytime(10, 0, animate=True)
+    except FlightForgeError as error:
+        if sky_missing(error):
+            pytest.skip(str(error))
+        assert "no day cycle" in str(error), error
+        hour, animated, sky = sim.daytime()
+        time.sleep(1.0)
+        assert not animated and sim.daytime()[0] == pytest.approx(hour, nan_ok=True)
+        pytest.skip(f"{sky} has no day cycle")
+
+    try:
+        sim.set_daytime(10, 0)
+        assert sim.daytime()[1], "set_daytime without animate leaves the day cycle running"
+
+        normal = free_running_day_rate(sim, 5.0)
+        sim.set_time_dilation(0.25)
+        quarter = free_running_day_rate(sim, 5.0)
+        sim.set_time_dilation(1.0)
+
+        sim.set_lockstep(True)
+        paused = day_seconds(sim)
+        time.sleep(2.0)
+        paused = day_seconds(sim) - paused
+        t0, d0 = sim.time().sim_time, day_seconds(sim)
+        stepped_to, _ = sim.step(120)
+        stepped = (day_seconds(sim) - d0) / (stepped_to - t0)
+    finally:
+        sim.set_lockstep(False)
+        sim.set_time_dilation(1.0)
+        sim.set_daytime(12, 0, animate=False)
+
+    print(f"day s per sim s: normal {normal:.3f}, quarter speed {quarter:.3f}, stepped {stepped:.3f}; paused 2 s moved {paused:.4f} day s")
+    assert normal > 0.0
+    assert paused == 0.0
+    assert quarter == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
+    assert stepped == pytest.approx(normal, rel=DAY_RATE_TOLERANCE)
+
+
+# //}
+
+# look //{
+
+# HIGH first: cameras that started streaming at a Lumen level once froze there (section 23.2a)
+LOOK_LEVELS = ["HIGH", "LOW", "MEDIUM", "EPIC", "CINEMATIC"]
+LOOK_MAD = 4.0  # 8-bit levels per channel
+LOOK_MAD_FISHEYE = 6.0  # both sides resampled bilinearly
+
+
+def mad(a, b):
+    return float(np.abs(a.astype(np.float32) - b.astype(np.float32)).mean())
+
+
+def fisheye_from_pinhole(pinhole, fov_deg, K, max_theta_deg=40.0):
+    """The fisheye image a pinhole render at face 0's pose gives inside max_theta of the axis (equidistant lens), and that mask."""
+    h, w = int(round(K[1][2] * 2 + 1)), int(round(K[0][2] * 2 + 1))
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float64)
+    u, v = (xs - K[0][2]) / K[0][0], (ys - K[1][2]) / K[1][1]
+    theta = np.hypot(u, v)
+    scale = np.where(theta > 1e-9, np.tan(np.minimum(theta, 1.5)) / np.maximum(theta, 1e-9), 1.0)
+    ph, pw = pinhole.shape[:2]
+    f = pw / 2.0 / math.tan(math.radians(fov_deg) / 2.0)
+    px, py = pw / 2.0 - 0.5 + f * u * scale, ph / 2.0 - 0.5 + f * v * scale
+    mask = (theta < math.radians(max_theta_deg)) & (px >= 0) & (py >= 0) & (px <= pw - 1) & (py <= ph - 1)
+    x0, y0 = np.clip(np.floor(px).astype(int), 0, pw - 2), np.clip(np.floor(py).astype(int), 0, ph - 2)
+    fx, fy = np.clip(px - x0, 0, 1)[..., None], np.clip(py - y0, 0, 1)[..., None]
+    p = pinhole.astype(np.float64)
+    top = p[y0, x0] * (1 - fx) + p[y0, x0 + 1] * fx
+    bottom = p[y0 + 1, x0] * (1 - fx) + p[y0 + 1, x0 + 1] * fx
+    return top * (1 - fy) + bottom * fy, mask
+
+
+def look_steps(sim, n):
+    """Ten at a time: the first frames at a new level compile shaders, and one step may not take longer than 60 s."""
+    for _ in range(n // 10):
+        for attempt in range(5):
+            try:
+                sim.step(10)
+                break
+            except FlightForgeError as error:
+                if "did not finish" not in str(error) or attempt == 4:
+                    raise
+
+
+def test_cameras_match_the_viewport(sim, robot):
+    """Each colour camera against the main viewport put on its view, at every scalability level; the level is set here, never assumed."""
+    # one image size, the fisheye's 512 faces: each viewport resize drops every camera's history
+    raw = {"encoding": {"compression": Compression.NONE}}
+    rgb = robot.add_sensor(SensorType.RGB_CAMERA)
+    robot.set_rgb_camera_config(sensor_id=rgb, width=512, height=512, **raw)
+    stereo = robot.add_sensor(SensorType.STEREO_CAMERA)
+    robot.set_stereo_camera_config(sensor_id=stereo, width=512, height=512, **raw)
+    fisheye = robot.add_sensor(SensorType.FISHEYE_CAMERA)
+    robot.set_fisheye_camera_config(sensor_id=fisheye, **raw)
+    K = robot.camera_info(fisheye)[0]["K"]
+    views = [
+        ("rgb", rgb, 0, lambda: robot.rgb(rgb)[0]),
+        ("stereo left", stereo, 0, lambda: robot.stereo(stereo)[0]),
+        ("stereo right", stereo, 1, lambda: robot.stereo(stereo)[1]),
+        ("fisheye centre", fisheye, 0, lambda: robot.fisheye(fisheye)[0]),
+    ]
+    failures = []
+    sim.set_fixed_timestep(1.0 / 30.0)
+    sim.set_lockstep(True)
+    try:
+        sim.set_graphics_settings(LOOK_LEVELS[0])
+        sim.viewport_image(robot, rgb)
+        look_steps(sim, 30)
+        for _, _, _, read in views:
+            read()
+        look_steps(sim, 150)
+        for level in LOOK_LEVELS:
+            sim.set_graphics_settings(level)
+            # the world's one Lumen scene settles after a level change; 300 steps covers it at every level
+            look_steps(sim, 300)
+            for name, sensor, view, read in views:
+                sim.viewport_image(robot, sensor, view)
+                look_steps(sim, 50)
+                camera = read()
+                viewport, _, fov = sim.viewport_image()
+                if name.startswith("fisheye"):
+                    expected, mask = fisheye_from_pinhole(viewport, fov, K)
+                    error = float(np.abs(camera.astype(np.float64) - expected)[mask].mean())
+                else:
+                    error = mad(camera, viewport)
+                print(f"{level:9s} {name:14s} MAD {error:.2f}")
+                if error > (LOOK_MAD_FISHEYE if name.startswith("fisheye") else LOOK_MAD):
+                    failures.append(f"{level} {name}: {error:.2f}")
+    finally:
+        sim.release_viewport()
+        sim.set_lockstep(False)
+        sim.set_fixed_timestep(0.0)
+        sim.set_graphics_settings("HIGH")
+    assert not failures, f"cameras differ from the viewport: {failures}"
+
+
+# //}
+
+# connections //{
+
+
+def test_robots_on_their_own_connections_overlap(sim, robot):
+    failures = []
+
+    def reader(index):
+        with Robot(sim, robot.id, own_connection=True) as own:
+            for _ in range(10):
+                try:
+                    own.get_state()
+                    own.lidar_scan() if index % 2 else own.rgb()
+                    own.rangefinder()
+                except FlightForgeError as error:
+                    failures.append(error)
+
+    threads = [threading.Thread(target=reader, args=(i,)) for i in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not failures
+
+
+def test_shared_connection_from_many_threads(sim, robot):
+    failures = []
+
+    def reader():
+        for _ in range(20):
+            try:
+                robot.get_state()
+                sim.sim_time()
+            except FlightForgeError as error:
+                failures.append(error)
+
+    threads = [threading.Thread(target=reader) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not failures
+
+
+def test_gym_envs_build_through_make(sim):
+    """Both environments must survive gymnasium.make(), whose PassiveEnvChecker validates observation_space at
+    construction, not merely be registered."""
+    gymnasium = pytest.importorskip("gymnasium")
+    pytest.importorskip("flightforge.gym_envs")
+
+    for env_id in ("FlightForge/CameraNav-v0", "FlightForge/LidarNav-v0"):
+        env = gymnasium.make(env_id, simulator=sim, max_steps=4)
+        try:
+            assert isinstance(env.observation_space, gymnasium.spaces.Space), env_id
+
+            observation, _ = env.reset()
+            assert observation.shape == env.observation_space.shape, env_id
+
+            observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
+            assert np.isfinite(observation).all(), env_id
+            assert np.isfinite(reward), env_id
+        finally:
+            env.close()
+
+
+def test_list_worlds_names_the_loaded_one(sim):
+    worlds, current, loading = sim.list_worlds()
+    assert worlds and not loading
+    assert current in {w.package for w in worlds}
+    assert len({w.name for w in worlds}) == len(worlds)
+
+
+def test_unknown_world_is_refused(sim):
+    before = sim.list_worlds().current
+    for bad in ("CaveTunnel", "IndustialWarehouse", "/Game/Nowhere/Maps/Nowhere"):
+        with pytest.raises(FlightForgeError, match="unknown world|no map"):
+            sim.switch_world(bad)
+    assert sim.list_worlds().current == before
+
+
+@pytest.mark.skipif(os.environ.get("FF_SWITCH_WORLDS") is None, reason="switches the loaded map; FF_SWITCH_WORLDS names the worlds to visit")
+def test_switch_then_spawn(sim):
+    """Each switch answers once the world ticks, the old robots are gone, and one spawned right after works."""
+    start = sim.list_worlds().current
+    for target in os.environ["FF_SWITCH_WORLDS"].split(",") + [start]:
+        before = sim.spawn_robot((0.0, 0.0, 2.0))
+        package, removed = sim.switch_world(target)
+        assert before.id in removed
+        assert sim.list_worlds().current == package
+        with pytest.raises(FlightForgeError, match="switch_world"):
+            before.get_state()
+
+        robot = sim.spawn_robot((0.0, 0.0, 2.0))
+        try:
+            robot.get_state()
+        finally:
+            sim.remove_robot(robot)
+
+
+# //}
